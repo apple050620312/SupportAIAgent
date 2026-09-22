@@ -1,0 +1,25 @@
+{
+  "name": "openclaw-hosting-support",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=24.16.0"
+  },
+  "scripts": {
+    "build": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r build",
+    "typecheck": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r typecheck",
+    "test": "corepack pnpm build && corepack pnpm --filter @openclaw-hosting/support-core test",
+    "lint": "eslint .",
+    "dev": "corepack pnpm --filter @openclaw-hosting/support-core dev",
+    "start": "corepack pnpm --filter @openclaw-hosting/support-core start"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "eslint": "^9.36.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.1",
+    "vitest": "^3.2.4"
+  }
+}
