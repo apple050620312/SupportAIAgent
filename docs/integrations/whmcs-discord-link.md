@@ -100,6 +100,69 @@ Ticket Bot appears actively wired into Discord interaction handlers; PteroAI's o
 
 Both projects use the same WHMCS custom API action and receive the same minimal identity field. PteroAI has better credential placement and transport, while Ticket Bot demonstrates active actor-derived lookup and a `result` success check. Neither has adequate failure classification or ambiguity handling. The custom `GetClientID` API contract is **REUSABLE WITH WRAPPER**, subject to verification of its failure and cardinality semantics; neither client implementation is suitable for direct reuse.
 
+## Observed GetClientID API contract
+
+### Characterization status
+
+Live characterization is still pending. No WHMCS request was made while building the harness, and no response row is documented until an operator runs it against an explicitly authorized environment and manually reviews the sanitized output.
+
+The isolated harness is `scripts/characterize-get-client-id.ts`. Its parsing, validation, request planning, and sanitization logic lives under `scripts/lib/` and is not imported by Support Core or any production package.
+
+### Prepared request contract
+
+The harness is limited to sequential, non-retried `POST` requests to `<WHMCS_BASE_URL>/includes/api.php` using `application/x-www-form-urlencoded`. Authentication and action parameters are placed only in the request body:
+
+- `action=GetClientID`;
+- `discordid=<test Discord snowflake>`;
+- `identifier=<WHMCS API identifier>`, except for the missing-authentication case;
+- `secret=<WHMCS API secret>`, except for the missing-authentication case;
+- `responsetype=json`.
+
+The invalid-authentication case derives a deliberately invalid secret in memory. The harness uses a ten-second timeout, does not retry, rejects redirects, requires HTTPS for remote hosts, and permits plain HTTP only for `localhost`, `127.0.0.1`, or `::1`.
+
+### Operator configuration
+
+Copy `.env.characterization.example` to the Git-ignored `.env.characterization` file and replace every required placeholder:
+
+- `CHARACTERIZATION_ACK=I_HAVE_AUTHORIZATION`;
+- `WHMCS_BASE_URL`;
+- `WHMCS_API_IDENTIFIER`;
+- `WHMCS_API_SECRET`;
+- `TEST_LINKED_DISCORD_ID`;
+- `TEST_UNLINKED_DISCORD_ID`.
+
+`TEST_CLOSED_CLIENT_DISCORD_ID` and `TEST_INACTIVE_CLIENT_DISCORD_ID` are optional and should be set only when safe fixtures already exist. The harness does not generate IDs, enumerate mappings, probe duplicates, or create test data.
+
+Run it manually with:
+
+```sh
+corepack pnpm characterize:get-client-id
+```
+
+Without the exact acknowledgement and complete required configuration, the command exits before reaching `fetch`.
+
+### Input and output safety
+
+Configured test identities must be canonical strings of 17-20 ASCII decimal digits, without signs, decimal points, whitespace, or leading zeroes, and must fit within the unsigned 64-bit snowflake range. Validation uses `BigInt`; Discord IDs are never converted through JavaScript `Number`. The explicit malformed and empty cases bypass this local validation so the authorized endpoint behavior can be observed.
+
+The stdout table records only:
+
+- case name, HTTP status, and content type;
+- whether JSON parsing succeeded;
+- presence and primitive type of `result` and `clientid`;
+- a conservatively sanitized `result` value;
+- presence of `message` and `error` fields;
+- safe unexpected field names;
+- transport/shape classification.
+
+It never retains or prints credentials, Discord IDs, client ID values, raw bodies, message/error values, or customer data. Responses larger than 64 KiB are not parsed. `characterization-results/` is reserved and Git-ignored for any operator-captured sanitized output; the current harness writes only to stdout.
+
+### Prepared cases
+
+The harness prepares linked, unlinked, malformed, empty, invalid-authentication, and missing-authentication cases. Closed-client and inactive-client cases are included only when their optional variables are supplied. It deliberately has no duplicate-account or enumeration behavior.
+
+These cases remain unobserved. In particular, no response may be interpreted as `IDENTITY_NOT_LINKED` until live results demonstrate a distinct no-match contract. Sanitized results must be manually reviewed before ADR 0003 is created or production adapter behavior is specified.
+
 ## Storage model
 
 The storage model is **unknown**. No readable migration, activation function, schema builder, SQL statement, model, or table definition is present.
@@ -256,7 +319,7 @@ The next investigation needs authoritative evidence for the remaining protected 
 
 Task 2B should be gated on characterizing the `GetClientID` response semantics above. Its proposed scope is:
 
-1. Exercise `GetClientID` in an authorized non-production environment for linked, unlinked, malformed, duplicate/ambiguous, missing-client, inactive/closed-client, unauthorized, and upstream-failure cases; record redacted responses.
+1. Configure and manually run the characterization harness in an authorized non-production environment for linked, unlinked, malformed, empty, invalid-authentication, missing-authentication, and any already-available inactive/closed-client fixtures; record and review only sanitized results.
 2. Confirm vendor support/ownership of the action and create ADR 0003 if the results establish a reliable authority contract.
 3. Define a minimal internal response and explicit status/error mapping without exposing generic WHMCS actions or client selection to OpenClaw.
 4. Implement a read-only `CustomerIdentityResolver` adapter in `packages/whmcs` that form-posts to `/includes/api.php`, accepts the trusted Discord ID from `ActorContext` only, and keeps credentials in runtime configuration.

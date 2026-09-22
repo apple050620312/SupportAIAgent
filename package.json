@@ -8,16 +8,19 @@
     "node": ">=24.16.0"
   },
   "scripts": {
-    "build": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r build",
-    "typecheck": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r typecheck",
-    "test": "corepack pnpm build && corepack pnpm --filter @openclaw-hosting/support-core test",
+    "build": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r build && tsc -p scripts/tsconfig.json --noEmit",
+    "typecheck": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r typecheck && tsc -p scripts/tsconfig.json --noEmit",
+    "test": "corepack pnpm build && vitest run scripts/test && corepack pnpm --filter @openclaw-hosting/support-core test",
     "lint": "eslint .",
+    "characterize:get-client-id": "node --env-file-if-exists=.env.characterization --import tsx scripts/characterize-get-client-id.ts",
     "dev": "corepack pnpm --filter @openclaw-hosting/support-core dev",
     "start": "corepack pnpm --filter @openclaw-hosting/support-core start"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@types/node": "^24.5.2",
     "eslint": "^9.36.0",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.44.1",
     "vitest": "^3.2.4"
