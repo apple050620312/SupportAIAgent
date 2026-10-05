@@ -25,7 +25,7 @@ The model selects only service references within owned resources. Core's public 
 
 ## Security implications
 
-Capsules are bearer credentials, not encrypted payloads. Keep them in trusted host memory, out of model-visible text, logs, URLs, archives and fixtures. Use TLS remotely, short lifetimes, a random signing key of at least 32 bytes, and a protected service network. Read-only replay within the lifetime is possible; the current authoritative state check still revokes a ticket after takeover/close. This protocol is not suitable for future provider mutations without a separate approval/replay/idempotency design.
+Capsules are bearer credentials, not encrypted payloads. Keep them in trusted host memory, out of model-visible text, logs, URLs, archives and fixtures. Use TLS remotely, short lifetimes, a random signing key of at least 32 bytes, and a protected service network. Read-only replay within the lifetime is possible; the current authoritative state check still revokes a ticket after takeover/close. This protocol does not authorize provider mutations beyond the separately bounded restart policy; other writes require a separate approval/replay/idempotency design.
 
 The real bot must derive the customer actor and channel ownership from authenticated Discord events and its stored ticket data. It must authorize staff roles before takeover/close methods, atomically compare/update revisions, serialize final sends against takeover/close, check the expected HUMAN_NEEDED revision when sending handoff chunks, and persist handoff delivery receipts in its existing ticket state. These cannot be replaced by model assertions or the offline in-memory demo.
 

@@ -42,7 +42,7 @@ openclaw plugins install --link ./packages/openclaw-hosting-plugin
 }
 ```
 
-以該版本的正常設定流程準備同名專用 agent、模型與 workspace，套用插件內的 hosting-support Skill。只允許七個 hosting tools，關閉 exec、任意 HTTP、檔案、跨 session、message 與其他管理工具。原生 run 也有七個名稱的雙重 allowlist，不能用這一點替代 Gateway 的測試設定。
+以該版本的正常設定流程準備同名專用 agent、模型與 workspace，套用插件內的 hosting-support Skill。只允許八個 hosting tools，關閉 exec、任意 HTTP、檔案、跨 session、message 與其他管理工具。原生 run 也有八個名稱的雙重 allowlist，不能用這一點替代 Gateway 的測試設定。
 
 Gateway 使用認證，bot 另從環境取得其 token，不把 token 放入插件 config 或模型提示詞。Core/Gateway 分機部署時都使用 HTTPS 及受保護網路。此 launcher 的 Core 只綁 loopback；跨機 TLS 由操作者配置受保護的代理，不把 loopback HTTP 範例直接改成公開 HTTP。
 

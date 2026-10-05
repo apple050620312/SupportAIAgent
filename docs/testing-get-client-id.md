@@ -104,4 +104,4 @@ GetClientID 只回一個 ID 也不能證明映射唯一。沒有可用的 stale�
 
 先人工審查這次結果，再更新整合文件及 adapter 的暫定解析規則。只有取得足夠證據才建立 ADR 0003。
 
-客戶存在與 Active 狀態驗證、已擁有服務查詢、Pterodactyl server/resources、受控 Core 路由、tool factory 與客服單 bridge 已能用 mock 串接。它們尚未啟用正式環境。第一關審查後，依 [唯讀原型測試指南](testing-read-only-support.md) 測試 provider 與既有 bot/選定 Harness 的真正接點。確認唯一性及可信 ActorContext 傳遞後才開放客戶操作。自動審核訂單與重啟操作仍是後續階段。
+客戶存在與 Active 狀態驗證、已擁有服務查詢、Pterodactyl server/resources、受控 Core 路由、tool factory、受限 restart 與客服單 bridge 已能用 mock 串接。它們尚未啟用正式環境。第一關審查後，依 [唯讀原型測試指南](testing-read-only-support.md) 測試 provider 與既有 bot/選定 Harness 的真正接點。確認唯一性及可信 ActorContext 傳遞後才開放客戶操作。自動審核訂單與其他寫入操作仍是後續階段。
