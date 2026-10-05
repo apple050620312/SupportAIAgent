@@ -2,11 +2,19 @@ import type {
   ActorContext,
   CustomerIdentity,
   GameServer,
-  HostingService
+  HostingService,
+  HandoffRequest,
+  TicketScope,
+  TicketSnapshot
 } from "@openclaw-hosting/contracts";
 
 export interface CustomerIdentityResolver {
   resolveActor(actorContext: ActorContext): Promise<CustomerIdentity | null>;
+}
+
+export interface TicketAccessProvider {
+  read(scope: TicketScope): Promise<TicketSnapshot | null>;
+  handoff(scope: TicketScope, request: HandoffRequest): Promise<void>;
 }
 
 export interface HostingServiceProvider {

@@ -3,6 +3,7 @@ dist/
 coverage/
 .env
 .env.characterization
+.env.support-probe
 characterization-results/
 *.log
 .DS_Store

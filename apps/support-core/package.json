@@ -11,6 +11,7 @@
     "start": "node dist/src/server.js"
   },
   "dependencies": {
+    "@openclaw-hosting/trusted-context": "workspace:*",
     "@openclaw-hosting/contracts": "workspace:*",
     "@sinclair/typebox": "^0.34.41",
     "fastify": "^5.6.1"

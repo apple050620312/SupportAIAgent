@@ -17,4 +17,8 @@ A model-provided identifier is only a selector within resources already proven t
 
 WHMCS and Pterodactyl privileged credentials remain inside their adapters. They must never be exposed to the model, Discord, shared contracts, error details, or logs. The agent must not receive arbitrary HTTP, arbitrary provider API, refund, termination, deletion, or destructive restore capabilities.
 
-Correlation IDs are operational metadata, not authentication. Identity transport and service-to-service authentication between OpenClaw and Support Core remain intentionally unspecified until a later task.
+Correlation IDs are operational metadata, not authentication. The prototype transport uses sixty-second HMAC ticket capsules issued by a trusted bot context, with actor/guild/channel binding and an authoritative ticket-state check per operation. The agent has neither a signing key nor authority to choose a customer. Core rechecks ticket state before releasing awaited customer data; the final bot send still requires a serialized state check against takeover/close.
+
+Unknown sessions get no tools. Plain identity headers, session naming and model claims are not alternatives to the signed context. Capsules are bearer credentials and contain identity in cleartext encoding; keep them out of model text, logs and URLs. Production requires a protected TLS network, rotated random key, verified host/session binding and real bot state/send adapters. Read-only replay within sixty seconds is possible, so this design does not authorize future provider mutations.
+
+Core discards raw arbitrary port-error causes as well as provider error bodies. Neither generic provider HTTP nor full customer/service/container records cross the tool boundary. Handoff text is bounded, split for Discord, has mentions disabled and is explicitly agent-reported/unverified.

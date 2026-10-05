@@ -1,8 +1,10 @@
 import { Type } from "@sinclair/typebox";
 import Fastify from "fastify";
+import { registerReadOnlyRoutes, type ReadOnlyDelivery } from "./delivery/read-only-routes.js";
 
 export interface BuildAppOptions {
   readonly logger?: boolean | { readonly level: string };
+  readonly readOnly?: ReadOnlyDelivery;
 }
 
 const HealthResponseSchema = Type.Object(
@@ -12,7 +14,12 @@ const HealthResponseSchema = Type.Object(
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
-    logger: options.logger ?? true,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
+    logger: options.logger === false ? false : {
+      level: typeof options.logger === "object" ? options.logger.level : "info",
+      redact: ["req.headers.authorization"],
+      serializers: { req: (request: { method: string }) => ({ method: request.method }) }
+    },
     requestIdHeader: "x-correlation-id"
   });
 
@@ -26,5 +33,6 @@ export function buildApp(options: BuildAppOptions = {}) {
     () => ({ status: "ok" as const })
   );
 
+  if (options.readOnly) registerReadOnlyRoutes(app, options.readOnly);
   return app;
 }

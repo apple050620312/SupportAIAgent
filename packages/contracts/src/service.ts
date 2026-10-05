@@ -14,7 +14,8 @@ export const HostingServiceSchema = Type.Object(
     serviceRef: Type.String({ minLength: 1 }),
     customerRef: Type.String({ minLength: 1 }),
     displayName: Type.String({ minLength: 1 }),
-    status: HostingServiceStatusSchema
+    status: HostingServiceStatusSchema,
+    runtimeProvider: Type.Optional(Type.Literal("pterodactyl"))
   },
   { additionalProperties: false }
 );

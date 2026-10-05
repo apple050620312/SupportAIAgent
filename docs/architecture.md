@@ -15,7 +15,7 @@ Support Core is stateless in the MVP. Each operation carries an `ActorContext` c
 
 ## Dependency direction
 
-`HostingSupportService` depends on `CustomerIdentityResolver`, `HostingServiceProvider`, and `GameServerProvider`. Concrete adapters point inward toward these ports. Fastify is only a delivery mechanism and currently exposes health, not customer operations.
+`HostingSupportService` depends on `CustomerIdentityResolver`, `HostingServiceProvider`, and `GameServerProvider`. Concrete adapters point inward toward these ports. Provider adapters share private bounded HTTP transport; Core never imports provider network clients. The opt-in delivery layer also depends on `TicketAccessProvider`, backed by the existing bot's authoritative ticket state.
 
 The lookup sequence is fixed:
 
@@ -32,4 +32,8 @@ Expected failures use stable error codes: `IDENTITY_NOT_LINKED`, `SERVICE_NOT_FO
 
 ## HTTP surface
 
-Only `GET /health` exists in Task 1. Future customer routes require a separately designed authenticated identity transport; adding demonstration routes that accept provider identifiers would undermine the boundary.
+Normal startup exposes only `GET /health`. `buildApp` can explicitly register prototype `/v1/me/identity`, `/services`, `/services/:serviceRef`, `/servers`, `/servers/:serviceRef/status`, `/servers/:serviceRef/resources` and `/handoff` with supplied read-only dependencies. These routes reject additional parameters and use signed bot-issued ticket context, not model actor IDs. Public responses omit customer references and Pterodactyl UUIDs.
+
+Handoff is a bounded existing-bot effect, not a provider mutation. Core validates ticket authority before requests and again before releasing customer data after awaited work. The bot must serialize final reply delivery against takeover/close and persist revisioned handoff receipts; the demo's in-memory store is not production persistence.
+
+See ADR 0004 and the manual testing guide. Real provider activation, identity authority, bot/session adapters and native Harness host binding remain unverified. The concrete tool factory and provider chain are exercised by the offline demo and regression evals without a model.

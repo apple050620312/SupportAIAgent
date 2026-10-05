@@ -3,7 +3,7 @@ export { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
 
 export const CHARACTERIZATION_ACKNOWLEDGEMENT = "I_HAVE_AUTHORIZATION";
 
-const MAX_RESPONSE_LENGTH = 65_536;
+const MAX_RESPONSE_BYTES = 65_536;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export type CharacterizationCase =
@@ -45,6 +45,7 @@ export interface CharacterizationResult {
   readonly resultValue: string | null;
   readonly clientIdPresence: boolean;
   readonly clientIdType: ObservableValueType;
+  readonly clientIdValidation: "absent" | "positive-safe-integer" | "zero" | "invalid";
   readonly messagePresence: boolean;
   readonly errorPresence: boolean;
   readonly unexpectedFields: readonly string[];
@@ -179,6 +180,11 @@ function loadConfiguration(
   const secret = requireValue(environment, "WHMCS_API_SECRET");
   const linked = requireSnowflake(environment, "TEST_LINKED_DISCORD_ID");
   const unlinked = requireSnowflake(environment, "TEST_UNLINKED_DISCORD_ID");
+  if (linked === unlinked) {
+    throw new CharacterizationSetupError(
+      "Linked and unlinked test identities must be different"
+    );
+  }
   const closed = optionalSnowflake(
     environment,
     "TEST_CLOSED_CLIENT_DISCORD_ID"
@@ -243,26 +249,68 @@ function safeResultValue(value: unknown): string | null {
   return value === "success" || value === "error" ? value : "<redacted>";
 }
 
+function clientIdValidation(value: unknown, present: boolean): CharacterizationResult["clientIdValidation"] {
+  if (!present) return "absent";
+  if (value === 0 || value === "0") return "zero";
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return "positive-safe-integer";
+  }
+  if (typeof value === "string" && /^[1-9][0-9]{0,15}$/.test(value) &&
+      BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return "positive-safe-integer";
+  }
+  return "invalid";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function safeUnexpectedFields(record: Record<string, unknown>): readonly string[] {
   const expected = new Set(["result", "clientid", "message", "error"]);
+  // A syntactically valid key can still contain a reflected credential or name.
+  // Display only known contract-related names; unknown names remain redacted.
+  const allowed = new Set(["client", "clients", "translations", "status", "count", "matches", "data"]);
   return Object.keys(record)
-    .filter(
-      (name) =>
-        !expected.has(name) && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)
-    )
+    .filter((name) => !expected.has(name))
+    .map((name) => allowed.has(name) ? name : "<redacted-field>")
     .sort();
 }
 
 function safeContentType(value: string | null): string | null {
   if (value === null) return null;
   const mediaType = value.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mediaType)
+  const allowed = new Set([
+    "application/json", "application/problem+json", "application/octet-stream",
+    "application/xml", "text/json", "text/html", "text/plain", "text/xml"
+  ]);
+  return allowed.has(mediaType)
     ? mediaType
     : "<redacted>";
+}
+
+async function readObservationBody(response: Response): Promise<{
+  readonly body: string;
+  readonly bodyTruncated: boolean;
+}> {
+  if (response.body === null) return { body: "", bodyTruncated: false };
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let size = 0;
+  let body = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) return { body: "", bodyTruncated: true };
+      body += decoder.decode(value, { stream: true });
+    }
+    return { body: body + decoder.decode(), bodyTruncated: false };
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
 }
 
 function emptyResult(
@@ -280,6 +328,7 @@ function emptyResult(
     resultValue: null,
     clientIdPresence: false,
     clientIdType: "absent",
+    clientIdValidation: "absent",
     messagePresence: false,
     errorPresence: false,
     unexpectedFields: [],
@@ -349,6 +398,7 @@ export function parseGetClientIdResponse(
     resultValue: resultPresence ? safeResultValue(parsed.result) : null,
     clientIdPresence,
     clientIdType: observableType(parsed.clientid, clientIdPresence),
+    clientIdValidation: clientIdValidation(parsed.clientid, clientIdPresence),
     messagePresence: Object.hasOwn(parsed, "message"),
     errorPresence: Object.hasOwn(parsed, "error"),
     unexpectedFields: safeUnexpectedFields(parsed),
@@ -396,13 +446,12 @@ async function executeCase(
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
-    const responseBody = await response.text();
+    const observationBody = await readObservationBody(response);
     return parseGetClientIdResponse({
       case: plannedCase.name,
       httpStatus: response.status,
       contentType: response.headers.get("content-type"),
-      body: responseBody.length > MAX_RESPONSE_LENGTH ? "" : responseBody,
-      bodyTruncated: responseBody.length > MAX_RESPONSE_LENGTH
+      ...observationBody
     });
   } catch {
     return createNetworkError(plannedCase.name);

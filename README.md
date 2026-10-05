@@ -12,11 +12,14 @@ Support Core is the trusted authorization boundary. It resolves a Discord actor 
 
 ## Layout
 
-- `apps/support-core`: Fastify health service and provider-independent support orchestration.
+- `apps/support-core`: health service, port-based authorization and opt-in authenticated read-only delivery.
 - `packages/contracts`: small TypeBox schemas and inferred TypeScript types.
-- `packages/whmcs`: provisional read-only GetClientID identity adapter, not connected to application startup.
-- `packages/pterodactyl`: future Pterodactyl adapter types and configuration boundary.
-- `packages/openclaw-hosting-plugin`: placeholder documentation for the future plugin.
+- `packages/whmcs`: provisional identity, client existence/status and owned-service read adapters.
+- `packages/pterodactyl`: Pterodactyl 1.15.1 external mapping and resource read adapter.
+- `packages/provider-http`: private bounded provider transport, never an agent tool.
+- `packages/trusted-context`: bot-issued short-lived signed ticket capsules.
+- `packages/ticket-bridge`: ticket lifecycle, handoff and serialized-send ports for the existing bot.
+- `packages/openclaw-hosting-plugin`: bounded tool factory and support Skill, pending native host wrapper.
 - `docs`: architecture, security, integration questions, and decisions.
 
 ## Development
@@ -46,4 +49,15 @@ The WHMCS identity adapter is tested with synthetic mocked responses only. It ac
 
 ## Next milestone
 
-Review authorized GetClientID characterization and establish mapping uniqueness, client existence/status policy, and trusted identity transport before enabling customer operations. Service resolution and Pterodactyl lookup remain unimplemented.
+The operator reports WHMCS 9.0.9 and Pterodactyl 1.15.1. The offline read-only chain now includes identity, existing Active client verification, owned services, server status/resources, six agent tools and staff handoff. [Provider evidence](docs/integrations/read-only-providers.md) separates official-source facts from unverified deployment assumptions.
+
+```sh
+corepack pnpm demo:mock
+corepack pnpm eval:mock
+```
+
+These commands use only synthetic mocks and Fastify injection, with no provider, Discord, model or OpenClaw network calls. `pnpm dev`/`start` remain health-only; customer routes require explicit `buildApp({ readOnly: ... })` dependencies and a real authoritative ticket adapter.
+
+Start with [GetClientID manual testing](docs/testing-get-client-id.md), then [the read-only integration test guide](docs/testing-read-only-support.md). That guide includes the separately acknowledged `probe:read-only` command and the real Ticket Bot / Harness integration gates. Do not run the probe before reviewing identity results or install the tool factory as a native plugin without verifying a pinned host SDK.
+
+Mapping uniqueness, real response compatibility, key scopes, policy approval, bot state/send integration and host context binding remain operator-tested deployment gates. Provider mutations, restart and Order Agent remain deferred. ADR 0003 is not created; [ADR 0004](docs/decisions/0004-trusted-ticket-context.md) documents prototype trusted-context delivery without claiming GetClientID authority.

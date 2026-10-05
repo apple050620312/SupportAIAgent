@@ -12,11 +12,18 @@
     "typecheck": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r typecheck && tsc -p scripts/tsconfig.json --noEmit",
     "test": "corepack pnpm build && vitest run scripts/test && corepack pnpm --filter @openclaw-hosting/support-core test",
     "lint": "eslint .",
+    "demo:mock": "corepack pnpm build && node --import tsx scripts/demo-mock-support.ts",
+    "probe:read-only": "corepack pnpm build && node --env-file-if-exists=.env.support-probe --import tsx scripts/probe-read-only-support.ts",
+    "eval:mock": "corepack pnpm build && vitest run scripts/test/support-flow.test.ts scripts/test/support-security.test.ts scripts/test/read-only-providers.test.ts",
     "characterize:get-client-id": "node --env-file-if-exists=.env.characterization --import tsx scripts/characterize-get-client-id.ts",
     "dev": "corepack pnpm --filter @openclaw-hosting/support-core dev",
     "start": "corepack pnpm --filter @openclaw-hosting/support-core start"
   },
   "devDependencies": {
+    "@openclaw-hosting/openclaw-plugin": "workspace:*",
+    "@openclaw-hosting/ticket-bridge": "workspace:*",
+    "@openclaw-hosting/trusted-context": "workspace:*",
+    "@openclaw-hosting/pterodactyl": "workspace:*",
     "@openclaw-hosting/contracts": "workspace:*",
     "@openclaw-hosting/whmcs": "workspace:*",
     "@eslint/js": "^9.36.0",

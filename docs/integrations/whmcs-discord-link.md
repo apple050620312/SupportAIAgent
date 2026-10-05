@@ -125,11 +125,13 @@ Snowflake validation is now a pure shared function in `packages/contracts/src/di
 
 All adapter fixtures are synthetic. Mock tests verify request construction, success parsing, invalid IDs/configuration, HTTP/auth-shaped/unknown responses, response size and parsing, abort handling, redaction, and that Core stops downstream service access on identity failure. They establish local implementation behavior only.
 
-**Deployment gates remain:** characterize real success/no-match/authentication responses, establish authoritative uniqueness/ambiguity behavior, verify the returned client exists and apply an explicit client-status policy, configure least-privilege runtime credentials, and authenticate ActorContext transport. A single returned client ID does not prove uniqueness. A second narrowly scoped client existence/status lookup is recommended before support access unless authoritative evidence establishes those guarantees within GetClientID. No such second call is implemented. ADR 0003 remains deferred until manually reviewed evidence supports the identity authority decision.
+**Deployment gates remain:** characterize real success/no-match/authentication responses, establish authoritative uniqueness/ambiguity behavior, verify the returned client exists and apply an explicit client-status policy, configure least-privilege runtime credentials, and verify the deployed ActorContext transport. A single returned client ID does not prove uniqueness. A separate `VerifiedWhmcsCustomerResolver` now implements the documented `GetClientsDetails` read and an Active-only prototype policy; the minimal GetClientID candidate itself still proves neither existence nor status. Provider contract evidence and live checks are in [the read-only notes](read-only-providers.md). The signed ticket transport is specified in ADR 0004, but is not wired into normal startup. ADR 0003 remains deferred until manually reviewed evidence supports the identity authority decision.
 
 ### Characterization status
 
 Live characterization is still pending. No WHMCS request was made while building the harness, and no response row is documented until an operator runs it against an explicitly authorized environment and manually reviews the sanitized output.
+
+The current manual-test gate and operator steps are documented in [the test guide](../testing-get-client-id.md). Additional read-only provider/route/tool/bridge code is mock-tested; live activation is pending that review. The existence of a mock-tested adapter is not live characterization evidence.
 
 The isolated harness is `scripts/characterize-get-client-id.ts`. Its parsing, request planning, and sanitization logic lives under `scripts/lib/` and is not imported by Support Core or any production package. Only its pure snowflake validator is shared through `packages/contracts`.
 
@@ -176,12 +178,13 @@ The stdout table records only:
 - case name, HTTP status, and content type;
 - whether JSON parsing succeeded;
 - presence and primitive type of `result` and `clientid`;
+- client ID format validation (`absent`, `positive-safe-integer`, `zero`, or `invalid`) under the provisional adapter's local policy, without retaining the value;
 - a conservatively sanitized `result` value;
 - presence of `message` and `error` fields;
-- safe unexpected field names;
+- allowlisted contract-related unexpected field names, with all other names replaced by `<redacted-field>`;
 - transport/shape classification.
 
-It never retains or prints credentials, Discord IDs, client ID values, raw bodies, message/error values, or customer data. Responses larger than 64 KiB are not parsed. `characterization-results/` is reserved and Git-ignored for any operator-captured sanitized output; the current harness writes only to stdout.
+It never persists or prints credentials, Discord IDs, client ID values, raw bodies, message/error values, or customer data. Unknown media types are redacted rather than printed verbatim. Responses are read with a 64 KiB byte limit and cancelled when oversized. `characterization-results/` is reserved and Git-ignored for any operator-captured sanitized output; the current harness writes only to stdout. Configured linked and unlinked identities must be different.
 
 ### Prepared cases
 

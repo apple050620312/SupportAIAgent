@@ -11,6 +11,7 @@
   },
   "files": ["dist"],
   "dependencies": {
+    "@openclaw-hosting/provider-http": "workspace:*",
     "@openclaw-hosting/contracts": "workspace:*"
   },
   "scripts": {

@@ -147,5 +147,6 @@ describe("HostingSupportService", () => {
     expect(failure).toBeInstanceOf(UpstreamUnavailableError);
     expect((failure as UpstreamUnavailableError).code).toBe("UPSTREAM_UNAVAILABLE");
     expect((failure as Error).message).not.toContain("sensitive detail");
+    expect(failure).not.toHaveProperty("cause");
   });
 });
