@@ -22,4 +22,6 @@
 
 尚未提供真實 bot state/send adapter 與 native plugin entry，原因是它們依賴 operator 的權限、部署 state API 和目標 Harness 版本。typed ports 與可執行 fake 展示了接點，但不能拿它們替代真實權限或持久 receipts。人工核對環境後，才將這些接點套到既有 host，而不是猜測壓縮檔就是正式 runtime。
 
+進一步讀取封存程式後，已確認 Ticket Bot 的 Mongoose schema 沒有 AI state、顯式 revision 與 handoff receipts。close/reopen 也未實施 bridge 要求的並行控制，因此正式接入仍有需要機器人維護者處理的程式遷移，不能標記為只剩測試。具體證據與遷移範圍見 [客服單接入調查](integrations/ticket-bot.md)。[Harness 比較案例](harness-evaluation.md) 已備妥，實際模型測試與 native wrapper 仍待版本選定。
+
 後續寫入、重啟、訂單自動 Accept/Pending、帳務工具、console/file access、跨客戶記憶與資料庫不是本階段。主軸先穩定唯讀客服與交班，再另立有權限與批准流程的里程碑。
