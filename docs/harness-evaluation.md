@@ -49,4 +49,4 @@ E03、E07 等 fixture 是人工實驗需要另外準備的變體，目前 demo �
 
 ## 尚待確認
 
-需要候選 Harness 的目標版本、模型配置及可信 host 接點，才能撰寫與驗證各自的 native wrapper。此文件不假定任何候選的實際 SDK、session schema 或新 API 已可用。實際接入前先完成 [機器人遷移核對](integrations/ticket-bot.md) 與 [唯讀環境測試](testing-read-only-support.md)。
+操作者已選 OpenClaw，本 repo 已實作固定 2026.9.8 的 native wrapper、bot ingress 與手動 launcher。先依 [接入指南](testing-ticket-openclaw.md) 測試，再執行本表的模型品質、延遲與成本實驗。若未來新增比較候選，才核對它的版本、SDK 與可信 host 接點，不假定未驗證的新 API 已可用。

@@ -4,6 +4,7 @@ coverage/
 .env
 .env.characterization
 .env.support-probe
+.env.ticket-support
 characterization-results/
 *.log
 .DS_Store

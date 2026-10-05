@@ -1,4 +1,4 @@
-# Hosting tool factory prototype
+# Hosting Support native OpenClaw plugin
 
 This package now exports `createHostingTools` and `hostingToolFactory`: six bounded read-only tools and a ticket-side handoff tool. They call authenticated Support Core only. They use concrete tool `execute(toolCallId, parameters, signal?)` semantics described in the official [tool plugin documentation](https://docs.openclaw.ai/plugins/tool-plugins). No OpenClaw runtime dependency is installed.
 
@@ -10,4 +10,8 @@ The factory holds no WHMCS/Pterodactyl credential or context signing key. HTTPS 
 
 Run `corepack pnpm demo:mock` or `corepack pnpm eval:mock` to exercise the concrete tools with Core and mocked providers. These are not model-quality or native SDK compatibility benchmarks.
 
-Native plugin manifest/entry packaging and the real host-context binding are intentionally pending a pinned operator OpenClaw host version and the conversation's planned Harness trial. SDK APIs are experimental; do not install an invented manifest or infer customer authority from session key patterns. The current factory is the reusable implementation for that thin host wrapper and for another Harness.
+The operator chose OpenClaw. The package now ships `openclaw.plugin.json`, the native `dist/native.js` entry and a Gateway-authenticated `/hosting-support/turn` route, pinned to **2026.9.8**. `registerHostingPlugin` registers optional version-two factories. No SDK runtime is installed in this workspace; the Gateway supplies its native API. Structural subsets are reviewed against the tagged source, not an assertion of live loader compatibility.
+
+The turn route verifies the capsule through Core before invoking `runEmbeddedAgent`. It binds a random session to the verified scope, places the capsule exclusively in `toolBindings`, restricts both tool allowlists, enforces a 45-second run deadline, and extracts only final text. The bot retains final delivery authority. Native tool `details` wrap domain data under `data`, avoiding OpenClaw's reserved top-level status/error outcome fields.
+
+Use the [manual bot/OpenClaw guide](../../docs/testing-ticket-openclaw.md). Unknown bindings get no tools; model IDs and session naming grant nothing. Live loader, SDK, model and provider tests are still pending. Do not use this single-process prototype as unattended production infrastructure.

@@ -72,11 +72,11 @@ corepack pnpm probe:read-only
 
 這些 host-specific adapter 不能從只讀壓縮檔推定正式部署行為。現有的 typed bridge 與離線假實作提供可接入的合約。它們不是正式 Discord SDK 串接或 durable delivery 的保證。
 
-封存程式的 schema 與 close/reopen 路徑已核對，缺少必要 AI 狀態及並行送訊息機制。請先看 [客服單接入調查與遷移範圍](integrations/ticket-bot.md)，不要把已讀的 `closed` 或 `claimedBy` 直接替代 bridge 合約。正式接入仍需要程式遷移，並非只有測試。
+封存程式的 schema 與 close/reopen 路徑已核對。依操作者保持原檔的指示，已實作單程序 overlay 與 shared-model mutation/send gate。請先看 [客服單調查](integrations/ticket-bot.md) 與 [實際接入測試指南](testing-ticket-openclaw.md)，不要把 `closed` 或 `claimedBy` 單獨視為足夠的 AI 授權。
 
 Context 簽發使用 `TicketContextTokens`。正式 key 至少 32 個隨機 bytes，保留在可信 bot 與 Core，工具封裝只取得短效 capsule。不要把 key 或 capsule 放進提示詞、模型工具參數、URL 或日誌。
 
-`createHostingTools` / `hostingToolFactory` 已提供六個唯讀工具與交班工具。未知 session 沒有工具，已知 session 綁定可信 capsule getter 與 host authority guard。這是可用 mock 測試的 tool factory，不是已安裝的 OpenClaw native plugin。先指定實際 OpenClaw host 版本與可驗證的 context 欄位，再依該 SDK 包成最薄的 entry/manifest。官方 API 是 experimental，不能猜 sender 或 session key 的權限。
+`createHostingTools` / `hostingToolFactory` 已提供六個唯讀工具與交班工具。OpenClaw 已選定並固定 2026.9.8，native entry/manifest、Gateway-authenticated turn route 與 `toolBindings` 接線均已實作。未知 binding 沒有工具，Core 仍驗證 signed capsule 與 ticket state。尚未安裝或實際執行 Gateway，mock 不代表 native 相容性測試通過，不能猜 sender 或 session key 的權限。
 
 依主軸比較 Harness 時，使用相同客服案例與 tool factory，評估工具執行、交班品質、接手靜默、脈絡隔離、延遲、成本及部署複雜度。不要因另一個 Harness 宣稱有 session 隔離，就跳過 Core 的客戶所有權檢查。
 

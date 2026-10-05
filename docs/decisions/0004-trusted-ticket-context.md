@@ -35,4 +35,4 @@ Handoff is a bounded ticket-side effect, not a hosting mutation. Generated text 
 
 The prototype can test routes, tool schemas, ownership and ticket lifecycle without any live providers or model. Production bot/session integration must implement the declared state and serialized-send ports and verify them in the operator's environment. The existing external repositories are left unchanged.
 
-Native OpenClaw plugin packaging and final host authority-context binding require a pinned target host version and the planned runtime comparison. The current package supplies testable concrete factory tools with `execute(toolCallId, params, signal?)`, not a claim of installed SDK compatibility.
+Native packaging and host binding are now implemented for operator-selected OpenClaw, pinned to 2026.9.8; live SDK compatibility remains manual. ADR 0005 adds the unchanged-baseline single-process overlay: instead of durable retry recovery, restart revokes admission and uncertain sends are refused. It does not introduce a database into Core or approve GetClientID as production authority.

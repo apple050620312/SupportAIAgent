@@ -23,9 +23,9 @@ schema 沒有目前 bridge 使用的五種 AI 狀態、顯式 revision 或 hando
 
 只在 AI 程式送訊息前讀一次 `closed`，仍可能在讀取後被人工關閉。只替新增的 AI 路徑加鎖，也無法涵蓋既有 close/reopen 路徑。重新開啟若恢復同一個權限 scope，舊的六十秒 capsule 也可能仍有效，因此需要讓 host 的 authority guard 淘汰舊 invocation，並明確決定重新啟用 AI 的規則。
 
-這些是需要改動機器人權威狀態的實作缺口，不是單靠 live API 測試可以消除的未知。外部專案仍維持唯讀，Support Core 不直接讀取它的 MongoDB。
+這些原始缺口不能單靠 live API 測試消除。操作者後續明確指定保持 ZIP 不變，主 repo 因此新增單程序 runtime 接入，沿用原 bot 的 model/client 並在 handler 載入前裝上 mutation guard。AI state/receipts 是 opt-in overlay，重啟失效，沒有新 schema 或 Support Core 的 MongoDB client。這個範圍與限制由 ADR 0005 取代原先等待外部 state API 的阻塞。
 
-## 建議交給機器人維護者的遷移範圍
+## 保留給未來正式擴展的遷移建議
 
 以下為建議，不是已存在的正式 API。
 
@@ -48,4 +48,4 @@ schema 沒有目前 bridge 使用的五種 AI 狀態、顯式 revision 或 hando
 - 交班分段送出一半時發生接手、關閉或投遞不明，能安全停止並交由人工核對
 - 真正 Discord 角色與 bot 部署程序數有明確測試紀錄
 
-目前只有主 repo 的 synthetic bridge 測試成立。正式接入程式與以上部署驗收仍未完成。
+目前主 repo 已有 `LegacyTicketAdapter`、`DiscordTicketSupport`、`createOpenClawTicketRunner` 與 `start:ticket-support`，原生插件與完整合成流程測試也已加入。實際 SDK、原 bot 載入、Discord/Mongoose ordering 及以上部署驗收仍未執行。單程序方案不會修改 ZIP，也不宣稱 durable receipts 或跨程序安全。操作方式見 [OpenClaw 接入測試](../testing-ticket-openclaw.md)。

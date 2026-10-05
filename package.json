@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "demo:mock": "corepack pnpm build && node --import tsx scripts/demo-mock-support.ts",
     "probe:read-only": "corepack pnpm build && node --env-file-if-exists=.env.support-probe --import tsx scripts/probe-read-only-support.ts",
+    "start:ticket-support": "corepack pnpm build && node --env-file-if-exists=.env.ticket-support --import tsx scripts/run-ticket-support.ts",
     "eval:mock": "corepack pnpm build && vitest run scripts/test/support-flow.test.ts scripts/test/support-security.test.ts scripts/test/read-only-providers.test.ts",
     "characterize:get-client-id": "node --env-file-if-exists=.env.characterization --import tsx scripts/characterize-get-client-id.ts",
     "dev": "corepack pnpm --filter @openclaw-hosting/support-core dev",

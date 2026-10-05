@@ -2,16 +2,22 @@ import { HandoffRequestSchema, type HandoffRequest, type TicketScope, type Ticke
 import { Value } from "@sinclair/typebox/value";
 import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 
+export { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard } from "./legacy-ticket.js";
+export type { LegacyTicketReader, LegacyDiscordTransport } from "./legacy-ticket.js";
+export { DiscordTicketSupport, attachTicketSupportEvents } from "./discord-ticket.js";
+export type { TicketAgentRunner, TicketCustomerMessage } from "./discord-ticket.js";
+export { createOpenClawTicketRunner } from "./openclaw-runner.js";
+
 export interface TicketStore {
   read(scope: TicketScope): Promise<TicketSnapshot | null>;
-  /** Must be atomic and persist in the existing bot's authoritative ticket state. */
+  /** Atomic authoritative state; a process overlay must revoke all admission on restart. */
   compareAndSet(snapshot: TicketSnapshot, nextState: TicketState): Promise<boolean>;
 }
 export interface TicketMessenger {
   /** Implement in the existing bot; disable all allowed mentions for generated text. */
   send(scope: TicketScope, text: string, options: {
     readonly allowedMentions: readonly string[];
-    /** Bot persists the delivery receipt in its existing ticket state for retry safety. */
+    /** Persist receipts, or revoke admission on restart and refuse uncertain-send retries. */
     readonly idempotencyKey?: string;
     /** Check this HUMAN_NEEDED revision atomically with receipt/send; deny closed/claimed tickets. */
     readonly expectedSnapshot: TicketSnapshot;

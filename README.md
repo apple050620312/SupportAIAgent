@@ -19,7 +19,7 @@ Support Core is the trusted authorization boundary. It resolves a Discord actor 
 - `packages/provider-http`: private bounded provider transport, never an agent tool.
 - `packages/trusted-context`: bot-issued short-lived signed ticket capsules.
 - `packages/ticket-bridge`: ticket lifecycle, handoff and serialized-send ports for the existing bot.
-- `packages/openclaw-hosting-plugin`: bounded tool factory and support Skill, pending native host wrapper.
+- `packages/openclaw-hosting-plugin`: bounded tool factory, native OpenClaw 2026.9.8 entry/turn route and support Skill.
 - `docs`: architecture, security, integration questions, and decisions.
 
 ## Development
@@ -43,7 +43,7 @@ If the environment cannot install Corepack's global shim, prefix the same comman
 
 ## Deliberately not implemented
 
-There are no live WHMCS or Pterodactyl calls, Discord ticket events, OpenClaw runtime dependency, order review workflow, mutation tools, database, Redis, queue, or container orchestration. Identity transport from OpenClaw is also intentionally unresolved.
+No live WHMCS, Pterodactyl, Discord or model request has been made during development. The normal startup has no provider wiring. Order review, provider mutation tools, a new database, Redis, a persistent queue and container orchestration remain unimplemented. OpenClaw is supplied by the operator's Gateway, not installed as a workspace runtime dependency.
 
 The WHMCS identity adapter is tested with synthetic mocked responses only. It accepts a trusted `ActorContext`, returns a minimal `customerRef`, and rejects unknown responses without treating them as not linked. It is not enabled by `pnpm dev` or `pnpm start`. See [the integration notes](docs/integrations/whmcs-discord-link.md#provisional-read-only-adapter) for its assumptions and deployment gates.
 
@@ -61,3 +61,5 @@ These commands use only synthetic mocks and Fastify injection, with no provider,
 Start with [GetClientID manual testing](docs/testing-get-client-id.md), then [the read-only integration test guide](docs/testing-read-only-support.md). That guide includes the separately acknowledged `probe:read-only` command and the real Ticket Bot / Harness integration gates. Do not run the probe before reviewing identity results or install the tool factory as a native plugin without verifying a pinned host SDK.
 
 Mapping uniqueness, real response compatibility, key scopes, policy approval, bot state/send integration and host context binding remain operator-tested deployment gates. Provider mutations, restart and Order Agent remain deferred. ADR 0003 is not created; [ADR 0004](docs/decisions/0004-trusted-ticket-context.md) documents prototype trusted-context delivery without claiming GetClientID authority.
+
+The unchanged `ticket-main.zip` baseline now has a separate single-process launcher, owner-derived message ingress and serialized delivery/mutation guard. OpenClaw is selected and pinned to 2026.9.8. Native entry, Gateway-authenticated turn routing and out-of-band capsule binding are implemented with synthetic tests; actual bot/native SDK activation remains manual. Follow [the bot/OpenClaw guide](docs/testing-ticket-openclaw.md) before `corepack pnpm start:ticket-support`. That command starts a live baseline only after explicit setup acknowledgements. Restart revokes AI admission; uncertain sends are never blindly retried. [ADR 0005](docs/decisions/0005-unchanged-ticket-baseline-openclaw.md) records the limited scope.

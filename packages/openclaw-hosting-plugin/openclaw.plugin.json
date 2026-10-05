@@ -1,0 +1,20 @@
+{
+  "id": "hosting-support",
+  "name": "Hosting Support",
+  "version": "0.0.0",
+  "description": "Read-only hosting support through trusted Support Core",
+  "skills": ["./skills/hosting-support"],
+  "activation": { "onStartup": true },
+  "contracts": {
+    "tools": ["identify_customer", "list_my_services", "get_service_details", "list_my_servers", "get_my_server_status", "get_my_server_resources", "handoff_to_staff"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["coreBaseUrl"],
+    "properties": {
+      "coreBaseUrl": { "type": "string", "description": "Protected Support Core installation root" },
+      "agentId": { "type": "string", "default": "hosting-support", "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+    }
+  }
+}
