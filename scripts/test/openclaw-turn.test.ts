@@ -33,7 +33,7 @@ describe("trusted OpenClaw embedded turn", () => {
       const args = f.runEmbeddedAgent.mock.calls[0]![0];
       expect(args.prompt).toBe("Synthetic question"); expect(args.prompt).not.toContain(f.token);
       expect(args.toolBindings).toEqual({ "hosting-support": { ticketToken: f.token } });
-      expect(args.toolsAllow).toHaveLength(8); expect(args.toolExecutionAllow).toEqual(args.toolsAllow);
+      expect(args.toolsAllow).toHaveLength(13); expect(args.toolExecutionAllow).toEqual(args.toolsAllow);
       expect(args.toolsAllow).not.toContain("exec"); expect(args.toolsAllow).not.toContain("message");
       expect(args.abortSignal).toBeInstanceOf(AbortSignal); expect(args.terminalReplyExpectation).toBe("required");
     } finally { await f.mock.app.close(); }

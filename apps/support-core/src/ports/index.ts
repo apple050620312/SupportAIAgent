@@ -4,6 +4,10 @@ import type {
   GameServer,
   HostingService,
   HandoffRequest,
+  FileContentsResponse,
+  FileListResponse,
+  MutationOperation,
+  StartupConfigResponse,
   TicketScope,
   TicketSnapshot,
   SupportAuditEvent
@@ -45,4 +49,11 @@ export interface GameServerProvider {
 /** State-changing provider capability. The Core calls it only after ownership is re-resolved. */
 export interface GameServerMutationProvider {
   restart(server: GameServer, actorContext: ActorContext): Promise<void>;
+  execute(operation: MutationOperation, server: GameServer, actorContext: ActorContext): Promise<void>;
+}
+
+export interface GameServerFileProvider {
+  listFiles(server: GameServer, path: string, actorContext: ActorContext): Promise<FileListResponse>;
+  readFile(server: GameServer, path: string, actorContext: ActorContext): Promise<FileContentsResponse>;
+  getStartupConfig(server: GameServer, actorContext: ActorContext): Promise<StartupConfigResponse>;
 }

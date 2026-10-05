@@ -18,7 +18,7 @@ All provider writes other than the explicitly bounded restart use a two-stage op
 
 The approval contains no model-supplied customer ID, server UUID or provider credential. It is bound to the ticket scope, service reference, operation digest, current revision, expiry and a random nonce. Takeover, close, ownership change, policy change or an uncertain upstream result invalidates it. Mutations are never automatically retried.
 
-The first implementation exposes only a bounded restart operation as an autonomous low-risk recovery. Core verifies ownership and service state before execution, reserves a per-actor/service cooldown before the provider call, reads the server back through the ownership path, and the agent must query status again. Console commands, arbitrary file writes, startup changes and reinstall remain disabled until their individual policy is implemented and tested. A future restart policy can still require staff approval in deployments that classify restarts as disruptive.
+The implementation exposes bounded read operations and a typed mutation proposal flow for file writes, file moves, startup changes, power operations, reinstall and suspend/unsuspend. Those mutations require trusted staff approval before a single-use execution. Core verifies ownership immediately before execution, applies path and startup editability policy, and reads the server back after the provider call. The existing restart operation remains a bounded autonomous low-risk recovery; deployments may require staff approval for restart as well.
 
 Continuous improvement is a reviewed loop rather than online weight training:
 

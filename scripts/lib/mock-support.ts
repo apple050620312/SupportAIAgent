@@ -7,6 +7,7 @@ import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
 import { createHostingTools } from "@openclaw-hosting/openclaw-plugin";
 import { buildApp } from "../../apps/support-core/dist/src/app.js";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
+import { MutationApprovalStore } from "../../apps/support-core/dist/src/services/mutation-approval-store.js";
 
 export const MOCK_SCOPE: TicketScope = {
   discordUserId: "18446744073709551615", guildId: "18446744073709551614", channelId: "18446744073709551613"
@@ -104,14 +105,19 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
       return Promise.resolve(json({ object: "stats", attributes: { current_state: "running", is_suspended: false,
         resources: { memory_bytes: 1024, cpu_absolute: 10, disk_bytes: 2048 } } }));
     }
+    if (/\/files\/list$/.test(parsed.pathname)) return Promise.resolve(json({ data: [{ attributes: { name: "config.yml", is_file: true } }] }));
+    if (/\/files\/contents$/.test(parsed.pathname)) return Promise.resolve(new Response("safe synthetic content", { status: 200, headers: { "content-type": "text/plain" } }));
+    if (/\/startup$/.test(parsed.pathname)) return Promise.resolve(json({ meta: { startup_command: "run", docker_images: { primary: "example/image:latest" } }, data: [{ attributes: { env_variable: "PORT", server_value: "25565", is_editable: true } }] }));
     throw new Error("Unapproved Pterodactyl read");
   };
   const identities = new VerifiedWhmcsCustomerResolver(new WhmcsCustomerIdentityResolver(whmcsConfig, whmcs), whmcsConfig, whmcs);
   const pteroProvider = new PterodactylGameServerProvider({ baseUrl: "https://panel.example.invalid/", applicationApiKey: "synthetic-application-key", clientApiKey: "synthetic-client-key", externalIdStrategy: "whmcs-service-id" }, ptero);
   const support = new HostingSupportService({ identityResolver: identities,
     hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, whmcs),
-    gameServers: pteroProvider, gameServerMutations: pteroProvider });
-  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
+    gameServers: pteroProvider, gameServerMutations: pteroProvider,
+    gameServerFiles: pteroProvider });
+  const approvals = new MutationApprovalStore();
+  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await app.inject({

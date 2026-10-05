@@ -107,6 +107,9 @@ importers:
       '@openclaw-hosting/provider-http':
         specifier: workspace:*
         version: link:../provider-http
+      '@sinclair/typebox':
+        specifier: ^0.34.41
+        version: 0.34.52
 
   packages/ticket-bridge:
     dependencies:

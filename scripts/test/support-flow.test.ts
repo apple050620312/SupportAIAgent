@@ -5,9 +5,10 @@ describe("offline tool to Core to provider flow", () => {
   it("executes the read-only tools and low-risk restart with minimal output", async () => {
     const demo = createMockSupport();
     try {
-      for (const tool of demo.toolsFor(MOCK_SCOPE).filter((candidate) => candidate.name !== "handoff_to_staff")) {
-        const parameters = ["get_service_details", "get_my_server_status", "get_my_server_resources", "restart_my_server"].includes(tool.name)
-          ? { serviceRef: "whmcs-service:1" } : {};
+      for (const tool of demo.toolsFor(MOCK_SCOPE).filter((candidate) => !["handoff_to_staff", "propose_mutation", "execute_approved_mutation"].includes(candidate.name))) {
+        const parameters = ["get_service_details", "get_my_server_status", "get_my_server_resources", "restart_my_server", "get_my_startup_config"].includes(tool.name)
+          ? { serviceRef: "whmcs-service:1" } : tool.name === "list_my_files" ? { serviceRef: "whmcs-service:1", path: "/" }
+            : tool.name === "read_my_file" ? { serviceRef: "whmcs-service:1", path: "/config.yml" } : {};
         const result = await tool.execute("synthetic", parameters);
         const output = JSON.stringify(result);
         expect(output).not.toContain("customerRef");

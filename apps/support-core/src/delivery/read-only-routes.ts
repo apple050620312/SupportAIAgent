@@ -4,19 +4,24 @@ import type { FastifyInstance } from "fastify";
 import {
   HandoffRequestSchema, PublicHostingServiceSchema, PublicGameServerSchema, ServiceSelectorSchema, ServerResourcesSchema, ServerStatusSchema,
   RestartServerResponseSchema,
-  type ActorContext, type HandoffRequest, type TicketScope
+  FileContentsResponseSchema, FileListResponseSchema, StartupConfigResponseSchema, MutationProposalResponseSchema, ExecuteMutationRequestSchema, ExecuteMutationResponseSchema,
+  MutationOperationSchema
 } from "@openclaw-hosting/contracts";
+import type { ActorContext, HandoffRequest, TicketScope, MutationOperation, ExecuteMutationRequest, SupportAuditEvent } from "@openclaw-hosting/contracts";
 import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 import type { TicketAccessProvider, SupportAuditRecorder } from "../ports/index.js";
-import type { SupportAuditEvent } from "@openclaw-hosting/contracts";
 import type { HostingSupportService } from "../services/hosting-support-service.js";
-import { SupportDomainError, UpstreamUnavailableError } from "../domain/errors.js";
+import { MutationNotAllowedError, SupportDomainError, UpstreamUnavailableError } from "../domain/errors.js";
+import type { MutationApprovalStore } from "../services/mutation-approval-store.js";
 
 export interface ReadOnlyDelivery {
   readonly support: HostingSupportService;
   readonly tokens: TicketContextTokens;
   readonly tickets: TicketAccessProvider;
   readonly audit?: SupportAuditRecorder;
+  readonly approvals?: MutationApprovalStore;
+  /** A separate trusted staff channel must call approve; models never receive this value. */
+  readonly staffApprovalToken?: string;
 }
 const publicService = PublicHostingServiceSchema;
 const publicServer = PublicGameServerSchema;
@@ -31,6 +36,9 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
     "/v1/me/services/:serviceRef": "get_service_details", "/v1/me/servers": "list_my_servers",
     "/v1/me/servers/:serviceRef/status": "get_my_server_status",
     "/v1/me/servers/:serviceRef/resources": "get_my_server_resources", "/v1/me/servers/:serviceRef/restart": "restart_server",
+    "/v1/me/servers/:serviceRef/files": "list_my_files", "/v1/me/servers/:serviceRef/file": "read_my_file",
+    "/v1/me/servers/:serviceRef/startup": "get_my_startup_config", "/v1/me/mutation-proposals": "propose_mutation",
+    "/v1/me/mutation-executions": "execute_approved_mutation",
     "/v1/me/handoff": "handoff_to_staff"
   };
   app.addHook("onResponse", async (request, reply) => {
@@ -58,6 +66,7 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
 
   app.addHook("onRequest", async (request, reply) => {
     if (request.routeOptions.url === "/health") return;
+    if (request.routeOptions.url?.startsWith("/v1/staff/")) return;
     const authorization = request.headers.authorization;
     let scope: TicketScope;
     try {
@@ -132,6 +141,42 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
   }, async (request) => {
     await delivery.support.restartMyServer(context(request).actor, request.params.serviceRef);
     return { requested: true, operation: "restart_server" as const };
+  });
+  app.get<{ Params: { serviceRef: string }; Querystring: { path?: string } }>("/v1/me/servers/:serviceRef/files", {
+    schema: { params: selector, querystring: Type.Object({ path: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })) }), response: { 200: FileListResponseSchema, ...errors } }
+  }, async (request) => delivery.support.listMyFiles(context(request).actor, request.params.serviceRef, request.query.path ?? "/"));
+  app.get<{ Params: { serviceRef: string }; Querystring: { path: string } }>("/v1/me/servers/:serviceRef/file", {
+    schema: { params: selector, querystring: Type.Object({ path: Type.String({ minLength: 1, maxLength: 512 }) }), response: { 200: FileContentsResponseSchema, ...errors } }
+  }, async (request) => delivery.support.readMyFile(context(request).actor, request.params.serviceRef, request.query.path));
+  app.get<{ Params: { serviceRef: string } }>("/v1/me/servers/:serviceRef/startup", {
+    schema: { params: selector, querystring: noQuery, response: { 200: StartupConfigResponseSchema, ...errors } }
+  }, async (request) => delivery.support.getMyStartupConfig(context(request).actor, request.params.serviceRef));
+  app.post<{ Body: MutationOperation }>("/v1/me/mutation-proposals", {
+    schema: { body: MutationOperationSchema, querystring: noQuery, response: { 200: MutationProposalResponseSchema, ...errors } }
+  }, async (request) => {
+    if (!delivery.approvals) throw new UpstreamUnavailableError("Mutation approval store");
+    const current = await delivery.tickets.read(context(request).scope);
+    if (!current) throw new TicketDeniedError();
+    const approval = delivery.approvals.propose(context(request).scope, current.revision, request.body);
+    return { requested: true as const, approvalId: approval.approvalId, operationDigest: approval.operationDigest, expiresAt: approval.expiresAt };
+  });
+  app.post<{ Body: ExecuteMutationRequest }>("/v1/me/mutation-executions", {
+    schema: { body: ExecuteMutationRequestSchema, querystring: noQuery, response: { 200: ExecuteMutationResponseSchema, ...errors } }
+  }, async (request) => {
+    if (!delivery.approvals) throw new UpstreamUnavailableError("Mutation approval store");
+    const current = await delivery.tickets.read(context(request).scope);
+    if (!current) throw new TicketDeniedError();
+    const approval = delivery.approvals.consume(request.body.approvalId, context(request).scope, current.revision);
+    if (!approval) throw new MutationNotAllowedError();
+    await delivery.support.executeApprovedMutation(context(request).actor, approval.operation);
+    return { executed: true as const, operation: approval.operation.operation };
+  });
+  app.post<{ Params: { approvalId: string } }>("/v1/staff/mutation-approvals/:approvalId/approve", {
+    schema: { params: Type.Object({ approvalId: Type.String() }), response: { 200: Type.Object({ approved: Type.Literal(true) }), ...errors } }
+  }, async (request, reply) => {
+    if (!delivery.approvals || !delivery.staffApprovalToken || request.headers["x-staff-approval"] !== delivery.staffApprovalToken) return reply.code(403).send({ code: "TICKET_ACCESS_DENIED", message: "Staff approval required" });
+    if (!delivery.approvals.approve(request.params.approvalId)) return reply.code(404).send({ code: "MUTATION_NOT_ALLOWED", message: "Approval is missing or expired" });
+    return { approved: true as const };
   });
   app.post<{ Body: HandoffRequest }>("/v1/me/handoff", {
     schema: { body: HandoffRequestSchema, querystring: noQuery, response: { 200: Type.Object({ requested: Type.Literal(true) }), ...errors } }

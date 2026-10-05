@@ -2,10 +2,15 @@ import {
   CustomerIdentitySchema,
   HostingServiceSchema,
   GameServerSchema,
+  MutationOperationSchema,
   type ActorContext,
   type CustomerIdentity,
+  type FileContentsResponse,
+  type FileListResponse,
   type GameServer,
-  type HostingService
+  type HostingService,
+  type MutationOperation,
+  type StartupConfigResponse
 } from "@openclaw-hosting/contracts";
 import { Value } from "@sinclair/typebox/value";
 import {
@@ -21,6 +26,7 @@ import {
 import type {
   CustomerIdentityResolver,
   GameServerProvider,
+  GameServerFileProvider,
   HostingServiceProvider,
   GameServerMutationProvider
 } from "../ports/index.js";
@@ -29,6 +35,7 @@ export interface HostingSupportDependencies {
   readonly identityResolver: CustomerIdentityResolver;
   readonly hostingServices: HostingServiceProvider;
   readonly gameServers: GameServerProvider;
+  readonly gameServerFiles?: GameServerFileProvider;
   readonly gameServerMutations?: GameServerMutationProvider;
 }
 
@@ -132,6 +139,45 @@ export class HostingSupportService {
       servers.push(server);
     }
     return servers;
+  }
+
+  async listMyFiles(actorContext: ActorContext, serviceRef: string, path = "/"): Promise<FileListResponse> {
+    const server = await this.getMyServer(actorContext, serviceRef);
+    if (!this.dependencies.gameServerFiles) throw new MutationNotAllowedError();
+    return this.callUpstream("Game server file provider", () => this.dependencies.gameServerFiles!.listFiles(server, path, actorContext));
+  }
+
+  async readMyFile(actorContext: ActorContext, serviceRef: string, path: string): Promise<FileContentsResponse> {
+    const server = await this.getMyServer(actorContext, serviceRef);
+    if (!this.dependencies.gameServerFiles) throw new MutationNotAllowedError();
+    return this.callUpstream("Game server file provider", () => this.dependencies.gameServerFiles!.readFile(server, path, actorContext));
+  }
+
+  async getMyStartupConfig(actorContext: ActorContext, serviceRef: string): Promise<StartupConfigResponse> {
+    const server = await this.getMyServer(actorContext, serviceRef);
+    if (!this.dependencies.gameServerFiles) throw new MutationNotAllowedError();
+    return this.callUpstream("Game server startup provider", () => this.dependencies.gameServerFiles!.getStartupConfig(server, actorContext));
+  }
+
+  /** Called only by the approval workflow after it has consumed a single-use approval. */
+  async executeApprovedMutation(actorContext: ActorContext, operation: MutationOperation): Promise<void> {
+    if (!Value.Check(MutationOperationSchema, operation) || !this.dependencies.gameServerMutations) {
+      throw new MutationNotAllowedError();
+    }
+    const server = await this.getMyServer(actorContext, operation.serviceRef);
+    if (server.serviceRef !== operation.serviceRef) throw new ServiceNotOwnedError();
+    if (operation.operation === "update_startup_variable") {
+      if (!this.dependencies.gameServerFiles) throw new MutationNotAllowedError();
+      const startup = await this.callUpstream("Game server startup provider", () =>
+        this.dependencies.gameServerFiles!.getStartupConfig(server, actorContext));
+      const variable = startup.variables.find((item) => item.key === operation.key);
+      if (!variable?.editable) throw new MutationNotAllowedError();
+    }
+    await this.callUpstream("Game server mutation provider", () =>
+      this.dependencies.gameServerMutations!.execute(operation, server, actorContext)
+    );
+    const verified = await this.getMyServer(actorContext, operation.serviceRef);
+    if (verified.status === "unknown") throw new UpstreamUnavailableError("Game server mutation verification");
   }
 
   /** Low-risk, reversible remediation. Ownership and active state are checked immediately before execution. */

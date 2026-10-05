@@ -12,7 +12,8 @@
   "files": ["dist"],
   "dependencies": {
     "@openclaw-hosting/contracts": "workspace:*",
-    "@openclaw-hosting/provider-http": "workspace:*"
+    "@openclaw-hosting/provider-http": "workspace:*",
+    "@sinclair/typebox": "^0.34.41"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

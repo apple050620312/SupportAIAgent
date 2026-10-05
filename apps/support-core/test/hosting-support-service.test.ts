@@ -159,7 +159,7 @@ describe("HostingSupportService", () => {
       gameServers: {
         findForOwnedService: () => Promise.resolve(reads++ === 0 ? ownedServer : { ...ownedServer, status: "unknown" })
       },
-      gameServerMutations: { restart: () => { mutations++; return Promise.resolve(); } }
+      gameServerMutations: { restart: () => { mutations++; return Promise.resolve(); }, execute: () => Promise.resolve() }
     });
 
     await expect(subject.restartMyServer(actor, ownedService.serviceRef)).rejects.toBeInstanceOf(UpstreamUnavailableError);
