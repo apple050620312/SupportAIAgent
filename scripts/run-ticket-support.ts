@@ -8,6 +8,7 @@ import {
 } from "@openclaw-hosting/ticket-bridge";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
+import { privateDiscordAudit } from "./lib/discord-support-audit.js";
 
 /** Manual launcher. Never imported by tests or default dev/start. */
 async function main() {
@@ -24,6 +25,7 @@ async function main() {
   const model = baselineRequire(resolve(root, "src/database/models/ticket.js")) as Parameters<typeof legacyMongooseReader>[0] & Record<string, unknown>;
   const reader = legacyMongooseReader(model);
   type BaselineClient = {
+    user: { id: string } | null;
     isReady(): boolean;
     channels: { fetch(channelId: string): Promise<unknown> };
     on(event: string, listener: (...args: never[]) => void): unknown;
@@ -41,21 +43,25 @@ async function main() {
   const adapter = new LegacyTicketAdapter(reader, discord);
   const restore = installLegacyMutationGuard(model, adapter);
   const bridge = new TicketBridge(adapter, adapter, setup.tokens);
-  const tickets = new DiscordTicketSupport(reader, adapter, bridge, setup.runner, setup.staff);
   // Baseline uses relative paths for handlers/transcripts; leave its source files untouched.
   process.chdir(root);
   const client = baselineRequire(resolve(root, "src/index.js")) as BaselineClient;
-  const detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
-  const app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge } });
+  let detach = () => undefined as void;
+  let app: ReturnType<typeof buildApp> | undefined;
   try {
     if (!client.isReady()) await once(client as never, "ready", { signal: AbortSignal.timeout(30_000) });
+    const audit = setup.auditChannelId ? privateDiscordAudit(await client.channels.fetch(setup.auditChannelId),
+      setup.guildId, setup.auditChannelId, setup.staff, client.user?.id ?? "", (code) => console.error(code)) : undefined;
+    const tickets = new DiscordTicketSupport(reader, adapter, bridge, setup.runner, setup.staff, audit);
+    detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
+    app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
     await tickets.enableChannel(setup.guildId, setup.channelId);
     await app.listen({ host: "127.0.0.1", port: setup.port });
     console.log("Ticket support ready for the explicitly configured test channel (OpenClaw 2026.9.8)");
-    const stop = () => { detach(); restore(); void app.close().finally(() => process.exit(0)); };
+    const stop = () => { detach(); restore(); void app?.close().finally(() => process.exit(0)); };
     process.once("SIGINT", stop); process.once("SIGTERM", stop);
   } catch {
-    detach(); restore(); await app.close();
+    detach(); restore(); await app?.close();
     throw new TicketSupportSetupError("Ticket support startup failed safely; inspect the baseline environment locally");
   }
 }

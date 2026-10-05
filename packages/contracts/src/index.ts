@@ -1,4 +1,5 @@
 export * from "./actor.js";
+export * from "./audit.js";
 export * from "./customer.js";
 export * from "./discord.js";
 export * from "./order.js";

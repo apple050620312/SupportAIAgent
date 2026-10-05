@@ -59,6 +59,8 @@ Gateway 使用認證，bot 另從環境取得其 token，不把 token 放入插�
 | `TICKET_BOT_ROOT` | 解壓後、內含 package.json 的 bot 絕對路徑 |
 | `TEST_TICKET_GUILD_ID` / `TEST_TICKET_CHANNEL_ID` | 唯一要啟用 AI 的測試客服單 |
 | `TICKET_STAFF_USER_IDS` | 有權接手的 staff user ID，以逗號分隔、不加空白 |
+| `TICKET_AUDIT_CHANNEL_ID` | 可選的 staff-only 稽核頻道，必須與客服單不同 |
+| `TICKET_AUDIT_REVIEW_ACK` | 設定稽核頻道時必須填 `I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL` |
 | `TICKET_CONTEXT_KEY` | 至少 32 bytes 的隨機 key，僅留在 bot/Core |
 | `SUPPORT_CORE_PORT` | loopback Core port，預設 3001 |
 | `WHMCS_BASE_URL` / `WHMCS_API_IDENTIFIER` / `WHMCS_API_SECRET` | 新的必要唯讀憑證與 HTTPS 安裝根網址 |
@@ -66,6 +68,8 @@ Gateway 使用認證，bot 另從環境取得其 token，不把 token 放入插�
 | `OPENCLAW_BASE_URL` / `OPENCLAW_GATEWAY_TOKEN` | 測試 Gateway 根網址與認證 token |
 
 launcher 會在載入原 bot 之前核對所有設定，不自行讀取原 bot 的 WHMCS/Pterodactyl 憑證。它先在 shared model 安裝 mutation guard，再載入原 `src/index.js`，等待 ready，從 ticket row 確認 owner 並啟用指定 channel。沒有修改原 bot 檔案。
+
+若設定稽核頻道，launcher 會在啟動後核對它是同一 guild 的文字頻道，@everyone 沒有檢視權限，且只有明確列出的 staff member 與 bot 可以檢視。稽核只保存固定操作名稱、結果與隨機 correlation ID，不保存 Discord ID、客戶文字、capsule、Authorization header、provider 回應或原始錯誤。頻道權限改變或送出逾時時只回報固定失敗碼，不重試，也不影響客服授權。
 
 ## 手動啟動及驗收
 

@@ -1,5 +1,5 @@
 /** Synthetic offline harness. Never import this module from production packages. */
-import type { TicketScope, TicketSnapshot } from "@openclaw-hosting/contracts";
+import type { TicketScope, TicketSnapshot, SupportAuditEvent } from "@openclaw-hosting/contracts";
 import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 import { TicketBridge, sameTicket, type TicketMessenger, type TicketStore } from "@openclaw-hosting/ticket-bridge";
 import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
@@ -31,7 +31,7 @@ export interface MockSupportHarness {
   toolsFor(scope: TicketScope): ReturnType<typeof createHostingTools>;
 }
 
-export function createMockSupport(): MockSupportHarness {
+export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }): MockSupportHarness {
   const snapshots = new Map<string, TicketSnapshot>([MOCK_SCOPE, MOCK_OTHER_SCOPE].map((scope) => [scope.channelId, { scope, revision: 0, state: "AI_ACTIVE" }]));
   const sent: { scope: TicketScope; text: string }[] = [];
   const receipts = new Set<string>();
@@ -105,7 +105,7 @@ export function createMockSupport(): MockSupportHarness {
   const support = new HostingSupportService({ identityResolver: identities,
     hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, whmcs),
     gameServers: new PterodactylGameServerProvider({ baseUrl: "https://panel.example.invalid/", applicationApiKey: "synthetic-application-key", clientApiKey: "synthetic-client-key", externalIdStrategy: "whmcs-service-id" }, ptero) });
-  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge } });
+  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await app.inject({

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { isCanonicalDiscordSnowflake, type TicketScope } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake, type TicketScope, type SupportAuditEvent } from "@openclaw-hosting/contracts";
+import type { AuditRecorder } from "./audit.js";
 import { TicketBridgeError, type LegacyTicketAdapter, type TicketBridge, type LegacyTicketReader } from "./index.js";
 
 export interface TicketCustomerMessage {
@@ -17,8 +18,16 @@ export class DiscordTicketSupport {
   #unsubscribe: () => void;
   constructor(private readonly tickets: LegacyTicketReader, private readonly adapter: LegacyTicketAdapter,
     private readonly bridge: TicketBridge, private readonly agent: TicketAgentRunner,
-    private readonly staffUserIds: ReadonlySet<string>) {
-    this.#unsubscribe = adapter.onRetirement((channelId) => this.#leases.get(channelId)?.abort.abort());
+    private readonly staffUserIds: ReadonlySet<string>, private readonly audit?: AuditRecorder) {
+    this.#unsubscribe = adapter.onRetirement((channelId) => {
+      this.#leases.get(channelId)?.abort.abort();
+      this.record("ticket_retired", "success");
+    });
+  }
+
+  private record(operation: SupportAuditEvent["operation"], outcome: SupportAuditEvent["outcome"]): void {
+    try { void this.audit?.record({ operation, outcome, correlationId: randomUUID() }).catch(() => undefined); }
+    catch { /* Audit cannot grant or delay customer authority. */ }
   }
 
   /** Explicit test-ticket admission. Owner comes from the legacy row, not caller input. */
@@ -34,6 +43,7 @@ export class DiscordTicketSupport {
     const scope = { guildId, channelId, discordUserId: data.userId };
     await this.adapter.enable(scope);
     this.#leases.set(channelId, { scope, sessionId: randomUUID(), abort: new AbortController(), queued: 0, tail: Promise.resolve() });
+    this.record("ticket_admitted", "success");
   }
 
   async receive(message: TicketCustomerMessage): Promise<"ignored" | "sent" | "silenced" | "staff-takeover"> {
@@ -45,6 +55,7 @@ export class DiscordTicketSupport {
       // Abort before awaiting any state read. Customer generation does not hold the send gate.
       lease.abort.abort();
       await this.bridge.humanTakeover(lease.scope);
+      this.record("human_takeover", "success");
       return "staff-takeover";
     }
     if (lease.abort.signal.aborted || !message.content.trim() || message.content.length > 4000 || lease.queued >= 16) return "ignored";
@@ -59,6 +70,7 @@ export class DiscordTicketSupport {
       try {
         response = await this.agent.run({ sessionId: lease.sessionId, ticketToken, prompt: message.content }, lease.abort.signal);
       } catch {
+        this.record("agent_turn", lease.abort.signal.aborted ? "denied" : "failed");
         if (lease.abort.signal.aborted || this.#leases.get(message.channelId) !== lease) return "silenced" as const;
         // No retries after an uncertain model/tool run. Stop proactive access and notify staff.
         await this.bridge.handoff(lease.scope, { summary: "AI 客服流程暫時無法完成", reason: "需要人工核對工具或 Harness 結果", attemptedSteps: [] });
@@ -66,6 +78,7 @@ export class DiscordTicketSupport {
       }
       if (typeof response.reply !== "string" || !response.reply.trim() || response.reply.length > 6000 ||
           response.reply.includes(ticketToken)) throw new TicketBridgeError();
+      this.record("agent_turn", lease.abort.signal.aborted ? "denied" : "success");
       let rest = response.reply;
       while (rest) {
         if (lease.abort.signal.aborted || this.#leases.get(message.channelId) !== lease) return "silenced" as const;

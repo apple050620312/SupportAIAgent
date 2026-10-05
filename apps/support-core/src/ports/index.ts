@@ -5,8 +5,14 @@ import type {
   HostingService,
   HandoffRequest,
   TicketScope,
-  TicketSnapshot
+  TicketSnapshot,
+  SupportAuditEvent
 } from "@openclaw-hosting/contracts";
+
+export interface SupportAuditRecorder {
+  /** Best effort only; implementations must bound waiting and discard raw failures. */
+  record(event: SupportAuditEvent): Promise<void>;
+}
 
 export interface CustomerIdentityResolver {
   resolveActor(actorContext: ActorContext): Promise<CustomerIdentity | null>;

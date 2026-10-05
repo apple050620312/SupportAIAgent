@@ -19,7 +19,9 @@ describe("manual baseline launcher setup", () => {
     const fetchMock = vi.fn<typeof fetch>(); const setup = prepareTicketSupport(environment(), fetchMock);
     expect(setup.port).toBe(3001); expect(setup.staff.size).toBe(1); expect(fetchMock).not.toHaveBeenCalled();
   });
-  it.each([{ TEST_TICKET_CHANNEL_ID: "not-a-snowflake" }, { SUPPORT_CORE_PORT: "80" }, { OPENCLAW_BASE_URL: "http://remote.example.invalid" }])("rejects unsafe configuration %#", (override) => {
+  it.each([{ TEST_TICKET_CHANNEL_ID: "not-a-snowflake" }, { SUPPORT_CORE_PORT: "80" }, { OPENCLAW_BASE_URL: "http://remote.example.invalid" },
+    { TICKET_AUDIT_CHANNEL_ID: "18446744073709551612" },
+    { TICKET_AUDIT_CHANNEL_ID: "18446744073709551614", TICKET_AUDIT_REVIEW_ACK: "I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL" }])("rejects unsafe configuration %#", (override) => {
     const fetchMock = vi.fn<typeof fetch>(); expect(() => prepareTicketSupport({ ...environment(), ...override }, fetchMock)).toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });

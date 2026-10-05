@@ -36,6 +36,8 @@ Normal startup exposes only `GET /health`. `buildApp` can explicitly register pr
 
 Handoff is a bounded existing-bot effect, not a provider mutation. Core validates ticket authority before requests and again before releasing customer data after awaited work. The bot must serialize final reply delivery against takeover/close and persist revisioned handoff receipts; the demo's in-memory store is not production persistence.
 
+Operational audit is optional and separate from authorization. When configured, it emits only fixed operation/outcome/correlation metadata to a reviewed staff-only Discord channel; missing or failed audit delivery never grants access or turns a support request into success.
+
 See ADR 0004 and the manual testing guide. Real provider activation, identity authority, bot/session adapters and native Harness host binding remain unverified. The concrete tool factory and provider chain are exercised by the offline demo and regression evals without a model.
 
 The operator chose OpenClaw 2026.9.8 and the unchanged Ticket Bot archive as baseline. The opt-in launcher composes Core inside that bot process through ports; it reuses the bot's model/client and installs a serialized legacy mutation/send gate before importing handlers. Its overlay revokes admission on restart and refuses uncertain-send retries. The native Gateway route starts bounded, seven-tool-only runs with signed capsules in runtime `toolBindings`; the bot owns final Discord delivery. ADR 0005 limits this to one process and the configured test ticket, pending manual integration testing.

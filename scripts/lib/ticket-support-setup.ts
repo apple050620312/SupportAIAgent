@@ -26,6 +26,11 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
   const guildId = value(environment, "TEST_TICKET_GUILD_ID");
   const channelId = value(environment, "TEST_TICKET_CHANNEL_ID");
   const staff = value(environment, "TICKET_STAFF_USER_IDS").split(",");
+  const auditChannelId = environment.TICKET_AUDIT_CHANNEL_ID;
+  if (auditChannelId !== undefined && (!isCanonicalDiscordSnowflake(auditChannelId) ||
+      auditChannelId === channelId || environment.TICKET_AUDIT_REVIEW_ACK !== "I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL")) {
+    throw new TicketSupportSetupError("Audit requires a separate canonical channel ID and staff-only review acknowledgement");
+  }
   if (![guildId, channelId, ...staff].every(isCanonicalDiscordSnowflake)) {
     throw new TicketSupportSetupError("Ticket and staff IDs must be canonical snowflake strings");
   }
@@ -44,7 +49,7 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
         clientApiKey: value(environment, "PTERODACTYL_CLIENT_API_KEY"), externalIdStrategy: "whmcs-service-id" }, fetchImpl) });
     const tokens = new TicketContextTokens(value(environment, "TICKET_CONTEXT_KEY"));
     const runner = createOpenClawTicketRunner(value(environment, "OPENCLAW_BASE_URL"), value(environment, "OPENCLAW_GATEWAY_TOKEN"), fetchImpl);
-    return { root, guildId, channelId, staff: new Set(staff), port: Number(port), support, tokens, runner };
+    return { root, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), support, tokens, runner };
   } catch (error: unknown) {
     if (error instanceof TicketSupportSetupError) throw error;
     throw new TicketSupportSetupError("Invalid provider, context key or OpenClaw configuration");

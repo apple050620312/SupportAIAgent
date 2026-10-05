@@ -6,7 +6,8 @@ import {
   type ActorContext, type HandoffRequest, type TicketScope
 } from "@openclaw-hosting/contracts";
 import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
-import type { TicketAccessProvider } from "../ports/index.js";
+import type { TicketAccessProvider, SupportAuditRecorder } from "../ports/index.js";
+import type { SupportAuditEvent } from "@openclaw-hosting/contracts";
 import type { HostingSupportService } from "../services/hosting-support-service.js";
 import { SupportDomainError, UpstreamUnavailableError } from "../domain/errors.js";
 
@@ -14,6 +15,7 @@ export interface ReadOnlyDelivery {
   readonly support: HostingSupportService;
   readonly tokens: TicketContextTokens;
   readonly tickets: TicketAccessProvider;
+  readonly audit?: SupportAuditRecorder;
 }
 const publicService = PublicHostingServiceSchema;
 const publicServer = PublicGameServerSchema;
@@ -23,6 +25,20 @@ const noQuery = Type.Object({}, { additionalProperties: false });
 class TicketDeniedError extends Error {}
 
 export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyDelivery): void {
+  const operations: Readonly<Record<string, SupportAuditEvent["operation"]>> = {
+    "/v1/me/identity": "identify_customer", "/v1/me/services": "list_my_services",
+    "/v1/me/services/:serviceRef": "get_service_details", "/v1/me/servers": "list_my_servers",
+    "/v1/me/servers/:serviceRef/status": "get_my_server_status",
+    "/v1/me/servers/:serviceRef/resources": "get_my_server_resources", "/v1/me/handoff": "handoff_to_staff"
+  };
+  app.addHook("onResponse", async (request, reply) => {
+    const operation = operations[request.routeOptions.url ?? ""];
+    if (!operation || !delivery.audit) return;
+    try {
+      await delivery.audit.record({ operation, correlationId: randomUUID(),
+        outcome: reply.statusCode < 400 ? "success" : reply.statusCode < 500 ? "denied" : "failed" });
+    } catch { app.log.warn("SUPPORT_AUDIT_UNAVAILABLE"); }
+  });
   const contexts = new WeakMap<object, { actor: ActorContext; scope: TicketScope }>();
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof TicketDeniedError) {
