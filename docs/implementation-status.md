@@ -16,6 +16,7 @@
 | 隔離與流程測試 | mock providers → Core HTTP injection → tools、A/B 客戶、expiry/takeover/foreign denial | 真實 provider、Discord event races、live host registration |
 | Agent Evals | deterministic safety/workflow regression command | 相同客服案例下的實際 Harness、模型、cost/latency/summary quality 比較 |
 | 安全稽核 | 可選 staff-only Discord audit recorder，固定欄位與失敗隔離 | 實際頻道權限、保留政策與營運人員審查 |
+| PteroAI 移轉 | 已完成原始 ZIP 能力與風險盤點，唯讀客服 AI 路徑由 OpenClaw 取代 | 高風險檔案、startup、電源及 reinstall 操作需另立寫入里程碑 |
 
 操作入口是 [唯讀測試指南](testing-read-only-support.md)。第一個需要操作者執行的是 GetClientID characterization。全鏈 provider probe 另外要求明確授權、已審查 identity 合約與已確認 external ID mapping，兩者不會自動執行。
 

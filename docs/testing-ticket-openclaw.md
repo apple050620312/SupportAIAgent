@@ -91,4 +91,6 @@ corepack pnpm start:ticket-support
 
 原 bot 的下班提示、transcript 及其他非 AI 功能仍照原程式執行。這次只控制新增 AI 的授權與送訊息流程，不宣稱已改寫原 bot 的所有通知規則。
 
+不要讓 PteroAI 與 OpenClaw 同時處理同一張客服單。PteroAI 的舊 AI 路徑可讀取及修改檔案、startup、電源與 reinstall；本次 OpenClaw 路徑只取代其身分、唯讀診斷及交班部分。若要移轉寫入能力，必須先完成獨立的 mutation policy、approval、audit 與 receipt 設計。
+
 最後依 [Harness 比較案例](harness-evaluation.md) 記錄合成客服案例的品質、延遲與成本，不保存正式對話或 raw provider 回應。測試通過且 identity authority 有證據後，再決定 ADR 0003 與正式 rollout。單程序方案的界線見 [ADR 0005](decisions/0005-unchanged-ticket-baseline-openclaw.md)。
