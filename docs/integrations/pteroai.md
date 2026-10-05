@@ -72,15 +72,15 @@
 
 目前版本已經可以取代 PteroAI 的「客服 AI 身分解析、服務查詢、伺服器唯讀診斷、低風險 restart、OpenClaw 執行及人工交班」路徑，而且安全邊界更強。PteroAI 不應與新的 Support Agent 同時處理同一個客服單。
 
-這不是宣稱目前已經取代 PteroAI 的所有伺服器寫入能力。若商業需求仍包含檔案編輯、startup 修改、重裝或重啟，必須另立寫入能力設計，至少需要：
+這不是宣稱目前已經取代 PteroAI 的所有伺服器寫入能力。若商業需求仍包含檔案編輯、startup 修改、重裝、停止或終止等操作，必須另立寫入能力設計，至少需要：
 
 1. Core 內的明確 provider mutation port
 2. 依已驗證客戶與服務建立的 operation policy
 3. 每次操作的 staff 或客戶 approval，以及不可重放的 revision/nonce
 4. dry-run、輸入大小與路徑限制、結果驗證及失敗交班
-5. 與 Discord handoff、audit、重啟及 uncertain delivery 一致的 receipt 設計
+5. 與 Discord handoff、audit、bounded restart 及 uncertain delivery 一致的 receipt 設計
 
-在這些條件完成前，OpenClaw 以唯讀診斷加交班取代 PteroAI 的客服入口，是目前可以安全上線驗證的範圍。
+在這些條件完成前，OpenClaw 以唯讀診斷、bounded restart 加交班取代 PteroAI 的客服入口，是目前可以安全上線驗證的範圍。
 
 ## 移轉方式
 
