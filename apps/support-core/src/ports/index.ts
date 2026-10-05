@@ -41,3 +41,8 @@ export interface GameServerProvider {
     actorContext: ActorContext
   ): Promise<GameServer | null>;
 }
+
+/** State-changing provider capability. The Core calls it only after ownership is re-resolved. */
+export interface GameServerMutationProvider {
+  restart(server: GameServer, actorContext: ActorContext): Promise<void>;
+}

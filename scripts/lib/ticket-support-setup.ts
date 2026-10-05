@@ -2,7 +2,7 @@ import { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
 import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
 import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
-import { createOpenClawTicketRunner } from "@openclaw-hosting/ticket-bridge";
+import { createOpenClawTicketRunner, DEFAULT_HUMAN_IDLE_MS } from "@openclaw-hosting/ticket-bridge";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 
 export class TicketSupportSetupError extends Error {
@@ -38,18 +38,24 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
   if (!/^[0-9]{4,5}$/.test(port) || Number(port) < 1024 || Number(port) > 65535) {
     throw new TicketSupportSetupError("SUPPORT_CORE_PORT must be an unprivileged local port");
   }
+  const humanIdleMs = environment.TICKET_HUMAN_IDLE_MS ?? String(DEFAULT_HUMAN_IDLE_MS);
+  if (!/^[0-9]+$/.test(humanIdleMs) || !Number.isSafeInteger(Number(humanIdleMs)) ||
+      Number(humanIdleMs) < 5_000 || Number(humanIdleMs) > 86_400_000) {
+    throw new TicketSupportSetupError("TICKET_HUMAN_IDLE_MS must be an integer from 5000 to 86400000");
+  }
   try {
     const whmcsConfig = { baseUrl: value(environment, "WHMCS_BASE_URL"),
       apiIdentifier: value(environment, "WHMCS_API_IDENTIFIER"), apiSecret: value(environment, "WHMCS_API_SECRET") };
     const identities = new VerifiedWhmcsCustomerResolver(new WhmcsCustomerIdentityResolver(whmcsConfig, fetchImpl), whmcsConfig, fetchImpl);
+    const pterodactyl = new PterodactylGameServerProvider({ baseUrl: value(environment, "PTERODACTYL_BASE_URL"),
+        applicationApiKey: value(environment, "PTERODACTYL_APPLICATION_API_KEY"),
+        clientApiKey: value(environment, "PTERODACTYL_CLIENT_API_KEY"), externalIdStrategy: "whmcs-service-id" }, fetchImpl);
     const support = new HostingSupportService({ identityResolver: identities,
       hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, fetchImpl),
-      gameServers: new PterodactylGameServerProvider({ baseUrl: value(environment, "PTERODACTYL_BASE_URL"),
-        applicationApiKey: value(environment, "PTERODACTYL_APPLICATION_API_KEY"),
-        clientApiKey: value(environment, "PTERODACTYL_CLIENT_API_KEY"), externalIdStrategy: "whmcs-service-id" }, fetchImpl) });
+      gameServers: pterodactyl, gameServerMutations: pterodactyl });
     const tokens = new TicketContextTokens(value(environment, "TICKET_CONTEXT_KEY"));
     const runner = createOpenClawTicketRunner(value(environment, "OPENCLAW_BASE_URL"), value(environment, "OPENCLAW_GATEWAY_TOKEN"), fetchImpl);
-    return { root, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), support, tokens, runner };
+    return { root, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), humanIdleMs: Number(humanIdleMs), support, tokens, runner };
   } catch (error: unknown) {
     if (error instanceof TicketSupportSetupError) throw error;
     throw new TicketSupportSetupError("Invalid provider, context key or OpenClaw configuration");

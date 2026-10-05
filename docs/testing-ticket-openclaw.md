@@ -63,6 +63,7 @@ Gateway 使用認證，bot 另從環境取得其 token，不把 token 放入插�
 | `TICKET_AUDIT_REVIEW_ACK` | 設定稽核頻道時必須填 `I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL` |
 | `TICKET_CONTEXT_KEY` | 至少 32 bytes 的隨機 key，僅留在 bot/Core |
 | `SUPPORT_CORE_PORT` | loopback Core port，預設 3001 |
+| `TICKET_HUMAN_IDLE_MS` | 客戶追問等待最新 staff 活動的閒置時間，5,000 至 86,400,000 毫秒，預設 120,000 |
 | `WHMCS_BASE_URL` / `WHMCS_API_IDENTIFIER` / `WHMCS_API_SECRET` | 新的必要唯讀憑證與 HTTPS 安裝根網址 |
 | `PTERODACTYL_BASE_URL` / `PTERODACTYL_APPLICATION_API_KEY` / `PTERODACTYL_CLIENT_API_KEY` | 經驗證的 panel 根網址與兩種必要讀取 key |
 | `OPENCLAW_BASE_URL` / `OPENCLAW_GATEWAY_TOKEN` | 測試 Gateway 根網址與認證 token |
@@ -80,9 +81,9 @@ corepack pnpm start:ticket-support
 
 這會啟動真實流程。沒有 ACK 時會在載入 bot 和 HTTP 請求之前失敗。正常 `dev`、`start` 仍然只有 health。
 
-1. 用客戶 owner 發訊息，核對查到的服務與資源確實屬於此測試帳號。未設定的客服單、guest 和 bot 訊息都不應啟動模型。
+1. 用客戶 owner 發訊息，核對查到的服務與資源確實屬於此測試帳號。若測試問題屬於短暫離線或啟動卡住，可核對 AI 先執行一次 `restart_my_server`，再查詢狀態；未設定的客服單、guest 和 bot 訊息都不應啟動模型。
 2. 連續兩輪對話核對脈絡保留，且沒有跨客服單或跨 owner 記憶。Core 必須每次重新授權。
-3. 以設定的 staff 身分在生成中接手，核對 signal 中止且沒有新的 AI 回覆。不同客服單不能被該 staff 事件冒充目的地。
+3. 以設定的 staff 身分在生成中接手，核對 signal 中止且沒有新的 AI 回覆。接手後讓客戶再問一次，核對 AI 在人工作業閒置期間保持靜默；超過閒置時間且沒有新的 Staff 回覆後，核對 AI 才重新查詢並接手。不同客服單不能被該 staff 事件冒充目的地。
 4. 使用原 bot 的 close/delete/reopen/membership 路徑，核對 guard 在 query 執行前撤銷 AI。保守模式會撤銷所有已啟用 tickets，重開不會自動恢復。
 5. 核對插件 `/hosting-support/turn` 沒有 Gateway 認證不能呼叫，body 的 capsule 不出現在模型 prompt、日誌或最終回覆。模型不能取得可重新簽發 capsule 的 key。
 6. 交班送出失敗時先人工確認 Discord 結果。pending receipt 不自動重試，重啟也不能重送舊 AI 訊息。使用原客服單紀錄完成人工交接。
@@ -91,6 +92,6 @@ corepack pnpm start:ticket-support
 
 原 bot 的下班提示、transcript 及其他非 AI 功能仍照原程式執行。這次只控制新增 AI 的授權與送訊息流程，不宣稱已改寫原 bot 的所有通知規則。
 
-不要讓 PteroAI 與 OpenClaw 同時處理同一張客服單。PteroAI 的舊 AI 路徑可讀取及修改檔案、startup、電源與 reinstall；本次 OpenClaw 路徑只取代其身分、唯讀診斷及交班部分。若要移轉寫入能力，必須先完成獨立的 mutation policy、approval、audit 與 receipt 設計。
+不要讓 PteroAI 與 OpenClaw 同時處理同一張客服單。PteroAI 的舊 AI 路徑可讀取及修改檔案、startup、電源與 reinstall；本次 OpenClaw 路徑取代其身分、唯讀診斷、受限 restart 及交班部分。若要移轉其他寫入能力，必須先完成獨立的 mutation policy、approval、audit 與 receipt 設計。
 
 最後依 [Harness 比較案例](harness-evaluation.md) 記錄合成客服案例的品質、延遲與成本，不保存正式對話或 raw provider 回應。測試通過且 identity authority 有證據後，再決定 ADR 0003 與正式 rollout。單程序方案的界線見 [ADR 0005](decisions/0005-unchanged-ticket-baseline-openclaw.md)。

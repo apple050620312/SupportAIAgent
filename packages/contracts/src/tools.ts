@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { HostingServiceSchema } from "./service.js";
 import { GameServerSchema, ServerResourcesSchema, ServerStatusSchema } from "./server.js";
 import { HandoffRequestSchema } from "./ticket.js";
+import { RestartServerRequestSchema, RestartServerResponseSchema } from "./mutation.js";
 
 export const PublicHostingServiceSchema = Type.Omit(HostingServiceSchema, ["customerRef"]);
 export const PublicGameServerSchema = Type.Omit(GameServerSchema, ["serverRef"]);
@@ -17,6 +18,7 @@ export const HostingToolContracts = {
   list_my_servers: { input: noArguments, output: Type.Array(PublicGameServerSchema) },
   get_my_server_status: { input: ServiceSelectorSchema, output: Type.Object({ serviceRef: Type.String(), status: ServerStatusSchema }, { additionalProperties: false }) },
   get_my_server_resources: { input: ServiceSelectorSchema, output: ServerResourcesSchema },
+  restart_my_server: { input: RestartServerRequestSchema, output: RestartServerResponseSchema },
   handoff_to_staff: { input: HandoffRequestSchema, output: Type.Object({ requested: Type.Literal(true) }, { additionalProperties: false }) }
 } as const;
 export type HostingToolName = keyof typeof HostingToolContracts;

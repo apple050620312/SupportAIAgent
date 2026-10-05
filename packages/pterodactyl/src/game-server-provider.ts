@@ -82,6 +82,21 @@ export class PterodactylGameServerProvider {
     };
   }
 
+  /** Reversible client operation. Core must resolve the server from the owned service first. */
+  async restart(server: GameServer, actor: ActorContext): Promise<void> {
+    if (!isCanonicalDiscordSnowflake(actor.actor.discordUserId) ||
+        !server.serverRef.startsWith("pterodactyl:") ||
+        !UUID.test(server.serverRef.slice("pterodactyl:".length)) ||
+        !server.serviceRef.startsWith("whmcs-service:") ||
+        !["running", "starting", "stopping"].includes(server.status)) throw new ProviderReadError("policy");
+    const response = await this.#fetch(new URL(`api/client/servers/${server.serverRef.slice("pterodactyl:".length)}/power`, this.#base).href, {
+      method: "POST", headers: { ...this.headers(this.#clientKey), "content-type": "application/json" },
+      body: JSON.stringify({ signal: "restart" }), redirect: "error", signal: AbortSignal.timeout(10_000)
+    });
+    await response.body?.cancel().catch(() => undefined);
+    if (![200, 202, 204].includes(response.status) || response.redirected) throw new ProviderReadError("http");
+  }
+
   private headers(key: string): Record<string, string> {
     return { authorization: `Bearer ${key}`, accept: "application/vnd.pterodactyl.v1+json" };
   }

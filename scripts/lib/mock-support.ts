@@ -89,6 +89,11 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
   const ptero: typeof fetch = (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     providerCalls.push(parsed.pathname);
+    if (init?.method === "POST" && /\/api\/client\/servers\/00000000-0000-4000-8000-00000000000[12]\/power$/.test(parsed.pathname)) {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) as { signal?: string } : {};
+      if (body.signal !== "restart") throw new Error("Unapproved power signal");
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     if (init?.method !== "GET") throw new Error("Unapproved method");
     const match = /^\/api\/application\/servers\/external\/([12])$/.exec(parsed.pathname);
     if (match) return Promise.resolve(json({ object: "server", attributes: {
@@ -102,9 +107,10 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
     throw new Error("Unapproved Pterodactyl read");
   };
   const identities = new VerifiedWhmcsCustomerResolver(new WhmcsCustomerIdentityResolver(whmcsConfig, whmcs), whmcsConfig, whmcs);
+  const pteroProvider = new PterodactylGameServerProvider({ baseUrl: "https://panel.example.invalid/", applicationApiKey: "synthetic-application-key", clientApiKey: "synthetic-client-key", externalIdStrategy: "whmcs-service-id" }, ptero);
   const support = new HostingSupportService({ identityResolver: identities,
     hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, whmcs),
-    gameServers: new PterodactylGameServerProvider({ baseUrl: "https://panel.example.invalid/", applicationApiKey: "synthetic-application-key", clientApiKey: "synthetic-client-key", externalIdStrategy: "whmcs-service-id" }, ptero) });
+    gameServers: pteroProvider, gameServerMutations: pteroProvider });
   const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);

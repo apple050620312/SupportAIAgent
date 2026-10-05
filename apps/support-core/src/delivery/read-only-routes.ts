@@ -3,6 +3,7 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyInstance } from "fastify";
 import {
   HandoffRequestSchema, PublicHostingServiceSchema, PublicGameServerSchema, ServiceSelectorSchema, ServerResourcesSchema, ServerStatusSchema,
+  RestartServerResponseSchema,
   type ActorContext, type HandoffRequest, type TicketScope
 } from "@openclaw-hosting/contracts";
 import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
@@ -29,7 +30,8 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
     "/v1/me/identity": "identify_customer", "/v1/me/services": "list_my_services",
     "/v1/me/services/:serviceRef": "get_service_details", "/v1/me/servers": "list_my_servers",
     "/v1/me/servers/:serviceRef/status": "get_my_server_status",
-    "/v1/me/servers/:serviceRef/resources": "get_my_server_resources", "/v1/me/handoff": "handoff_to_staff"
+    "/v1/me/servers/:serviceRef/resources": "get_my_server_resources", "/v1/me/servers/:serviceRef/restart": "restart_server",
+    "/v1/me/handoff": "handoff_to_staff"
   };
   app.addHook("onResponse", async (request, reply) => {
     const operation = operations[request.routeOptions.url ?? ""];
@@ -45,7 +47,7 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
       return reply.code(403).send({ code: "TICKET_ACCESS_DENIED", message: "Ticket access denied" });
     }
     if (error instanceof SupportDomainError) {
-      const status = error.code === "UPSTREAM_UNAVAILABLE" ? 503 : error.code === "SERVICE_NOT_OWNED" ? 403 : 404;
+      const status = error.code === "UPSTREAM_UNAVAILABLE" ? 503 : error.code === "SERVICE_NOT_OWNED" || error.code === "MUTATION_NOT_ALLOWED" ? 403 : error.code === "MUTATION_RATE_LIMITED" ? 429 : 404;
       return reply.code(status).send({ code: error.code, message: error.message });
     }
     if (typeof error === "object" && error !== null && "validation" in error) {
@@ -93,7 +95,7 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
         !["AI_ACTIVE", "WAITING_CUSTOMER"].includes(current.state)) throw new TicketDeniedError();
     return payload;
   });
-  const errors = { 400: errorSchema, 401: errorSchema, 403: errorSchema, 404: errorSchema, 503: errorSchema };
+  const errors = { 400: errorSchema, 401: errorSchema, 403: errorSchema, 404: errorSchema, 429: errorSchema, 503: errorSchema };
   app.get("/v1/me/identity", { schema: { querystring: noQuery, response: { 200: Type.Object({ linked: Type.Literal(true) }), ...errors } } },
     async (request) => { await delivery.support.resolveCustomer(context(request).actor); return { linked: true }; });
   app.get("/v1/me/services", { schema: { querystring: noQuery, response: { 200: Type.Array(publicService), ...errors } } },
@@ -124,6 +126,12 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
     const server = await delivery.support.getMyServer(context(request).actor, request.params.serviceRef);
     if (!server.resources) throw new UpstreamUnavailableError("Game server resources");
     return server.resources;
+  });
+  app.post<{ Params: { serviceRef: string } }>("/v1/me/servers/:serviceRef/restart", {
+    schema: { params: selector, querystring: noQuery, body: noQuery, response: { 200: RestartServerResponseSchema, ...errors } }
+  }, async (request) => {
+    await delivery.support.restartMyServer(context(request).actor, request.params.serviceRef);
+    return { requested: true, operation: "restart_server" as const };
   });
   app.post<{ Body: HandoffRequest }>("/v1/me/handoff", {
     schema: { body: HandoffRequestSchema, querystring: noQuery, response: { 200: Type.Object({ requested: Type.Literal(true) }), ...errors } }

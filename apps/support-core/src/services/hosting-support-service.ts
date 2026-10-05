@@ -14,21 +14,26 @@ import {
   ServiceNotFoundError,
   ServiceNotOwnedError,
   SupportDomainError,
+  MutationNotAllowedError,
+  MutationRateLimitedError,
   UpstreamUnavailableError
 } from "../domain/errors.js";
 import type {
   CustomerIdentityResolver,
   GameServerProvider,
-  HostingServiceProvider
+  HostingServiceProvider,
+  GameServerMutationProvider
 } from "../ports/index.js";
 
 export interface HostingSupportDependencies {
   readonly identityResolver: CustomerIdentityResolver;
   readonly hostingServices: HostingServiceProvider;
   readonly gameServers: GameServerProvider;
+  readonly gameServerMutations?: GameServerMutationProvider;
 }
 
 export class HostingSupportService {
+  #restartAt = new Map<string, number>();
   constructor(private readonly dependencies: HostingSupportDependencies) {}
 
   async resolveCustomer(actorContext: ActorContext): Promise<CustomerIdentity> {
@@ -127,6 +132,31 @@ export class HostingSupportService {
       servers.push(server);
     }
     return servers;
+  }
+
+  /** Low-risk, reversible remediation. Ownership and active state are checked immediately before execution. */
+  async restartMyServer(actorContext: ActorContext, serviceRef: string): Promise<void> {
+    if (!this.dependencies.gameServerMutations) throw new MutationNotAllowedError();
+    const server = await this.getMyServer(actorContext, serviceRef);
+    if (!["running", "starting", "stopping"].includes(server.status)) throw new MutationNotAllowedError();
+    const key = `${actorContext.actor.discordUserId}:${serviceRef}`;
+    const now = Date.now();
+    const previous = this.#restartAt.get(key) ?? 0;
+    if (now - previous < 120_000) throw new MutationRateLimitedError();
+    // Reserve the cooldown before the provider call. A timeout or failed
+    // readback may leave the provider mutation uncertain, so never retry it
+    // immediately from the same actor/service pair.
+    this.#restartAt.set(key, now);
+    await this.callUpstream("Game server mutation provider", () =>
+      this.dependencies.gameServerMutations!.restart(server, actorContext)
+    );
+    // Read back through the same ownership path before reporting the request as
+    // accepted. This does not claim the incident is fixed; it only confirms that
+    // the target is still resolvable and the provider returned a known status.
+    const verified = await this.getMyServer(actorContext, serviceRef);
+    if (!Value.Check(GameServerSchema, verified) || verified.status === "unknown") {
+      throw new UpstreamUnavailableError("Game server mutation verification");
+    }
   }
 
   private async callUpstream<T>(provider: string, operation: () => Promise<T>): Promise<T> {

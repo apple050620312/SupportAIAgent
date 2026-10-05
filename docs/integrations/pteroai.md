@@ -59,8 +59,9 @@
 | Discord → WHMCS 身分 | 直接在 bot 內查詢，且有任意 `uid` 風險 | trusted ticket capsule → Core → WHMCS adapter | OpenClaw 取代 |
 | 服務 ownership | Pterodactyl ID 進入 AI 物件後直接使用 | Core 每次依 actor 重查服務並核對 ownership | OpenClaw 取代 |
 | 伺服器 status/resources | 直接用 client key | Core provider port，最小 DTO、嚴格 schema | OpenClaw 取代 |
+| 低風險恢復 | Console 會自動 stop/start | `restart_my_server` 先驗證 ownership、狀態及頻率，再重新查詢 | OpenClaw 取代 |
 | ticket lifecycle | in-memory active identifier，缺少 CAS 及 takeover binding | 原 bot shared model、revision gate、撤銷 admission、人工接手中止 | OpenClaw 取代 |
-| Agent runtime | bot 直接呼叫模型 API | OpenClaw 2026.9.8 native plugin、固定七工具 allowlist | OpenClaw 取代 |
+| Agent runtime | bot 直接呼叫模型 API | OpenClaw 2026.9.8 native plugin、固定八工具 allowlist | OpenClaw 取代 |
 | handoff | 沒有 Support Core 的交班邊界 | `handoff_to_staff`、固定摘要、人工接手後靜音 | OpenClaw 取代 |
 | 檔案讀寫 | 有 | 目前沒有 | 有意保留為後續安全設計 |
 | startup 修改 | 有 | 目前沒有 | 有意保留為後續安全設計 |
@@ -69,7 +70,7 @@
 
 ## Supersession 判定
 
-目前版本已經可以取代 PteroAI 的「客服 AI 身分解析、服務查詢、伺服器唯讀診斷、OpenClaw 執行及人工交班」路徑，而且安全邊界更強。PteroAI 不應與新的 Support Agent 同時處理同一個客服單。
+目前版本已經可以取代 PteroAI 的「客服 AI 身分解析、服務查詢、伺服器唯讀診斷、低風險 restart、OpenClaw 執行及人工交班」路徑，而且安全邊界更強。PteroAI 不應與新的 Support Agent 同時處理同一個客服單。
 
 這不是宣稱目前已經取代 PteroAI 的所有伺服器寫入能力。若商業需求仍包含檔案編輯、startup 修改、重裝或重啟，必須另立寫入能力設計，至少需要：
 

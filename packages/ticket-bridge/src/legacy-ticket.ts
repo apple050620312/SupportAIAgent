@@ -114,7 +114,9 @@ export class LegacyTicketAdapter implements TicketStore, TicketMessenger {
       if (!["AI_ACTIVE", "WAITING_CUSTOMER", "HUMAN_NEEDED", "HUMAN_ACTIVE", "CLOSED"].includes(nextState) ||
           !Number.isSafeInteger(current.revision + 1)) throw new TicketBridgeError();
       this.#sessions.set(snapshot.scope.channelId, { scope: { ...snapshot.scope }, state: nextState, revision: current.revision + 1 });
-      if (nextState === "HUMAN_ACTIVE" || nextState === "CLOSED") this.notifyRetirement(snapshot.scope.channelId);
+      // HUMAN_ACTIVE is a reversible staff handoff; the Discord ingress aborts the
+      // current generation but may resume after the configured human-idle window.
+      if (nextState === "CLOSED") this.notifyRetirement(snapshot.scope.channelId);
       return true;
     });
   }

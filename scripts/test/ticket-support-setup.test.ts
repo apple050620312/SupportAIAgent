@@ -20,9 +20,14 @@ describe("manual baseline launcher setup", () => {
     expect(setup.port).toBe(3001); expect(setup.staff.size).toBe(1); expect(fetchMock).not.toHaveBeenCalled();
   });
   it.each([{ TEST_TICKET_CHANNEL_ID: "not-a-snowflake" }, { SUPPORT_CORE_PORT: "80" }, { OPENCLAW_BASE_URL: "http://remote.example.invalid" },
+    { TICKET_HUMAN_IDLE_MS: "4999" }, { TICKET_HUMAN_IDLE_MS: "not-a-duration" },
     { TICKET_AUDIT_CHANNEL_ID: "18446744073709551612" },
     { TICKET_AUDIT_CHANNEL_ID: "18446744073709551614", TICKET_AUDIT_REVIEW_ACK: "I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL" }])("rejects unsafe configuration %#", (override) => {
     const fetchMock = vi.fn<typeof fetch>(); expect(() => prepareTicketSupport({ ...environment(), ...override }, fetchMock)).toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("accepts and returns the bounded human idle setting", () => {
+    const setup = prepareTicketSupport({ ...environment(), TICKET_HUMAN_IDLE_MS: "5000" }, vi.fn<typeof fetch>());
+    expect(setup.humanIdleMs).toBe(5000);
   });
 });

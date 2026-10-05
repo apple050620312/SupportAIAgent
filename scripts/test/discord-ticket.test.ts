@@ -49,6 +49,59 @@ describe("Discord ticket-main message ingress", () => {
     expect(f.run.mock.calls[0]?.[1].aborted).toBe(true);
     finish({ reply: "Do not send this" }); expect(await pending).toBe("silenced"); expect(f.send).not.toHaveBeenCalled();
   });
+
+  it("re-enters AI after a customer follow-up only when staff has been idle", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture(); await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+      let finish!: (value: { reply: string }) => void;
+      const started = new Promise<void>((resolve) => {
+        f.run.mockImplementationOnce(() => { resolve(); return new Promise((done) => { finish = done; }); });
+      });
+      const first = f.controller.receive(f.message); await started;
+      expect(await f.controller.receive({ ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false } })).toBe("staff-takeover");
+      finish({ reply: "stale" }); await expect(first).resolves.toBe("silenced");
+
+      f.run.mockResolvedValue({ reply: "Resumed support reply" });
+      const followUp = f.controller.receive({ ...f.message, content: "Still waiting" });
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(f.run).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(followUp).resolves.toBe("sent");
+      expect(f.run).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("refreshes the human idle window when staff sends another message", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture(); await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+      await f.controller.receive({ ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false } });
+      f.run.mockResolvedValue({ reply: "Resumed support reply" });
+      const followUp = f.controller.receive({ ...f.message, content: "Still waiting" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await f.controller.receive({ ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false }, content: "Staff is checking" });
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(f.run).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(followUp).resolves.toBe("sent");
+    } finally { vi.useRealTimers(); }
+  });
+  it("uses the configured human idle window instead of a fixed timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      const configured = new DiscordTicketSupport(f.reader, f.adapter, f.bridge, { run: f.run }, new Set([MOCK_OTHER_SCOPE.discordUserId]), undefined, { humanIdleMs: 5_000 });
+      await configured.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+      await configured.receive({ ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false } });
+      f.run.mockResolvedValue({ reply: "Configured resume" });
+      const followUp = configured.receive({ ...f.message, content: "Still waiting" });
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(f.run).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(followUp).resolves.toBe("sent");
+    } finally { vi.useRealTimers(); }
+  });
   it("rejects old output after legacy close and reopen", async () => {
     const f = fixture(); await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
     f.run.mockImplementationOnce(async () => {

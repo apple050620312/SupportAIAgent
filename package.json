@@ -25,6 +25,7 @@
     "@openclaw-hosting/ticket-bridge": "workspace:*",
     "@openclaw-hosting/trusted-context": "workspace:*",
     "@openclaw-hosting/pterodactyl": "workspace:*",
+    "@openclaw-hosting/learning-loop": "workspace:*",
     "@openclaw-hosting/contracts": "workspace:*",
     "@openclaw-hosting/whmcs": "workspace:*",
     "@eslint/js": "^9.36.0",

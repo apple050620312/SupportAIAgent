@@ -4,8 +4,8 @@ import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 
 export { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard } from "./legacy-ticket.js";
 export type { LegacyTicketReader, LegacyDiscordTransport } from "./legacy-ticket.js";
-export { DiscordTicketSupport, attachTicketSupportEvents } from "./discord-ticket.js";
-export type { TicketAgentRunner, TicketCustomerMessage } from "./discord-ticket.js";
+export { DEFAULT_HUMAN_IDLE_MS, DiscordTicketSupport, attachTicketSupportEvents } from "./discord-ticket.js";
+export type { DiscordTicketSupportOptions, TicketAgentRunner, TicketCustomerMessage } from "./discord-ticket.js";
 export { createOpenClawTicketRunner } from "./openclaw-runner.js";
 
 export interface TicketStore {
@@ -89,6 +89,16 @@ export class TicketBridge {
   async customerMessage(scope: TicketScope): Promise<void> {
     const snapshot = await this.read(scope);
     if (snapshot?.state === "WAITING_CUSTOMER" && !await this.store.compareAndSet(snapshot, "AI_ACTIVE")) {
+      throw new TicketBridgeError();
+    }
+  }
+
+  /** Reopen only after the trusted host's human-idle policy has elapsed. */
+  async resumeAfterHuman(scope: TicketScope): Promise<void> {
+    const snapshot = await this.read(scope);
+    if (!snapshot || snapshot.state === "CLOSED" ||
+        (snapshot.state !== "HUMAN_ACTIVE" && snapshot.state !== "AI_ACTIVE") ||
+        (snapshot.state === "HUMAN_ACTIVE" && !await this.store.compareAndSet(snapshot, "AI_ACTIVE"))) {
       throw new TicketBridgeError();
     }
   }

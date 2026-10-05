@@ -76,7 +76,7 @@ corepack pnpm probe:read-only
 
 Context 簽發使用 `TicketContextTokens`。正式 key 至少 32 個隨機 bytes，保留在可信 bot 與 Core，工具封裝只取得短效 capsule。不要把 key 或 capsule 放進提示詞、模型工具參數、URL 或日誌。
 
-`createHostingTools` / `hostingToolFactory` 已提供六個唯讀工具與交班工具。OpenClaw 已選定並固定 2026.9.8，native entry/manifest、Gateway-authenticated turn route 與 `toolBindings` 接線均已實作。未知 binding 沒有工具，Core 仍驗證 signed capsule 與 ticket state。尚未安裝或實際執行 Gateway，mock 不代表 native 相容性測試通過，不能猜 sender 或 session key 的權限。
+`createHostingTools` / `hostingToolFactory` 已提供六個唯讀查詢、一個受限的 `restart_my_server` 與交班工具。重啟只能使用 Core 驗證過的服務 selector，並由 Core 重新確認 ownership、狀態及頻率；設定 `TICKET_HUMAN_IDLE_MS` 後，人工接手期間的客戶追問會等待最新 staff 活動逾時才恢復 AI。OpenClaw 已選定並固定 2026.9.8，native entry/manifest、Gateway-authenticated turn route 與 `toolBindings` 接線均已實作。未知 binding 沒有工具，Core 仍驗證 signed capsule 與 ticket state。尚未安裝或實際執行 Gateway，mock 不代表 native 相容性測試通過，不能猜 sender 或 session key 的權限。
 
 依主軸比較 Harness 時，使用相同客服案例與 tool factory，評估工具執行、交班品質、接手靜默、脈絡隔離、延遲、成本及部署複雜度。不要因另一個 Harness 宣稱有 session 隔離，就跳過 Core 的客戶所有權檢查。
 
@@ -91,4 +91,4 @@ Context 簽發使用 `TicketContextTokens`。正式 key 至少 32 個隨機 byte
 5. 交班投遞失敗可安全重試，沒有跨客服單傳送、重複通知或模型指定 mentions
 6. 真正 host 的工具註冊、簽發與 state adapter 經隔離環境測試，再決定最終 Harness
 
-這些結果審查後才決定 ADR 0003 與正式啟用。Order Agent、重啟、退款、終止及其他寫入操作不屬於本次唯讀階段。
+這些結果審查後才決定 ADR 0003 與正式啟用。Order Agent、退款、終止、console、檔案及 startup 寫入仍不屬於目前範圍；重啟是唯一已加入的低風險受限操作，仍需真實權限與結果驗證。

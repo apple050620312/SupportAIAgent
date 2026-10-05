@@ -11,12 +11,13 @@
 | 已擁有服務 | 客戶限定分頁、row ownership、重複/不一致拒絕、最小 DTO | empty/pagination 形狀、backend marker、實際 key 權限 |
 | 服務 → Pterodactyl | 官方 1.15.1 external GET、full UUID resources GET、資料最小化 | service ID external mapping、Application/Client key scope |
 | 唯讀 Core | `/v1/me` opt-in routes、trusted context、schema/ownership checks | TLS/private network、真正 ticket store、identity authority |
-| 客服工具 | 六個唯讀 tool factory、handoff tool、OpenClaw 2026.9.8 native entry/manifest、Gateway turn route、out-of-band toolBindings | 真正 native loader、SDK、模型工具 allowlist 與 session context 測試 |
+| 客服工具 | 六個唯讀 tool factory、受限 restart、handoff tool、OpenClaw 2026.9.8 native entry/manifest、Gateway turn route、out-of-band toolBindings | 真正 native loader、SDK、模型工具 allowlist 與 session context 測試 |
 | 客服單生命週期 | 以原 ZIP 作基底的 owner-derived event ingress、單程序 overlay、mutation/send gate、receipt 與 restart revocation、manual launcher | 實際 Mongoose/Discord ordering、staff allowlist、exclusive single process、投遞不明的人工核對 |
 | 隔離與流程測試 | mock providers → Core HTTP injection → tools、A/B 客戶、expiry/takeover/foreign denial | 真實 provider、Discord event races、live host registration |
 | Agent Evals | deterministic safety/workflow regression command | 相同客服案例下的實際 Harness、模型、cost/latency/summary quality 比較 |
 | 安全稽核 | 可選 staff-only Discord audit recorder，固定欄位與失敗隔離 | 實際頻道權限、保留政策與營運人員審查 |
 | PteroAI 移轉 | 已完成原始 ZIP 能力與風險盤點，唯讀客服 AI 路徑由 OpenClaw 取代 | 高風險檔案、startup、電源及 reinstall 操作需另立寫入里程碑 |
+| 寫入與持續改善 | 已加入 Core ownership 驗證、頻率限制及狀態前置檢查的低風險 `restart_my_server`；ADR 0006 定義其餘 approval-bound mutation 與 reviewed learning loop | 真實 restart 權限、結果驗證、Staff approval host event、人工 eval |
 
 操作入口是 [唯讀測試指南](testing-read-only-support.md)。第一個需要操作者執行的是 GetClientID characterization。全鏈 provider probe 另外要求明確授權、已審查 identity 合約與已確認 external ID mapping，兩者不會自動執行。
 
@@ -26,4 +27,4 @@
 
 原 schema 缺少 AI state、顯式 revision 與 receipts，現在透過明確 opt-in 的單程序 overlay 處理。所有受 guard 包覆的 legacy mutation 都先撤銷 AI，重啟不延續舊 admission，投遞不明不盲目重試。這不是 durable 或多程序保證。來源與限制見 [客服單調查](integrations/ticket-bot.md)、[ADR 0005](decisions/0005-unchanged-ticket-baseline-openclaw.md) 及 [手動接入測試指南](testing-ticket-openclaw.md)。[Harness 案例](harness-evaluation.md) 仍需人工跑模型品質與成本實驗。
 
-後續寫入、重啟、訂單自動 Accept/Pending、帳務工具、console/file access、跨客戶記憶與資料庫不是本階段。主軸先穩定唯讀客服與交班，再另立有權限與批准流程的里程碑。
+後續寫入、訂單自動 Accept/Pending、帳務工具、console/file access、跨客戶記憶與資料庫不是本階段。重啟已是唯一受限的低風險操作，仍需真實權限與結果驗證；其餘寫入另立有權限與批准流程的里程碑。

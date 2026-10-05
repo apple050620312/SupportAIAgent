@@ -3,6 +3,8 @@ export type SupportErrorCode =
   | "SERVICE_NOT_FOUND"
   | "SERVICE_NOT_OWNED"
   | "SERVER_NOT_FOUND"
+  | "MUTATION_NOT_ALLOWED"
+  | "MUTATION_RATE_LIMITED"
   | "UPSTREAM_UNAVAILABLE";
 
 export abstract class SupportDomainError extends Error {
@@ -54,4 +56,14 @@ export class UpstreamUnavailableError extends SupportDomainError {
     super(`${provider} is currently unavailable`, options);
     this.provider = provider;
   }
+}
+
+export class MutationNotAllowedError extends SupportDomainError {
+  readonly code = "MUTATION_NOT_ALLOWED" as const;
+  constructor() { super("This support operation requires a different approval"); }
+}
+
+export class MutationRateLimitedError extends SupportDomainError {
+  readonly code = "MUTATION_RATE_LIMITED" as const;
+  constructor() { super("This support operation was recently requested"); }
 }

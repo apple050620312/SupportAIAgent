@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 describe("offline tool to Core to provider flow", () => {
-  it("executes all six read-only tools with minimal output", async () => {
+  it("executes the read-only tools and low-risk restart with minimal output", async () => {
     const demo = createMockSupport();
     try {
       for (const tool of demo.toolsFor(MOCK_SCOPE).filter((candidate) => candidate.name !== "handoff_to_staff")) {
-        const parameters = ["get_service_details", "get_my_server_status", "get_my_server_resources"].includes(tool.name)
+        const parameters = ["get_service_details", "get_my_server_status", "get_my_server_resources", "restart_my_server"].includes(tool.name)
           ? { serviceRef: "whmcs-service:1" } : {};
         const result = await tool.execute("synthetic", parameters);
         const output = JSON.stringify(result);
@@ -16,6 +16,7 @@ describe("offline tool to Core to provider flow", () => {
         expect(output).not.toContain("synthetic-secret");
       }
       expect(demo.providerCalls).toContain("GetClientsDetails");
+      expect(demo.providerCalls.some((call) => call.endsWith("/power"))).toBe(true);
     } finally { await demo.app.close(); }
   });
   it("cannot select another customer's service or inject a customer/actor ID", async () => {

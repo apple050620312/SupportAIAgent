@@ -28,6 +28,7 @@ const descriptions: Record<HostingToolName, string> = {
   list_my_servers: "列出目前客戶的活躍遊戲伺服器",
   get_my_server_status: "查詢已擁有服務的伺服器狀態",
   get_my_server_resources: "查詢已擁有服務的資源使用量",
+  restart_my_server: "重新啟動已擁有且目前可操作的伺服器 會在 Core 驗證 ownership 並限制頻率後執行",
   handoff_to_staff: "將尚未驗證的代理摘要交給客服單機器人安排人工接手"
 };
 const allowedErrors = new Set(["UNAUTHENTICATED", "TICKET_ACCESS_DENIED", "INVALID_REQUEST", "IDENTITY_NOT_LINKED",
@@ -56,16 +57,16 @@ export function createHostingTools(
         identify_customer: "v1/me/identity", list_my_services: "v1/me/services",
         get_service_details: `v1/me/services/${ref}`, list_my_servers: "v1/me/servers",
         get_my_server_status: `v1/me/servers/${ref}/status`,
-        get_my_server_resources: `v1/me/servers/${ref}/resources`, handoff_to_staff: "v1/me/handoff"
+        get_my_server_resources: `v1/me/servers/${ref}/resources`, restart_my_server: `v1/me/servers/${ref}/restart`, handoff_to_staff: "v1/me/handoff"
       };
       try {
         const token = await context.getTicketToken();
         context.assertCurrent();
         signal?.throwIfAborted();
         const response = await fetchImpl(new URL(routes[name], base).href, {
-          method: name === "handoff_to_staff" ? "POST" : "GET",
+          method: name === "handoff_to_staff" || name === "restart_my_server" ? "POST" : "GET",
           headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-          ...(name === "handoff_to_staff" ? { body: JSON.stringify(parameters) } : {}),
+          ...(name === "handoff_to_staff" ? { body: JSON.stringify(parameters) } : name === "restart_my_server" ? { body: JSON.stringify({}) } : {}),
           redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000)
         });
         if (response.redirected || response.headers.get("content-type")?.split(";")[0] !== "application/json" || response.body === null) {

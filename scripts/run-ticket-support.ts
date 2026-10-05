@@ -52,7 +52,9 @@ async function main() {
     if (!client.isReady()) await once(client as never, "ready", { signal: AbortSignal.timeout(30_000) });
     const audit = setup.auditChannelId ? privateDiscordAudit(await client.channels.fetch(setup.auditChannelId),
       setup.guildId, setup.auditChannelId, setup.staff, client.user?.id ?? "", (code) => console.error(code)) : undefined;
-    const tickets = new DiscordTicketSupport(reader, adapter, bridge, setup.runner, setup.staff, audit);
+    const tickets = new DiscordTicketSupport(reader, adapter, bridge, setup.runner, setup.staff, audit, {
+      humanIdleMs: setup.humanIdleMs
+    });
     detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
     app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
     await tickets.enableChannel(setup.guildId, setup.channelId);

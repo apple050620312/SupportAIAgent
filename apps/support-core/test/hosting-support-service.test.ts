@@ -149,4 +149,20 @@ describe("HostingSupportService", () => {
     expect((failure as Error).message).not.toContain("sensitive detail");
     expect(failure).not.toHaveProperty("cause");
   });
+
+  it("does not report a restart when the post-operation status readback is unknown", async () => {
+    let reads = 0;
+    let mutations = 0;
+    const subject = new HostingSupportService({
+      identityResolver: new FakeCustomerIdentityResolver(new Map([[actor.actor.discordUserId, customer]])),
+      hostingServices: new FakeHostingServiceProvider([ownedService]),
+      gameServers: {
+        findForOwnedService: () => Promise.resolve(reads++ === 0 ? ownedServer : { ...ownedServer, status: "unknown" })
+      },
+      gameServerMutations: { restart: () => { mutations++; return Promise.resolve(); } }
+    });
+
+    await expect(subject.restartMyServer(actor, ownedService.serviceRef)).rejects.toBeInstanceOf(UpstreamUnavailableError);
+    expect(mutations).toBe(1);
+  });
 });

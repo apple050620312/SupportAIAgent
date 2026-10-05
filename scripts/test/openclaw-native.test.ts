@@ -8,10 +8,10 @@ function registrations(fetchMock: typeof fetch) {
   return registerTool.mock.calls;
 }
 describe("OpenClaw v2026.9.8 native entry", () => {
-  it("ships a native register entry and seven optional version-two factories", () => {
+  it("ships a native register entry and eight optional version-two factories", () => {
     expect(plugin.id).toBe("hosting-support");
     const factories = registrations(vi.fn());
-    expect(factories).toHaveLength(7);
+    expect(factories).toHaveLength(8);
     expect(factories.every(([factory, options]) => factory.contextVersion === 2 && options.optional)).toBe(true);
     expect(factories.map(([, options]) => options.names[0])).toContain("handoff_to_staff");
   });

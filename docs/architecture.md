@@ -32,7 +32,7 @@ Expected failures use stable error codes: `IDENTITY_NOT_LINKED`, `SERVICE_NOT_FO
 
 ## HTTP surface
 
-Normal startup exposes only `GET /health`. `buildApp` can explicitly register prototype `/v1/me/identity`, `/services`, `/services/:serviceRef`, `/servers`, `/servers/:serviceRef/status`, `/servers/:serviceRef/resources` and `/handoff` with supplied read-only dependencies. These routes reject additional parameters and use signed bot-issued ticket context, not model actor IDs. Public responses omit customer references and Pterodactyl UUIDs.
+Normal startup exposes only `GET /health`. `buildApp` can explicitly register prototype `/v1/me/identity`, `/services`, `/services/:serviceRef`, `/servers`, `/servers/:serviceRef/status`, `/servers/:serviceRef/resources`, the bounded `/servers/:serviceRef/restart` operation and `/handoff` with supplied dependencies. These routes reject additional parameters and use signed bot-issued ticket context, not model actor IDs. Public responses omit customer references and Pterodactyl UUIDs.
 
 Handoff is a bounded existing-bot effect, not a provider mutation. Core validates ticket authority before requests and again before releasing customer data after awaited work. The bot must serialize final reply delivery against takeover/close and persist revisioned handoff receipts; the demo's in-memory store is not production persistence.
 
@@ -40,4 +40,6 @@ Operational audit is optional and separate from authorization. When configured, 
 
 See ADR 0004 and the manual testing guide. Real provider activation, identity authority, bot/session adapters and native Harness host binding remain unverified. The concrete tool factory and provider chain are exercised by the offline demo and regression evals without a model.
 
-The operator chose OpenClaw 2026.9.8 and the unchanged Ticket Bot archive as baseline. The opt-in launcher composes Core inside that bot process through ports; it reuses the bot's model/client and installs a serialized legacy mutation/send gate before importing handlers. Its overlay revokes admission on restart and refuses uncertain-send retries. The native Gateway route starts bounded, seven-tool-only runs with signed capsules in runtime `toolBindings`; the bot owns final Discord delivery. ADR 0005 limits this to one process and the configured test ticket, pending manual integration testing.
+The operator chose OpenClaw 2026.9.8 and the unchanged Ticket Bot archive as baseline. The opt-in launcher composes Core inside that bot process through ports; it reuses the bot's model/client and installs a serialized legacy mutation/send gate before importing handlers. Its overlay revokes admission on restart and refuses uncertain-send retries. The native Gateway route starts bounded, eight-tool-only runs with signed capsules in runtime `toolBindings`; the bot owns final Discord delivery. The only state-changing tool is the bounded, rate-limited `restart_my_server`; ADR 0005 limits this to one process and the configured test ticket, pending manual integration testing.
+
+Future provider writes follow ADR 0006: OpenClaw proposes a typed operation, Core re-resolves ownership and a trusted host approves the exact digest before one execution. Runtime learning uses deidentified feedback and reviewed eval promotion; it does not let the model alter its own tools, policies or production prompt.

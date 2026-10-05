@@ -1,6 +1,6 @@
 # Hosting Support native OpenClaw plugin
 
-This package now exports `createHostingTools` and `hostingToolFactory`: six bounded read-only tools and a ticket-side handoff tool. They call authenticated Support Core only. They use concrete tool `execute(toolCallId, parameters, signal?)` semantics described in the official [tool plugin documentation](https://docs.openclaw.ai/plugins/tool-plugins). No OpenClaw runtime dependency is installed.
+This package now exports `createHostingTools` and `hostingToolFactory`: six bounded read-only tools, one rate-limited restart tool and a ticket-side handoff tool. They call authenticated Support Core only. They use concrete tool `execute(toolCallId, parameters, signal?)` semantics described in the official [tool plugin documentation](https://docs.openclaw.ai/plugins/tool-plugins). No OpenClaw runtime dependency is installed.
 
 The host supplies `TrustedHostingToolContext`, an opaque ticket capsule getter and an invocation-currency guard, per verified ticket session. Unknown sessions receive no tools. A model cannot supply an actor/customer/server ID or a destination channel; it may select only `serviceRef` from its owned service list. Strict TypeBox validation rejects extra parameters.
 

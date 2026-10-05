@@ -84,15 +84,19 @@ describe("Core delivery authorization", () => {
       expect(demo.providerCalls).toEqual([]);
     } finally { await demo.app.close(); }
   });
-  it("does not expose mutation routes or accept client identifiers as query parameters", async () => {
+  it("accepts only the bounded restart route and rejects client identifiers as query parameters", async () => {
     const demo = createMockSupport();
     try {
       const authorization = `Bearer ${await demo.bridge.contextForCustomer(MOCK_SCOPE)}`;
       const query = await demo.app.inject({ url: "/v1/me/services?clientid=2", headers: { authorization } });
       expect(query.statusCode).toBe(400);
-      const mutation = await demo.app.inject({ method: "POST", url: "/v1/me/servers/whmcs-service:1/restart", headers: { authorization } });
-      expect(mutation.statusCode).toBe(404);
-      expect(demo.providerCalls).toEqual([]);
+      const badMutation = await demo.app.inject({ method: "POST", url: "/v1/me/servers/whmcs-service:1/restart",
+        headers: { authorization, "content-type": "application/json" }, payload: JSON.stringify({ clientid: 2 }) });
+      expect(badMutation.statusCode).toBe(400);
+      const mutation = await demo.app.inject({ method: "POST", url: "/v1/me/servers/whmcs-service:1/restart",
+        headers: { authorization, "content-type": "application/json" }, payload: "{}" });
+      expect(mutation.statusCode).toBe(200);
+      expect(demo.providerCalls.some((call) => call.endsWith("/power"))).toBe(true);
     } finally { await demo.app.close(); }
   });
 });
