@@ -4,7 +4,7 @@
 
 This investigation inspected the supplied `AndrezzzLinkDiscord` version 1.7 source tree and the supplied Ticket Bot and PteroAI source archives. The addon implementation is not available as readable PHP: `AndrezzzLinkDiscord.php`, `functions.php`, `hooks.php`, `public.php`, and every event hook under `hooks/` are ionCube-encoded. The readable addon material is limited to `whmcs.json`, Smarty templates, and third-party vendor code.
 
-The internal projects reveal the external lookup contract their consumers rely on, but not the addon's storage schema, lookup implementation, cardinality, lifecycle semantics, or complete failure behavior. This document separates facts verified from readable files from recommendations and unresolved questions. No production adapter is implemented here.
+The internal projects reveal the external lookup contract their consumers rely on, but not the addon's storage schema, lookup implementation, cardinality, lifecycle semantics, or complete failure behavior. The subsequently inspected original version 1.7 ZIP also supplies the vendor's custom WHMCS API files and Discord backend. This document separates readable-source facts, vendor claims, and recommendations. A provisional mock-tested read-only adapter now exists, but is not wired into startup or approved as a production identity authority. No live WHMCS requests have been made during its implementation.
 
 ## Current addon behavior
 
@@ -34,7 +34,7 @@ Both internal projects call the WHMCS external API endpoint `/includes/api.php` 
 - `secret=<WHMCS API secret>`;
 - `responsetype=json`.
 
-Both consumers expect the JSON response to contain `clientid`. Ticket Bot additionally checks `result === "success"` in two paths. The action name and Discord-specific parameter show that this is a custom action exposed through the generic WHMCS API endpoint. Given the surrounding system and matching addon feature description, the Link Discord addon is the likely provider, but the encoded addon source does not prove which PHP registration code implements it.
+Both consumers expect the JSON response to contain `clientid`. Ticket Bot additionally checks `result === "success"` in two paths. The original vendor ZIP supplies `WHMCS EXTRA/includes/api/getclientid.php` and `getclientdiscordid.php`; its root `README.md` explicitly advertises both lookup directions. This verifies vendor provenance of the custom action. The supplied PHP files are ionCube-encoded, so their resolver behavior remains unknown.
 
 The verified consumer flow is:
 
@@ -102,11 +102,36 @@ Both projects use the same WHMCS custom API action and receive the same minimal 
 
 ## Observed GetClientID API contract
 
+### Provisional read-only adapter
+
+**Engineering policy, not an observed response contract.** The operator authorized implementation using the known consumer request contract while deferring live characterization. `packages/whmcs/src/customer-identity-resolver.ts` exports `WhmcsCustomerIdentityResolver`, structurally compatible with Support Core's `CustomerIdentityResolver` port. It depends only on shared contracts, not on Support Core implementation. Production startup and the health-only HTTP surface remain unchanged.
+
+The constructor accepts `WhmcsAdapterConfig` (`baseUrl`, `apiIdentifier`, `apiSecret`). A future trusted composition root must supply runtime credentials; the adapter does not read historical source credentials or environment files automatically. Its optional fetch dependency exists for mocked tests. There is no generic WHMCS command interface.
+
+The only operation is `resolveActor(actorContext)`. It reads `actorContext.actor.discordUserId`, validates it as a canonical string, and form-posts the known GetClientID fields. Model-supplied client selectors are not used. ActorContext itself is not authentication: the future delivery layer must construct it from a verified Discord actor rather than model arguments.
+
+Current safeguards and deliberately conservative assumptions:
+
+- HTTPS only, including local targets; reject URL credentials, query strings, fragments, and a PHP endpoint supplied as the installation base. Preserve an installation subdirectory when appending `/includes/api.php`.
+- Put credentials only in the POST body. Reject redirects, apply a ten-second abort signal covering fetch/body consumption, and never retry.
+- Require a successful HTTP status, `application/json`, valid UTF-8 JSON, and a response no larger than 64 KiB while reading the body.
+- Require an object with exactly `result` and `clientid`, with `result === "success"`. Unknown additional fields, including ambiguity indicators or customer data, fail closed. This strict field allowlist and content-type rule may need adjustment after authorized observation; neither is a verified vendor schema.
+- Accept `clientid` only as a positive safe integer number or canonical positive decimal string no greater than JavaScript's maximum safe integer. Reject zero, signs, whitespace, leading zeroes, fractional values, arrays, and unsafe values. This bound is a local policy, not a discovered WHMCS database type.
+- Return only `{ customerRef: "whmcs:<canonical client ID>" }`. The reference is internal provider output, not an agent-selectable customer input. No display name, status, raw response, or provider credentials leave the adapter.
+- Never return `null`. No-match, authentication errors, addon failures, malformed responses, and unexpected shapes have no verified domain distinction yet. They throw a sanitized `WhmcsIdentityResolutionError`; Support Core's existing error boundary maps it to `UPSTREAM_UNAVAILABLE`, not `IDENTITY_NOT_LINKED`.
+- Errors retain a fixed failure category only, without the upstream exception/cause, request, response body, identifiers, or credentials. Credential fields are private and not exposed by object serialization.
+
+Snowflake validation is now a pure shared function in `packages/contracts/src/discord.ts`, also used by the characterization harness. It preserves strings and uses `BigInt` only for range comparison. The 17-20 digit unsigned-64-bit policy is intentionally conservative and does not describe encoded addon storage.
+
+All adapter fixtures are synthetic. Mock tests verify request construction, success parsing, invalid IDs/configuration, HTTP/auth-shaped/unknown responses, response size and parsing, abort handling, redaction, and that Core stops downstream service access on identity failure. They establish local implementation behavior only.
+
+**Deployment gates remain:** characterize real success/no-match/authentication responses, establish authoritative uniqueness/ambiguity behavior, verify the returned client exists and apply an explicit client-status policy, configure least-privilege runtime credentials, and authenticate ActorContext transport. A single returned client ID does not prove uniqueness. A second narrowly scoped client existence/status lookup is recommended before support access unless authoritative evidence establishes those guarantees within GetClientID. No such second call is implemented. ADR 0003 remains deferred until manually reviewed evidence supports the identity authority decision.
+
 ### Characterization status
 
 Live characterization is still pending. No WHMCS request was made while building the harness, and no response row is documented until an operator runs it against an explicitly authorized environment and manually reviews the sanitized output.
 
-The isolated harness is `scripts/characterize-get-client-id.ts`. Its parsing, validation, request planning, and sanitization logic lives under `scripts/lib/` and is not imported by Support Core or any production package.
+The isolated harness is `scripts/characterize-get-client-id.ts`. Its parsing, request planning, and sanitization logic lives under `scripts/lib/` and is not imported by Support Core or any production package. Only its pure snowflake validator is shared through `packages/contracts`.
 
 ### Prepared request contract
 
@@ -136,6 +161,7 @@ Copy `.env.characterization.example` to the Git-ignored `.env.characterization` 
 Run it manually with:
 
 ```sh
+corepack pnpm build
 corepack pnpm characterize:get-client-id
 ```
 
@@ -161,7 +187,7 @@ It never retains or prints credentials, Discord IDs, client ID values, raw bodie
 
 The harness prepares linked, unlinked, malformed, empty, invalid-authentication, and missing-authentication cases. Closed-client and inactive-client cases are included only when their optional variables are supplied. It deliberately has no duplicate-account or enumeration behavior.
 
-These cases remain unobserved. In particular, no response may be interpreted as `IDENTITY_NOT_LINKED` until live results demonstrate a distinct no-match contract. Sanitized results must be manually reviewed before ADR 0003 is created or production adapter behavior is specified.
+These cases remain unobserved. In particular, no response may be interpreted as `IDENTITY_NOT_LINKED` until live results demonstrate a distinct no-match contract. Sanitized results must be manually reviewed before ADR 0003 is created or the provisional adapter is enabled for customer operations.
 
 ## Storage model
 
@@ -181,6 +207,8 @@ The UI passes a decimal-looking Discord ID as a form value. A future contract sh
 ## Link cardinality
 
 Exact cardinality is **unknown**.
+
+The original ZIP's root README changelog for version 1.4 says that when more than one client has the same Discord ID, the old client gets removed. This is a **vendor claim**, not verified executable behavior or a uniqueness constraint. The wording does not establish which relationship/object is removed, whether legacy duplicates survive, or how a lookup handles ambiguity. Version 1.5 also claims only owners can link; the encoded PHP prevents verifying that policy.
 
 The client summary and linked-client templates present one Discord identity for one WHMCS client, but presentation does not prove database constraints. The encoded implementation and unavailable schema leave all of the following unresolved:
 
@@ -215,9 +243,9 @@ The addon templates separately expose a WHMCS admin-page AJAX handler at `addonm
 
 ### Still unverified
 
-The `GetClientID` server implementation and documentation are not readable. The supplied sources do not reveal:
+The original ZIP includes encoded custom API implementations and a readable README advertising them. The actual resolver implementation is not readable. The supplied sources do not reveal:
 
-- how the custom action is registered or whether the addon vendor treats it as a supported, versioned interface;
+- the action's runtime registration/installation state or a versioned request/response schema;
 - the complete response schema and error messages;
 - authorization beyond standard WHMCS API credential validation;
 - mapping query, ambiguity, status, or stale-link behavior;
@@ -299,7 +327,7 @@ The stable boundary remains `CustomerIdentityResolver.resolveActor(actorContext)
 
 The preferred implementation candidate is a dedicated adapter around the existing `GetClientID` custom WHMCS API action. It must form-post credentials and `discordid` server-side, take the Discord ID only from trusted `ActorContext`, validate a minimal response, and never expose the generic WHMCS API or accept a client ID from OpenClaw.
 
-Do not reuse either internal client unchanged. Before production implementation, characterize the action's error and ambiguity semantics in an authorized non-production environment and establish whether it is a supported addon contract. Direct database access is not recommended.
+Do not reuse either internal client unchanged. The provisional adapter implements the consumer request contract, but before enabling it, characterize the action's error and ambiguity semantics in an authorized environment and establish its supported guarantees. Direct database access is not recommended.
 
 No `0003` architecture decision is created by Task 2A.1. The interface is now known, but major security-relevant response semantics remain unresolved; committing to it as the production authority before those checks would be speculative.
 
@@ -312,20 +340,20 @@ The next investigation needs authoritative evidence for the remaining protected 
 3. The addon activation/migration definitions or a redacted `SHOW CREATE TABLE` result for addon-owned link tables, if any, including indexes and uniqueness constraints. A read-only schema description is sufficient; no database mutation is required.
 4. Confirmed behavior for duplicates, relinking, unlink deletion, stale links, missing clients, and inactive/closed clients.
 5. Confirmation of whether the addon supports multiple Discord identities, owners, team members, contacts, or sub-accounts.
-6. Confirmation that the custom action is provided and supported by the Link Discord addon rather than another WHMCS customization.
+6. Confirmation that the deployed custom action matches the vendor-supplied file/version and has a supported compatibility contract. Vendor provenance in the original ZIP is now established; deployment state remains unverified.
 7. A test environment or vendor-supported fixture that can exercise lookup and failure cases without production customer data.
 
 ## Task 2B implementation plan
 
-Task 2B should be gated on characterizing the `GetClientID` response semantics above. Its proposed scope is:
+The operator authorized a provisional adapter with mocks before live characterization. Its request, validation, minimal identity translation, and safe errors are implemented without production wiring. The next scope (Task 2B.2) is:
 
 1. Configure and manually run the characterization harness in an authorized non-production environment for linked, unlinked, malformed, empty, invalid-authentication, missing-authentication, and any already-available inactive/closed-client fixtures; record and review only sanitized results.
 2. Confirm vendor support/ownership of the action and create ADR 0003 if the results establish a reliable authority contract.
 3. Define a minimal internal response and explicit status/error mapping without exposing generic WHMCS actions or client selection to OpenClaw.
-4. Implement a read-only `CustomerIdentityResolver` adapter in `packages/whmcs` that form-posts to `/includes/api.php`, accepts the trusted Discord ID from `ActorContext` only, and keeps credentials in runtime configuration.
+4. Reconcile the existing provisional adapter with the reviewed real contract; do not wire it into startup until identity authority and trusted request-context transport are established.
 5. Validate the Discord ID as a canonical decimal string, validate the response shape, reject ambiguity or inconsistent data, and distinguish not-linked from authentication/provider failure.
 6. Optionally validate the returned client and obtain the required status through the narrowest supported WHMCS call, according to the verified policy.
 7. Add contract tests for every characterized response and failure case.
 8. Redact request credentials and sensitive identifiers from errors and logs, and add no database, Redis, queue, OpenClaw runtime dependency, or agent-facing customer-ID parameter.
 
-Until the response semantics are verified, Task 2B must not treat every WHMCS error as `IDENTITY_NOT_LINKED`, implement table queries, or copy either internal client's credential handling.
+Until the response semantics are verified, the adapter must not treat any unknown WHMCS error as `IDENTITY_NOT_LINKED`, implement table queries, or copy either internal client's credential handling. Service lookup, Pterodactyl integration, and agent runtime wiring are separate work.

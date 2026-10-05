@@ -17,6 +17,8 @@
     "start": "corepack pnpm --filter @openclaw-hosting/support-core start"
   },
   "devDependencies": {
+    "@openclaw-hosting/contracts": "workspace:*",
+    "@openclaw-hosting/whmcs": "workspace:*",
     "@eslint/js": "^9.36.0",
     "@types/node": "^24.5.2",
     "eslint": "^9.36.0",

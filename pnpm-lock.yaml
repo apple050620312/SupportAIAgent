@@ -11,6 +11,12 @@ importers:
       '@eslint/js':
         specifier: ^9.36.0
         version: 9.39.5
+      '@openclaw-hosting/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
+      '@openclaw-hosting/whmcs':
+        specifier: workspace:*
+        version: link:packages/whmcs
       '@types/node':
         specifier: ^24.5.2
         version: 24.13.6
@@ -59,7 +65,11 @@ importers:
 
   packages/pterodactyl: {}
 
-  packages/whmcs: {}
+  packages/whmcs:
+    dependencies:
+      '@openclaw-hosting/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
 packages:
 

@@ -1,6 +1,8 @@
+import { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
+export { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
+
 export const CHARACTERIZATION_ACKNOWLEDGEMENT = "I_HAVE_AUTHORIZATION";
 
-const MAX_DISCORD_SNOWFLAKE = 18_446_744_073_709_551_615n;
 const MAX_RESPONSE_LENGTH = 65_536;
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -84,14 +86,6 @@ export class CharacterizationSetupError extends Error {
     super(message);
     this.name = "CharacterizationSetupError";
   }
-}
-
-export function isCanonicalDiscordSnowflake(value: string): boolean {
-  if (!/^[1-9][0-9]{16,19}$/.test(value)) {
-    return false;
-  }
-
-  return BigInt(value) <= MAX_DISCORD_SNOWFLAKE;
 }
 
 function requireValue(
