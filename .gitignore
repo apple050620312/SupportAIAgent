@@ -6,5 +6,6 @@ coverage/
 .env.support-probe
 .env.ticket-support
 characterization-results/
+knowledge/
 *.log
 .DS_Store

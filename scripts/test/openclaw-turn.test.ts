@@ -31,9 +31,12 @@ describe("trusted OpenClaw embedded turn", () => {
     try {
       expect(await f.run(f.request)).toEqual({ reply: "Synthetic final reply" });
       const args = f.runEmbeddedAgent.mock.calls[0]![0];
-      expect(args.prompt).toBe("Synthetic question"); expect(args.prompt).not.toContain(f.token);
+      expect(args.prompt).toContain('客戶訊息 JSON\n"Synthetic question"'); expect(args.prompt).not.toContain(f.token);
+      expect(args.prompt).toContain("search_support_knowledge"); expect(args.prompt).toContain("reference_only");
+      expect(args.prompt).toContain("handoff_to_staff"); expect(args.prompt).toContain("執行後用工具檢查結果");
       expect(args.toolBindings).toEqual({ "hosting-support": { ticketToken: f.token } });
-      expect(args.toolsAllow).toHaveLength(13); expect(args.toolExecutionAllow).toEqual(args.toolsAllow);
+      expect(args.toolsAllow).toHaveLength(15); expect(args.toolExecutionAllow).toEqual(args.toolsAllow);
+      expect(args.toolsAllow).toContain("search_support_knowledge"); expect(args.toolsAllow).toContain("read_support_article");
       expect(args.toolsAllow).not.toContain("exec"); expect(args.toolsAllow).not.toContain("message");
       expect(args.abortSignal).toBeInstanceOf(AbortSignal); expect(args.terminalReplyExpectation).toBe("required");
     } finally { await f.mock.app.close(); }

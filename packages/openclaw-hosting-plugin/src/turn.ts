@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { HostingToolContracts } from "@openclaw-hosting/contracts";
 import { createHostingTools, HostingToolError } from "./index.js";
+import { SUPPORT_KNOWLEDGE_WORKFLOW } from "./knowledge-workflow.js";
 
 export interface HostingTurnRequest { sessionId: string; ticketToken: string; prompt: string; }
 /** Narrow reviewed subset of v2026.9.8 PluginRuntimeCore and RunEmbeddedAgentParams. */
@@ -81,7 +82,7 @@ export function createHostingTurnHandler(
       const result = await runtime.agent.runEmbeddedAgent({
         sessionId: scopedSessionId, sessionKey: `agent:${agentId}:hosting:${scopedSessionId}`, runId: randomUUID(),
         agentId, workspaceDir: runtime.agent.resolveAgentWorkspaceDir(runtime.config.current(), agentId),
-        prompt: request.prompt, timeoutMs: 45_000, abortSignal: signal, terminalReplyExpectation: "required",
+        prompt: `${SUPPORT_KNOWLEDGE_WORKFLOW}\n\n客戶訊息 JSON\n${JSON.stringify(request.prompt)}`, timeoutMs: 45_000, abortSignal: signal, terminalReplyExpectation: "required",
         toolBindings: { "hosting-support": { ticketToken: request.ticketToken } },
         toolsAllow: names, toolExecutionAllow: names
       });

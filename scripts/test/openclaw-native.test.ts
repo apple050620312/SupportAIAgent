@@ -11,7 +11,7 @@ describe("OpenClaw v2026.9.8 native entry", () => {
   it("ships native optional version-two factories", () => {
     expect(plugin.id).toBe("hosting-support");
     const factories = registrations(vi.fn());
-    expect(factories).toHaveLength(13);
+    expect(factories).toHaveLength(15);
     expect(factories.every(([factory, options]) => factory.contextVersion === 2 && options.optional)).toBe(true);
     expect(factories.map(([, options]) => options.names[0])).toContain("handoff_to_staff");
   });

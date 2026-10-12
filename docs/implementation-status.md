@@ -28,3 +28,9 @@
 原 schema 缺少 AI state、顯式 revision 與 receipts，現在透過明確 opt-in 的單程序 overlay 處理。所有受 guard 包覆的 legacy mutation 都先撤銷 AI，重啟不延續舊 admission，投遞不明不盲目重試。這不是 durable 或多程序保證。來源與限制見 [客服單調查](integrations/ticket-bot.md)、[ADR 0005](decisions/0005-unchanged-ticket-baseline-openclaw.md) 及 [手動接入測試指南](testing-ticket-openclaw.md)。[Harness 案例](harness-evaluation.md) 仍需人工跑模型品質與成本實驗。
 
 後續寫入、訂單自動 Accept/Pending、帳務工具、console/file access、跨客戶記憶與資料庫不是本階段。重啟已是唯一受限的低風險操作，仍需真實權限與結果驗證；其餘寫入另立有權限與批准流程的里程碑。
+
+## Markdown 知識庫整合 2026-10-12
+
+已新增本機 Markdown 索引、中文及英文詞彙搜尋、來源行號、分頁閱讀、版本化 articleRef 和十五工具的 OpenClaw 接線。手動 launcher 會在啟動 live bot 前檢查已設定的知識庫，並接上已有的伺服器檔案與 startup 唯讀 port。預設目錄是已忽略的 `knowledge/`，也可設定 `SUPPORT_KNOWLEDGE_ROOT`，詳見 [知識庫指南](support-knowledge.md)。
+
+合成測試驗證檔案邊界、索引更新、工具流程、人工接手和未核准操作拒絕，沒有呼叫 live provider、bot 或模型。實際知識庫搜尋品質、模型對文件注入的表現、逐篇工具覆蓋率和解決比例仍需人工評估。高風險 approval prototype 已有程式碼，但正式 staff approval 接線與各操作驗證仍是部署工作。上方是前期紀錄，應連同本次進度與 ADR 0007 閱讀。

@@ -12,6 +12,13 @@ import type {
   TicketSnapshot,
   SupportAuditEvent
 } from "@openclaw-hosting/contracts";
+import type { KnowledgeSearchRequest, KnowledgeSearchResponse, KnowledgeReadRequest, KnowledgeReadResponse } from "@openclaw-hosting/contracts";
+
+/** Operator-reviewed shared documentation only; never customer records or authority. */
+export interface SupportKnowledgeProvider {
+  search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse>;
+  read(request: KnowledgeReadRequest): Promise<KnowledgeReadResponse | null>;
+}
 
 export interface SupportAuditRecorder {
   /** Best effort only; implementations must bound waiting and discard raw failures. */

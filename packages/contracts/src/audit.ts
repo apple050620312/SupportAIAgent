@@ -8,7 +8,8 @@ export const SupportAuditEventSchema = Type.Object({
     Type.Literal("handoff_to_staff"), Type.Literal("ticket_admitted"), Type.Literal("human_takeover"),
     Type.Literal("ticket_retired"), Type.Literal("agent_turn"), Type.Literal("restart_server"),
     Type.Literal("list_my_files"), Type.Literal("read_my_file"), Type.Literal("get_my_startup_config"),
-    Type.Literal("propose_mutation"), Type.Literal("execute_approved_mutation")
+    Type.Literal("propose_mutation"), Type.Literal("execute_approved_mutation"),
+    Type.Literal("search_support_knowledge"), Type.Literal("read_support_article")
   ]),
   outcome: Type.Union([Type.Literal("success"), Type.Literal("denied"), Type.Literal("failed")]),
   correlationId: Type.String({ pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" })

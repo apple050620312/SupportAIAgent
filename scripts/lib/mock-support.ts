@@ -8,6 +8,8 @@ import { createHostingTools } from "@openclaw-hosting/openclaw-plugin";
 import { buildApp } from "../../apps/support-core/dist/src/app.js";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 import { MutationApprovalStore } from "../../apps/support-core/dist/src/services/mutation-approval-store.js";
+import { SupportKnowledgeService } from "../../apps/support-core/dist/src/services/support-knowledge-service.js";
+import type { SupportKnowledgeProvider } from "../../apps/support-core/dist/src/ports/index.js";
 
 export const MOCK_SCOPE: TicketScope = {
   discordUserId: "18446744073709551615", guildId: "18446744073709551614", channelId: "18446744073709551613"
@@ -16,6 +18,15 @@ export const MOCK_OTHER_SCOPE: TicketScope = {
   discordUserId: "18446744073709551612", guildId: MOCK_SCOPE.guildId, channelId: "18446744073709551611"
 };
 const key = "synthetic-offline-context-key-not-for-deployment";
+export const MOCK_ARTICLE_REF = `kb:${"a".repeat(64)}`;
+const mockKnowledge: SupportKnowledgeProvider = {
+  search: () => Promise.resolve({ trust: "reference_only", matches: [{ articleRef: MOCK_ARTICLE_REF,
+    source: "synthetic/recovery.md", title: "Synthetic recovery", heading: "Verification", startLine: 1, endLine: 2,
+    excerpt: "Query status and confirm the result with the customer." }] }),
+  read: (request) => Promise.resolve(request.articleRef === MOCK_ARTICLE_REF ? { trust: "reference_only", articleRef: MOCK_ARTICLE_REF,
+    source: "synthetic/recovery.md", title: "Synthetic recovery", content: "# Synthetic recovery\nQuery status and confirm the result with the customer.",
+    startLine: 1, endLine: 2, totalLines: 2 } : null)
+};
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
 }
@@ -32,7 +43,7 @@ export interface MockSupportHarness {
   toolsFor(scope: TicketScope): ReturnType<typeof createHostingTools>;
 }
 
-export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }): MockSupportHarness {
+export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }, knowledgeProvider: SupportKnowledgeProvider = mockKnowledge): MockSupportHarness {
   const snapshots = new Map<string, TicketSnapshot>([MOCK_SCOPE, MOCK_OTHER_SCOPE].map((scope) => [scope.channelId, { scope, revision: 0, state: "AI_ACTIVE" }]));
   const sent: { scope: TicketScope; text: string }[] = [];
   const receipts = new Set<string>();
@@ -117,7 +128,7 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
     gameServers: pteroProvider, gameServerMutations: pteroProvider,
     gameServerFiles: pteroProvider });
   const approvals = new MutationApprovalStore();
-  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
+  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, knowledge: new SupportKnowledgeService(knowledgeProvider), approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await app.inject({

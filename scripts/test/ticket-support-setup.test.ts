@@ -30,4 +30,17 @@ describe("manual baseline launcher setup", () => {
     const setup = prepareTicketSupport({ ...environment(), TICKET_HUMAN_IDLE_MS: "5000" }, vi.fn<typeof fetch>());
     expect(setup.humanIdleMs).toBe(5000);
   });
+  it("captures an absolute knowledge folder without reading files or contacting providers", () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const defaultSetup = prepareTicketSupport(environment(), fetchMock);
+    expect(defaultSetup.knowledgeRoot).toMatch(/[\\/]knowledge$/);
+    const setup = prepareTicketSupport({ ...environment(), SUPPORT_KNOWLEDGE_ROOT: defaultSetup.knowledgeRoot }, fetchMock);
+    expect(setup.knowledgeRoot).toBe(defaultSetup.knowledgeRoot);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("rejects model-like relative knowledge paths before loading a bot", () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    expect(() => prepareTicketSupport({ ...environment(), SUPPORT_KNOWLEDGE_ROOT: "../../private" }, fetchMock)).toThrow("absolute folder");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

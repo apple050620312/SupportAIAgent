@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { HostingServiceSchema } from "./service.js";
 import { GameServerSchema, ServerResourcesSchema, ServerStatusSchema } from "./server.js";
 import { HandoffRequestSchema } from "./ticket.js";
+import { KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema, KnowledgeReadRequestSchema, KnowledgeReadResponseSchema } from "./knowledge.js";
 import {
   ExecuteMutationRequestSchema, ExecuteMutationResponseSchema, FileContentsResponseSchema, FileListResponseSchema,
   MutationOperationSchema, MutationProposalResponseSchema, RestartServerRequestSchema, RestartServerResponseSchema,
@@ -29,6 +30,8 @@ export const HostingToolContracts = {
   get_my_startup_config: { input: ServiceSelectorSchema, output: StartupConfigResponseSchema },
   propose_mutation: { input: MutationOperationSchema, output: MutationProposalResponseSchema },
   execute_approved_mutation: { input: ExecuteMutationRequestSchema, output: ExecuteMutationResponseSchema },
+  search_support_knowledge: { input: KnowledgeSearchRequestSchema, output: KnowledgeSearchResponseSchema },
+  read_support_article: { input: KnowledgeReadRequestSchema, output: KnowledgeReadResponseSchema },
   handoff_to_staff: { input: HandoffRequestSchema, output: Type.Object({ requested: Type.Literal(true) }, { additionalProperties: false }) }
 } as const;
 export type HostingToolName = keyof typeof HostingToolContracts;

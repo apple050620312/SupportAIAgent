@@ -26,6 +26,12 @@ The lookup sequence is fixed:
 
 The core accepts `serviceRef` only as a selector. It never accepts a WHMCS client ID or Pterodactyl server UUID from the agent-facing operation.
 
+## Markdown support knowledge
+
+`SupportKnowledgeService` depends on a `SupportKnowledgeProvider` port. The read-only local Markdown adapter indexes an operator-configured shared corpus, with English/Chinese lexical search and bounded article pages. Signed-ticket Core routes provide `search_support_knowledge` and `read_support_article`; the model supplies a query or content-versioned article reference, never a filesystem root or path. Citations contain relative sources and line numbers. Documents are `reference_only` and cannot grant ownership or approve writes.
+
+Every OpenClaw support turn receives a reviewed search/read/diagnose/act/verify/handoff workflow. The manual launcher loads the knowledge folder before importing the live bot. No database or network retrieval service is introduced. See [the setup guide](support-knowledge.md) and ADR 0007; retrieval availability does not prove an incident was resolved.
+
 ## Error model
 
 Expected failures use stable error codes: `IDENTITY_NOT_LINKED`, `SERVICE_NOT_FOUND`, `SERVICE_NOT_OWNED`, `SERVER_NOT_FOUND`, and `UPSTREAM_UNAVAILABLE`. Messages are safe for logs/API translation and must not contain credentials or raw upstream bodies. Adapters map provider failures to these domain errors.
@@ -40,6 +46,6 @@ Operational audit is optional and separate from authorization. When configured, 
 
 See ADR 0004 and the manual testing guide. Real provider activation, identity authority, bot/session adapters and native Harness host binding remain unverified. The concrete tool factory and provider chain are exercised by the offline demo and regression evals without a model.
 
-The operator chose OpenClaw 2026.9.8 and the unchanged Ticket Bot archive as baseline. The opt-in launcher composes Core inside that bot process through ports; it reuses the bot's model/client and installs a serialized legacy mutation/send gate before importing handlers. Its overlay revokes admission on restart and refuses uncertain-send retries. The native Gateway route starts bounded, eight-tool-only runs with signed capsules in runtime `toolBindings`; the bot owns final Discord delivery. The only state-changing tool is the bounded, rate-limited `restart_my_server`; ADR 0005 limits this to one process and the configured test ticket, pending manual integration testing.
+The operator chose OpenClaw 2026.9.8 and the unchanged Ticket Bot archive as baseline. The opt-in launcher composes Core inside that bot process through ports; it reuses the bot's model/client and installs a serialized legacy mutation/send gate before importing handlers. Its overlay revokes admission on restart and refuses uncertain-send retries. The native Gateway route starts bounded runs with a fixed fifteen-tool allowlist and signed capsules in runtime `toolBindings`; the bot owns final Discord delivery. Reads include scoped server files/startup and shared Markdown knowledge. Restart uses its bounded policy; other provider writes require the separately configured approval prototype. The manual launcher does not supply staff approval. ADR 0005 limits this to one process and the configured test ticket, pending manual integration testing.
 
 Future provider writes follow ADR 0006: OpenClaw proposes a typed operation, Core re-resolves ownership and a trusted host approves the exact digest before one execution. Runtime learning uses deidentified feedback and reviewed eval promotion; it does not let the model alter its own tools, policies or production prompt.

@@ -9,11 +9,19 @@ import {
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
 import { privateDiscordAudit } from "./lib/discord-support-audit.js";
+import { MarkdownKnowledgeProvider } from "../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
+import { SupportKnowledgeService } from "../apps/support-core/dist/src/services/support-knowledge-service.js";
 
 /** Manual launcher. Never imported by tests or default dev/start. */
 async function main() {
   // Capture before baseline src/index.js replaces process.env with its own config.
   const setup = prepareTicketSupport({ ...process.env });
+  // Load only reviewed local documentation before importing the live baseline.
+  const knowledgeProvider = new MarkdownKnowledgeProvider(setup.knowledgeRoot);
+  try {
+    if (!(await knowledgeProvider.stats()).articles) throw new Error();
+  } catch { throw new TicketSupportSetupError("Support knowledge is unavailable; run knowledge:check before starting the bot"); }
+  const knowledge = new SupportKnowledgeService(knowledgeProvider);
   if (!isAbsolute(setup.root)) throw new TicketSupportSetupError("TICKET_BOT_ROOT must be an absolute extracted baseline directory");
   const root = resolve(setup.root);
   const metadata: unknown = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
@@ -56,7 +64,7 @@ async function main() {
       humanIdleMs: setup.humanIdleMs
     });
     detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
-    app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge, ...(audit ? { audit } : {}) } });
+    app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge, knowledge, ...(audit ? { audit } : {}) } });
     await tickets.enableChannel(setup.guildId, setup.channelId);
     await app.listen({ host: "127.0.0.1", port: setup.port });
     console.log("Ticket support ready for the explicitly configured test channel (OpenClaw 2026.9.8)");

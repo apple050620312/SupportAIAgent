@@ -22,6 +22,12 @@ Support Core is the trusted authorization boundary. It resolves a Discord actor 
 - `packages/openclaw-hosting-plugin`: bounded tool factory, native OpenClaw 2026.9.8 entry/turn route and support Skill.
 - `docs`: architecture, security, integration questions, and decisions.
 
+## Markdown support knowledge
+
+Place reviewed customer-safe UTF-8 `.md` files under the ignored `knowledge/` directory, or set `SUPPORT_KNOWLEDGE_ROOT` to an absolute folder in `.env.ticket-support`. Run `corepack pnpm knowledge:check` for an offline corpus check. The manual ticket launcher loads this corpus before starting the bot. OpenClaw can search in Chinese/English, read cited pages and use existing Core tools to attempt resolution, verify results or hand off. See [the knowledge guide](docs/support-knowledge.md) and [article template](docs/examples/support-knowledge-article.md).
+
+Knowledge documents do not authorize operations. Unsupported or unverified procedures still require staff help; this integration does not claim every documented issue is solved or the 80% target has been achieved.
+
 ## Development
 
 Requires Node.js 24.16+ and pnpm.
@@ -43,13 +49,13 @@ If the environment cannot install Corepack's global shim, prefix the same comman
 
 ## Deliberately not implemented
 
-No live WHMCS, Pterodactyl, Discord or model request has been made during development. The normal startup has no provider wiring. Only the bounded restart mutation is implemented; file/startup/reinstall writes, Order review, a new database, Redis, a persistent queue and container orchestration remain unimplemented. OpenClaw is supplied by the operator's Gateway, not installed as a workspace runtime dependency.
+No live WHMCS, Pterodactyl, Discord or model request has been made during development. Normal dev/start has no provider wiring. Bounded restart and the approved-mutation prototype have offline implementations; actual staff-approval integration, provider compatibility and post-operation semantics remain deployment gates. Order review, a new database, Redis, a persistent queue and container orchestration remain unimplemented. OpenClaw is supplied by the operator's Gateway, not installed as a workspace runtime dependency.
 
 The WHMCS identity adapter is tested with synthetic mocked responses only. It accepts a trusted `ActorContext`, returns a minimal `customerRef`, and rejects unknown responses without treating them as not linked. It is not enabled by `pnpm dev` or `pnpm start`. See [the integration notes](docs/integrations/whmcs-discord-link.md#provisional-read-only-adapter) for its assumptions and deployment gates.
 
 ## Next milestone
 
-The operator reports WHMCS 9.0.9 and Pterodactyl 1.15.1. The offline chain now includes identity, existing Active client verification, owned services, server status/resources, bounded restart, eight agent tools and staff handoff. [Provider evidence](docs/integrations/read-only-providers.md) separates official-source facts from unverified deployment assumptions.
+The operator reports WHMCS 9.0.9 and Pterodactyl 1.15.1. The offline chain includes identity, Active client verification, owned services, server diagnosis, bounded restart, the approved-mutation prototype, Markdown knowledge and staff handoff. The native factory registers fifteen bounded tools. [Provider evidence](docs/integrations/read-only-providers.md) separates official-source facts from unverified deployment assumptions.
 
 ```sh
 corepack pnpm demo:mock
@@ -60,8 +66,8 @@ These commands use only synthetic mocks and Fastify injection, with no provider,
 
 Start with [GetClientID manual testing](docs/testing-get-client-id.md), then [the read-only integration test guide](docs/testing-read-only-support.md). That guide includes the separately acknowledged `probe:read-only` command and the real Ticket Bot / Harness integration gates. Do not run the probe before reviewing identity results or install the tool factory as a native plugin without verifying a pinned host SDK.
 
-Mapping uniqueness, real response compatibility, key scopes, policy approval, bot state/send integration and host context binding remain operator-tested deployment gates. The bounded `restart_my_server` operation is implemented but still needs a real permission and status verification; file/startup/reinstall mutations and Order Agent remain deferred. ADR 0003 is not created; [ADR 0004](docs/decisions/0004-trusted-ticket-context.md) documents prototype trusted-context delivery without claiming GetClientID authority.
+Mapping uniqueness, real response compatibility, key scopes, policy approval, bot state/send integration and host context binding remain operator-tested deployment gates. Bounded restart and the high-risk prototype still need real permission and operation-specific verification; the manual launcher does not wire trusted staff approval. Order Agent remains deferred. ADR 0003 is not created; [ADR 0004](docs/decisions/0004-trusted-ticket-context.md) documents prototype trusted-context delivery without claiming GetClientID authority.
 
 The unchanged `ticket-main.zip` baseline now has a separate single-process launcher, owner-derived message ingress and serialized delivery/mutation guard. OpenClaw is selected and pinned to 2026.9.8. Native entry, Gateway-authenticated turn routing and out-of-band capsule binding are implemented with synthetic tests; actual bot/native SDK activation remains manual. Follow [the bot/OpenClaw guide](docs/testing-ticket-openclaw.md) before `corepack pnpm start:ticket-support`. That command starts a live baseline only after explicit setup acknowledgements. Restart revokes AI admission; uncertain sends are never blindly retried. [ADR 0005](docs/decisions/0005-unchanged-ticket-baseline-openclaw.md) records the limited scope.
 
-The inspected `PteroAI-main.zip` is treated as a legacy reference. OpenClaw supersedes its customer identity, ownership, read-only diagnosis and staff handoff path through Support Core. PteroAI's direct file, startup, power and reinstall operations are intentionally not exposed; see [the migration baseline](docs/integrations/pteroai.md) before planning a separately approved mutation milestone.
+The inspected `PteroAI-main.zip` is treated as a legacy reference. OpenClaw replaces its identity, ownership, diagnosis and handoff path through Support Core. File/startup/power/reinstall capabilities use scoped reads or the approved-mutation prototype rather than direct model access to provider credentials. See [the migration baseline](docs/integrations/pteroai.md) and [mutation prototype notes](docs/integrations/pteroai-high-risk-capabilities.md); real high-risk execution still requires reviewed staff-approval wiring and integration tests.

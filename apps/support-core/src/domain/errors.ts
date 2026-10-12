@@ -1,4 +1,5 @@
 export type SupportErrorCode =
+  | "KNOWLEDGE_NOT_FOUND"
   | "IDENTITY_NOT_LINKED"
   | "SERVICE_NOT_FOUND"
   | "SERVICE_NOT_OWNED"
@@ -66,4 +67,9 @@ export class MutationNotAllowedError extends SupportDomainError {
 export class MutationRateLimitedError extends SupportDomainError {
   readonly code = "MUTATION_RATE_LIMITED" as const;
   constructor() { super("This support operation was recently requested"); }
+}
+
+export class KnowledgeNotFoundError extends SupportDomainError {
+  readonly code = "KNOWLEDGE_NOT_FOUND" as const;
+  constructor() { super("The knowledge article or requested lines are no longer available; search again"); }
 }

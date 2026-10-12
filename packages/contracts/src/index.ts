@@ -2,6 +2,7 @@ export * from "./actor.js";
 export * from "./audit.js";
 export * from "./mutation.js";
 export * from "./learning.js";
+export * from "./knowledge.js";
 export * from "./customer.js";
 export * from "./discord.js";
 export * from "./order.js";

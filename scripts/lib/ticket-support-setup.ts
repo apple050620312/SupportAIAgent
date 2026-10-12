@@ -4,6 +4,7 @@ import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHost
 import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
 import { createOpenClawTicketRunner, DEFAULT_HUMAN_IDLE_MS } from "@openclaw-hosting/ticket-bridge";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
+import { supportKnowledgeRoot } from "./knowledge-setup.js";
 
 export class TicketSupportSetupError extends Error {
   constructor(message: string) { super(message); this.name = "TicketSupportSetupError"; }
@@ -23,6 +24,9 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
     throw new TicketSupportSetupError("Review the baseline, identity and external mapping; set all four authorization acknowledgements");
   }
   const root = value(environment, "TICKET_BOT_ROOT");
+  let knowledgeRoot: string;
+  try { knowledgeRoot = supportKnowledgeRoot(environment); }
+  catch { throw new TicketSupportSetupError("SUPPORT_KNOWLEDGE_ROOT must be an absolute folder path"); }
   const guildId = value(environment, "TEST_TICKET_GUILD_ID");
   const channelId = value(environment, "TEST_TICKET_CHANNEL_ID");
   const staff = value(environment, "TICKET_STAFF_USER_IDS").split(",");
@@ -52,10 +56,10 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
         clientApiKey: value(environment, "PTERODACTYL_CLIENT_API_KEY"), externalIdStrategy: "whmcs-service-id" }, fetchImpl);
     const support = new HostingSupportService({ identityResolver: identities,
       hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, fetchImpl),
-      gameServers: pterodactyl, gameServerMutations: pterodactyl });
+      gameServers: pterodactyl, gameServerFiles: pterodactyl, gameServerMutations: pterodactyl });
     const tokens = new TicketContextTokens(value(environment, "TICKET_CONTEXT_KEY"));
     const runner = createOpenClawTicketRunner(value(environment, "OPENCLAW_BASE_URL"), value(environment, "OPENCLAW_GATEWAY_TOKEN"), fetchImpl);
-    return { root, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), humanIdleMs: Number(humanIdleMs), support, tokens, runner };
+    return { root, knowledgeRoot, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), humanIdleMs: Number(humanIdleMs), support, tokens, runner };
   } catch (error: unknown) {
     if (error instanceof TicketSupportSetupError) throw error;
     throw new TicketSupportSetupError("Invalid provider, context key or OpenClaw configuration");

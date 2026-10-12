@@ -5,14 +5,16 @@ import {
   HandoffRequestSchema, PublicHostingServiceSchema, PublicGameServerSchema, ServiceSelectorSchema, ServerResourcesSchema, ServerStatusSchema,
   RestartServerResponseSchema,
   FileContentsResponseSchema, FileListResponseSchema, StartupConfigResponseSchema, MutationProposalResponseSchema, ExecuteMutationRequestSchema, ExecuteMutationResponseSchema,
-  MutationOperationSchema
+  MutationOperationSchema, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema,
+  KnowledgeReadRequestSchema, KnowledgeReadResponseSchema
 } from "@openclaw-hosting/contracts";
-import type { ActorContext, HandoffRequest, TicketScope, MutationOperation, ExecuteMutationRequest, SupportAuditEvent } from "@openclaw-hosting/contracts";
+import type { ActorContext, HandoffRequest, TicketScope, MutationOperation, ExecuteMutationRequest, SupportAuditEvent, KnowledgeSearchRequest, KnowledgeReadRequest } from "@openclaw-hosting/contracts";
 import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
 import type { TicketAccessProvider, SupportAuditRecorder } from "../ports/index.js";
 import type { HostingSupportService } from "../services/hosting-support-service.js";
 import { MutationNotAllowedError, SupportDomainError, UpstreamUnavailableError } from "../domain/errors.js";
 import type { MutationApprovalStore } from "../services/mutation-approval-store.js";
+import type { SupportKnowledgeService } from "../services/support-knowledge-service.js";
 
 export interface ReadOnlyDelivery {
   readonly support: HostingSupportService;
@@ -22,6 +24,7 @@ export interface ReadOnlyDelivery {
   readonly approvals?: MutationApprovalStore;
   /** A separate trusted staff channel must call approve; models never receive this value. */
   readonly staffApprovalToken?: string;
+  readonly knowledge?: SupportKnowledgeService;
 }
 const publicService = PublicHostingServiceSchema;
 const publicServer = PublicGameServerSchema;
@@ -39,6 +42,7 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
     "/v1/me/servers/:serviceRef/files": "list_my_files", "/v1/me/servers/:serviceRef/file": "read_my_file",
     "/v1/me/servers/:serviceRef/startup": "get_my_startup_config", "/v1/me/mutation-proposals": "propose_mutation",
     "/v1/me/mutation-executions": "execute_approved_mutation",
+    "/v1/me/knowledge/search": "search_support_knowledge", "/v1/me/knowledge/read": "read_support_article",
     "/v1/me/handoff": "handoff_to_staff"
   };
   app.addHook("onResponse", async (request, reply) => {
@@ -105,6 +109,20 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
     return payload;
   });
   const errors = { 400: errorSchema, 401: errorSchema, 403: errorSchema, 404: errorSchema, 429: errorSchema, 503: errorSchema };
+  app.post<{ Body: KnowledgeSearchRequest }>("/v1/me/knowledge/search", {
+    schema: { body: KnowledgeSearchRequestSchema, querystring: noQuery, response: { 200: KnowledgeSearchResponseSchema, ...errors } }
+  }, async (request) => {
+    context(request);
+    if (!delivery.knowledge) throw new UpstreamUnavailableError("Support knowledge");
+    return delivery.knowledge.search(request.body);
+  });
+  app.post<{ Body: KnowledgeReadRequest }>("/v1/me/knowledge/read", {
+    schema: { body: KnowledgeReadRequestSchema, querystring: noQuery, response: { 200: KnowledgeReadResponseSchema, ...errors } }
+  }, async (request) => {
+    context(request);
+    if (!delivery.knowledge) throw new UpstreamUnavailableError("Support knowledge");
+    return delivery.knowledge.read(request.body);
+  });
   app.get("/v1/me/identity", { schema: { querystring: noQuery, response: { 200: Type.Object({ linked: Type.Literal(true) }), ...errors } } },
     async (request) => { await delivery.support.resolveCustomer(context(request).actor); return { linked: true }; });
   app.get("/v1/me/services", { schema: { querystring: noQuery, response: { 200: Type.Array(publicService), ...errors } } },
