@@ -38,14 +38,14 @@ if (blockers.length) {
   process.exitCode = 1;
 } else {
   const history = await mkdtemp(join(tmpdir(), 'golden-history-'));
-  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string })[] = [];
+  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string })[] = [];
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
   try {
     for (const item of items) {
       const turnStart = Date.now();
-      let steps = 0; let handedOff = false; let answer = ''; let error = false;
+      let steps = 0; let handedOff = false; let answer = ''; let error = false; let attempts = 0; let transientFailure = false;
       const toolErrors: string[] = [];
       const modelFailures: { name: string; status: number | null }[] = [];
       const finishReasons: string[] = [];
@@ -57,7 +57,8 @@ if (blockers.length) {
         try { result = await doGenerate(); }
         catch (error) {
           const e = error as { name?: unknown; statusCode?: unknown };
-          modelFailures.push({ name: ['AI_APICallError', 'AbortError', 'TimeoutError', 'AI_NoOutputGeneratedError'].includes(String(e.name)) ? String(e.name) : 'OtherModelError', status: typeof e.statusCode === 'number' ? e.statusCode : null });
+          const storeContinuation = /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(error instanceof Error ? error.message : '');
+          modelFailures.push({ name: storeContinuation ? 'StoreContinuationError' : ['AI_APICallError', 'AbortError', 'TimeoutError', 'AI_NoOutputGeneratedError'].includes(String(e.name)) ? String(e.name) : 'OtherModelError', status: typeof e.statusCode === 'number' ? e.statusCode : null });
           throw error;
         }
         finishReasons.push(result.finishReason.unified);
@@ -83,12 +84,26 @@ if (blockers.length) {
         } };
       } });
       try {
-        answer = (await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal)).reply;
-      } catch { error = true; }
+      do {
+        attempts++;
+        error = false;
+        transientFailure = false;
+        const failuresBeforeAttempt = modelFailures.length;
+        try {
+          answer = (await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal)).reply;
+          transientFailure = modelFailures.slice(failuresBeforeAttempt).some(f => f.status === 502 || f.status === 503 || f.status === 504 || f.name === 'StoreContinuationError');
+        } catch (caught) {
+          error = true;
+          const detail = caught instanceof Error ? caught.message : '';
+          transientFailure ||= /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(detail);
+          if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+        }
+      } while (transientFailure && attempts < 3);
+      }
       finally { await harness.app.close(); }
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
       const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
-      results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, latencyMs: Date.now() - turnStart,
+      results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
         citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', ...score(item, answer, handedOff, error) });
       await writeFile(output, JSON.stringify({ ...metadata, kbStats, status: 'running', results }, null, 2), { mode: 0o600 });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);

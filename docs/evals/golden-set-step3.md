@@ -170,3 +170,53 @@ Full run: **0/154 (0.0%) resolved-correct; 21/21 (100.0%) handoff-correct; 0 par
 | Cost | null | null | not measured |
 
 The model change did not improve lexical resolution: both runs scored 0/154. It improved expected-handoff correctness and reduced Core errors and delivered wrong answers, while increasing 502s by five. Because the 502s remained on the same sub2api provider and increased with luna, this run does not support attributing them solely to gpt-6.1-sol; it demonstrates provider/model-path instability affecting both models. Raw results are ignored at `eval-results/golden-2026-11-07T16-45-22-873Z-175.json` (smoke: `golden-2026-11-07T16-43-31-399Z-10.json`).
+
+## Step 7 — gpt-6-luna, Responses continuation fix and retries (2026-11-08)
+
+The store error was caused by the Responses continuation path at the provider boundary. AI SDK `@ai-sdk/openai@4.0.110` carries Responses item IDs from prior tool-loop steps when storage is enabled; sub2api does not reliably persist those `rs_*` items (its error explicitly says items created with `store:false` are not persisted). Our model factory did not set `previousResponseId` or `store:false`, and the loop itself did not add a server continuation ID. The safe reproduction evidence was the multi-step Responses request shape and the gateway's non-persistence error; after forcing `providerOptions: { openai: { store: false } }`, the same two-step tool-call/final-citation path completed and no continuation error appeared. This keeps the loop self-contained by sending the full local message/tool history each step. No provider key, body, or full exception was logged.
+
+The regression test is mocked (`scripts/test/vercel-agent.test.ts`) and verifies every Responses-model step receives `store:false` and no `previousResponseId`. The live smoke and full run used `MODEL_ID=gpt-6-luna`, `MODEL_PROVIDER=sub2api`, `GOLDEN_LIVE_MODEL=1`, and `/home/hatch/workspace/run-with-sub2api-key.sh`. Per-item retries allow at most three attempts only for HTTP 502/503/504 or the allowlisted store/previous-response error, with 1s then 2s backoff. Deterministic handoffs, Core 404/403, and scoring failures are never retried. Attempt counts are stored in every raw result and report.
+
+Smoke (10): **0/9 (0.0%) resolved-correct; 1/1 (100.0%) handoff-correct; 0 partial; 9 wrong**. No retries were needed. Full (175/175): **0/154 (0.0%) resolved-correct; 18/21 (85.7%) handoff-correct; 0 partial; 157 wrong**. No item needed a retry and no item ended with `error:true`; the run recorded no provider failures (the store/continuation 502 class fell from step 6's 43 to 0). Full wall time was 1822.128 seconds; mean item latency was 10.412 seconds (wall time / 175); mean generation attempts was 1.423. Cost: **null**. Scores measure **loop + published-docs KB (unreviewed as agent answers)**; a static set cannot establish seven-day true resolution.
+
+### Per-category results
+
+| Category | Executed | Resolved-correct/expected resolved | Handoff-correct/expected handoff | Partial | Wrong |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| account_access | 8 | 0/8 | 0/0 | 0 | 8 |
+| billing_other | 6 | 0/5 | 1/1 | 0 | 5 |
+| billing_payment | 11 | 0/10 | 1/1 | 0 | 10 |
+| billing_question | 3 | 0/3 | 0/0 | 0 | 3 |
+| cannot_connect | 19 | 0/18 | 1/1 | 0 | 18 |
+| custom_quote | 6 | 0/3 | 3/3 | 0 | 3 |
+| files_panel | 6 | 0/6 | 0/0 | 0 | 6 |
+| general_other | 9 | 0/8 | 0/1 | 0 | 9 |
+| lag_performance | 11 | 0/10 | 0/1 | 0 | 11 |
+| plan_cancel | 6 | 0/5 | 1/1 | 0 | 5 |
+| plan_upgrade | 8 | 0/8 | 0/0 | 0 | 8 |
+| plugin_mod | 13 | 0/12 | 1/1 | 0 | 12 |
+| pre_sales | 6 | 0/6 | 0/0 | 0 | 6 |
+| purchase_help | 5 | 0/4 | 1/1 | 0 | 4 |
+| refund | 6 | 0/6 | 0/0 | 0 | 6 |
+| server_other | 13 | 0/10 | 3/3 | 0 | 10 |
+| server_start_crash | 22 | 0/18 | 3/4 | 0 | 19 |
+| version_core | 9 | 0/7 | 2/2 | 0 | 7 |
+| world_backup | 8 | 0/7 | 1/1 | 0 | 7 |
+
+### Failure-pattern breakdown and comparison with step 6
+
+The full run recorded 0 provider failures, 42 Core/read-tool errors (26 synthetic log 404s and 16 synthetic invoice 403s), 0 citation-gate violations, and 6 delivered answers that failed strict expected-point scoring. Tool-call finish reasons occurred on 124 items and normal `stop` on 51; deterministic handoff behavior completed all turns. No item recovered on retry because no transient failure occurred.
+
+| Measure | Step 6 gpt-6-luna | Step 7 gpt-6-luna | Change |
+| --- | ---: | ---: | ---: |
+| Resolved-correct | 0/154 (0.0%) | 0/154 (0.0%) | unchanged |
+| Handoff-correct | 21/21 (100.0%) | 18/21 (85.7%) | -3 items |
+| Provider 502 failures | 43 | 0 | -43 |
+| Core/read-tool errors | 32 | 42 | +10 |
+| Full mean item latency | 7.775 s | 10.412 s | +2.637 s |
+| Mean generation attempts | 1.411 | 1.423 | +0.012 |
+| Items needing retries | not instrumented | 0 | — |
+| Recovered on retry | not instrumented | 0 | — |
+| Cost | null | null | unchanged |
+
+The lower handoff score reflects model/run variance and synthetic tool-state outcomes; it is not evidence that the continuation fix weakened the safety gate. The store fix removed the observed provider failure class. These scores remain a loop plus published-docs KB measurement, not reviewed customer answers or a seven-day resolution outcome.

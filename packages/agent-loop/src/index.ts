@@ -95,11 +95,16 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       };
       const agent = new ToolLoopAgent({
         model: options.model, instructions: SYSTEM_PROMPT, tools, temperature: 0.2, maxRetries: 0,
+        providerOptions: { openai: { store: false } },
         toolCallConcurrency: 1,
         stopWhen: [stepCountIs(10), () => handoff || failed]
       });
       let reply = "";
       try {
+        // sub2api may create Responses with store=false regardless of the requested
+        // default. Keep every continuation self-contained: the OpenAI provider
+        // omits item references when store is false, so no non-persisted rs_* id can
+        // leak into the next tool-loop step.
         const result = await agent.generate({ messages: [...history, { role: "user", content: prompt }], abortSignal: signal });
         reply = clean(result.text).trim();
         // A cap, invalid tool, tool error or uncited/unsupported answer is never presented as a resolution.

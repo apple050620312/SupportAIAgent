@@ -34,6 +34,15 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls[0]?.temperature).toBe(0.2);
   });
 
+  it("keeps Responses tool-loop continuations self-contained when storage is unavailable", async () => {
+    const { root, harness, request, signal } = await setup();
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
+    expect((await demoRunner(harness, root, model).run(request, signal)).reply).toBe(DEMO_ANSWER);
+    expect(model.doGenerateCalls.length).toBeGreaterThanOrEqual(2);
+    for (const call of model.doGenerateCalls) expect(call.providerOptions).toEqual({ openai: { store: false } });
+    expect(JSON.stringify(model.doGenerateCalls)).not.toContain("previousResponseId");
+  });
+
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice",
