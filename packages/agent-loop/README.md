@@ -34,11 +34,11 @@ Optional live model only (set the key securely in the shell environment first):
 AGENT_LIVE_MODEL=1 pnpm demo:vercel
 ```
 
-This requires `SUB2API_API_KEY` (or `OPENAI_API_KEY`) from the environment. It sends
-synthetic dialogue to `https://sub2api.coffeehost.net/v1`, using `gpt-6.1-sol` via
-the OpenAI-compatible Responses API. Hosting, ticket storage and Discord remain
-synthetic. The default does not switch to live merely because a key is present.
-No live request was made to verify endpoint/model compatibility in this step.
+Set `MODEL_PROVIDER=sub2api` (the default) with `SUB2API_API_KEY`, or
+`MODEL_PROVIDER=openai` with `OPENAI_API_KEY` for the official API. Both use
+`gpt-6.1-sol` through the OpenAI-compatible Responses API. Hosting, ticket storage
+and Discord remain synthetic. The sub2api path is live-tested by the golden eval;
+the official path is construction-tested only because no official key is present.
 
 ## DECISIONS
 
@@ -57,8 +57,9 @@ No live request was made to verify endpoint/model compatibility in this step.
   0600/0700; atomic replacement plus a cross-process lock fails closed on
   contention. An abandoned lock needs operator removal after confirming no turn
   is active. This is a single-host interim store, without DB/Redis/queue.
-- Require fresh KB retrieval each turn, at least 0.5 lexical query coverage
-  (English tokens / Chinese bigrams), and a final answer containing an exact
+- Require fresh KB retrieval each turn. The calibrated gate accepts passages
+  with at least 0.2 lexical query coverage, or the best returned passage at
+  0.1 (English tokens / Chinese bigrams), and a final answer containing an exact
   returned excerpt plus `[source:start-end]`. Missing/irrelevant retrieval,
   invalid tools, provider failure, missing citations or step exhaustion hands
   off. This conservative heuristic is not calibrated confidence or a semantic

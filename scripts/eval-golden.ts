@@ -21,10 +21,12 @@ const items = (parsed as GoldenItem[]).slice(0, limit);
 const outputDir = resolve('eval-results');
 await mkdir(outputDir, { recursive: true, mode: 0o700 });
 const output = join(outputDir, `golden-${new Date().toISOString().replace(/[:.]/g, '-')}-${items.length}.json`);
-const metadata = { model: 'gpt-6.1-sol', endpoint: 'https://sub2api.coffeehost.net/v1', datasetSha256: createHash('sha256').update(source).digest('hex'), selected: items.length, total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring; no semantic judgement', trueResolution7d: null };
+const provider = (process.env.MODEL_PROVIDER ?? 'sub2api').toLowerCase();
+const endpoint = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://sub2api.coffeehost.net/v1';
+const metadata = { model: process.env.AGENT_LIVE_MODEL_ID || 'gpt-6.1-sol', provider, endpoint, datasetSha256: createHash('sha256').update(source).digest('hex'), selected: items.length, total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring; no semantic judgement', trueResolution7d: null };
 const blockers: string[] = [];
 if (process.env.GOLDEN_LIVE_MODEL !== '1') blockers.push('GOLDEN_LIVE_MODEL=1 required; no model calls made');
-if (!(process.env.SUB2API_API_KEY || process.env.OPENAI_API_KEY)?.trim()) blockers.push('SUB2API_API_KEY / OPENAI_API_KEY absent');
+if (!((provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.SUB2API_API_KEY) || '').trim()) blockers.push(`${provider === 'openai' ? 'OPENAI_API_KEY' : 'SUB2API_API_KEY'} absent`);
 const knowledge = new MarkdownKnowledgeProvider(supportKnowledgeRoot(process.env));
 let kbStats;
 try { kbStats = await knowledge.stats(); if (!kbStats.articles) blockers.push('Reviewed KB has no articles'); }
