@@ -113,3 +113,60 @@ Raw final results (ignored): eval-results/golden-2026-11-07T15-57-30-320Z-10.jso
 ## Previous step-4 baseline
 
 Step 4 (2026-11-07): 175/175; resolved-correct 0/154, handoff-correct 21/21, partial 0, wrong 154/175; 19 articles / 86 sections, mean 1.17 attempts and 9.95 seconds/item, wall time 1740.654 seconds, cost null. Its broad citation attribution was not supported by provider-failure/finish-reason diagnostics, which were absent then.
+
+## Step 6 — gpt-6-luna (2026-11-08)
+
+The model selector is now shared through `MODEL_ID` (default `gpt-6.1-sol`; the prior `AGENT_LIVE_MODEL_ID` remains a compatibility fallback). Sub2api accepted `gpt-6-luna`: the 10-item smoke completed successfully, then the full 175-item run completed without endpoint rejection or model-request errors that aborted an item. Commands used the required `/home/hatch/workspace/run-with-sub2api-key.sh` wrapper, `MODEL_ID=gpt-6-luna`, `GOLDEN_LIVE_MODEL=1`, and the default `MODEL_PROVIDER=sub2api`. The provider emitted the existing warning that temperature is unsupported for reasoning models; effective temperature is unknown.
+
+Full run: **0/154 (0.0%) resolved-correct; 21/21 (100.0%) handoff-correct; 0 partial; 154/175 wrong**. Offline resolution proxy: 0. Smoke: **0/9 resolved-correct; 1/1 handoff-correct; 0 partial; 9/10 wrong**. Cost: **null** (no pricing instrumentation). Full wall time was 1360.600 seconds; mean item latency was 7.775 seconds (wall time / 175); mean generation attempts were 1.411. These are loop measurements over synthetic Core state, not seven-day customer outcomes.
+
+### Per-category results
+
+| Category | Executed | Resolved-correct/expected resolved | Handoff-correct/expected handoff | Partial | Wrong |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| account_access | 8 | 0/8 | 0/0 | 0 | 8 |
+| billing_other | 6 | 0/5 | 1/1 | 0 | 5 |
+| billing_payment | 11 | 0/10 | 1/1 | 0 | 10 |
+| billing_question | 3 | 0/3 | 0/0 | 0 | 3 |
+| cannot_connect | 19 | 0/18 | 1/1 | 0 | 18 |
+| custom_quote | 6 | 0/3 | 3/3 | 0 | 3 |
+| files_panel | 6 | 0/6 | 0/0 | 0 | 6 |
+| general_other | 9 | 0/8 | 1/1 | 0 | 8 |
+| lag_performance | 11 | 0/10 | 1/1 | 0 | 10 |
+| plan_cancel | 6 | 0/5 | 1/1 | 0 | 5 |
+| plan_upgrade | 8 | 0/8 | 0/0 | 0 | 8 |
+| plugin_mod | 13 | 0/12 | 1/1 | 0 | 12 |
+| pre_sales | 6 | 0/6 | 0/0 | 0 | 6 |
+| purchase_help | 5 | 0/4 | 1/1 | 0 | 4 |
+| refund | 6 | 0/6 | 0/0 | 0 | 6 |
+| server_other | 13 | 0/10 | 3/3 | 0 | 10 |
+| server_start_crash | 22 | 0/18 | 4/4 | 0 | 18 |
+| version_core | 9 | 0/7 | 2/2 | 0 | 7 |
+| world_backup | 8 | 0/7 | 1/1 | 0 | 7 |
+
+### Failure-pattern breakdown
+
+- Provider failures: **43**, all recorded as sub2api HTTP **502** model failures. The 502 problem therefore followed the provider path, not a gpt-6.1-sol-only behavior; gpt-6-luna still saw 43 such failures (step 5 saw 38).
+- Core/read-tool errors: **32** (synthetic harness HTTP errors, principally the same unavailable log/invoice state). This is lower than step 5's 47 but remains a harness limitation.
+- Retrieval/tool-validation early-stop: **0 distinct items**. The runner produced a deterministic handoff reply for failed/unsupported turns; traces were tool-call-only, but they did not remain unresolved without a final reply as in step 5's early-stop bucket.
+- Delivered-but-scored-wrong: **6** resolved answers (GS-035, GS-086, GS-099, GS-103, GS-105, GS-127); strict whole-point scoring rejected each.
+- Missing procedures: **3** of those delivered answers explicitly lacked enough procedure or required staff confirmation (GS-035, GS-086, GS-127). These are KB/operational gaps, not evidence that relaxing scoring would resolve them.
+- Escalation gaps: **0** expected-handoff items lacked lifecycle handoff; all 21 expected handoffs were handed off.
+- Citation-gate violations: **0** delivered answers.
+
+### Step-5 comparison
+
+| Measure | Step 5 gpt-6.1-sol | Step 6 gpt-6-luna | Change |
+| --- | ---: | ---: | ---: |
+| Resolved-correct | 0/154 (0.0%) | 0/154 (0.0%) | unchanged |
+| Handoff-correct | 20/21 (95.2%) | 21/21 (100.0%) | +1 item |
+| Provider 502 failures | 38 | 43 | +5 |
+| Core/read-tool errors | 47 | 32 | -15 |
+| Early-stop bucket | 59 | 0 distinct items | lower; final deterministic handoff recorded |
+| Delivered-but-scored-wrong | 8 | 6 | -2 |
+| Missing procedures | 2 | 3 | +1 |
+| Escalation gaps | 1 | 0 | -1 |
+| Full mean item latency | 11.608 s | 7.775 s | -3.833 s |
+| Cost | null | null | not measured |
+
+The model change did not improve lexical resolution: both runs scored 0/154. It improved expected-handoff correctness and reduced Core errors and delivered wrong answers, while increasing 502s by five. Because the 502s remained on the same sub2api provider and increased with luna, this run does not support attributing them solely to gpt-6.1-sol; it demonstrates provider/model-path instability affecting both models. Raw results are ignored at `eval-results/golden-2026-11-07T16-45-22-873Z-175.json` (smoke: `golden-2026-11-07T16-43-31-399Z-10.json`).

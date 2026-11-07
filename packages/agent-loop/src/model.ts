@@ -13,5 +13,5 @@ export function createLiveModel(env: NodeJS.ProcessEnv = process.env): LanguageM
   if (!config) throw new Error("MODEL_PROVIDER must be sub2api or openai");
   const apiKey = config.apiKey;
   if (!apiKey?.trim()) throw new Error("Live model API key missing");
-  return createOpenAI({ baseURL: config.baseURL, apiKey }).responses(env.AGENT_LIVE_MODEL_ID || "gpt-6.1-sol");
+  return createOpenAI({ baseURL: config.baseURL, apiKey }).responses(env.MODEL_ID || env.AGENT_LIVE_MODEL_ID || "gpt-6.1-sol");
 }
