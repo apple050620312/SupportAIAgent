@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw-hosting/agent-loop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "ai": "7.0.164",
+    "@ai-sdk/openai": "4.0.110",
+    "@openclaw-hosting/contracts": "workspace:*",
+    "@openclaw-hosting/ticket-bridge": "workspace:*",
+    "@sinclair/typebox": "^0.34.41"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

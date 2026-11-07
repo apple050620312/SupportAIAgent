@@ -9,7 +9,7 @@ import { buildApp } from "../../apps/support-core/dist/src/app.js";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 import { MutationApprovalStore } from "../../apps/support-core/dist/src/services/mutation-approval-store.js";
 import { SupportKnowledgeService } from "../../apps/support-core/dist/src/services/support-knowledge-service.js";
-import type { SupportKnowledgeProvider } from "../../apps/support-core/dist/src/ports/index.js";
+import type { SupportKnowledgeProvider, InvoiceProvider, RedactedServerLogProvider } from "../../apps/support-core/dist/src/ports/index.js";
 
 export const MOCK_SCOPE: TicketScope = {
   discordUserId: "18446744073709551615", guildId: "18446744073709551614", channelId: "18446744073709551613"
@@ -43,7 +43,7 @@ export interface MockSupportHarness {
   toolsFor(scope: TicketScope): ReturnType<typeof createHostingTools>;
 }
 
-export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }, knowledgeProvider: SupportKnowledgeProvider = mockKnowledge): MockSupportHarness {
+export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }, knowledgeProvider: SupportKnowledgeProvider = mockKnowledge, reads?: { invoices: InvoiceProvider; logs: RedactedServerLogProvider; invoiceRef: string }): MockSupportHarness {
   const snapshots = new Map<string, TicketSnapshot>([MOCK_SCOPE, MOCK_OTHER_SCOPE].map((scope) => [scope.channelId, { scope, revision: 0, state: "AI_ACTIVE" }]));
   const sent: { scope: TicketScope; text: string }[] = [];
   const receipts = new Set<string>();
@@ -126,10 +126,10 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
   const support = new HostingSupportService({ identityResolver: identities,
     hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, whmcs),
     gameServers: pteroProvider, gameServerMutations: pteroProvider,
-    gameServerFiles: pteroProvider });
+    gameServerFiles: pteroProvider, ...(reads ? { invoices: reads.invoices, logs: reads.logs } : {}) });
   const approvals = new MutationApprovalStore();
-  const app = buildApp({ logger: false, readOnly: { selectedResources: { serviceForTicket: (scope) => Promise.resolve(scope.discordUserId === MOCK_SCOPE.discordUserId ? "whmcs-service:1" : "whmcs-service:2"), invoiceForTicket: () => Promise.resolve(null) }, invocationAudit: { append: () => Promise.resolve() },
-    permissions: { grants: () => Promise.resolve(["customer:read", "server:read", "knowledge:read", "ticket:handoff", "server:restart", "server:propose", "server:mutate"]),
+  const app = buildApp({ logger: false, readOnly: { selectedResources: { serviceForTicket: (scope) => Promise.resolve(scope.discordUserId === MOCK_SCOPE.discordUserId ? "whmcs-service:1" : "whmcs-service:2"), invoiceForTicket: () => Promise.resolve(reads?.invoiceRef ?? null) }, invocationAudit: { append: () => Promise.resolve() },
+    permissions: { grants: () => Promise.resolve(["customer:read", "server:read", "knowledge:read", "ticket:handoff", "server:restart", "server:propose", "server:mutate", ...(reads ? ["invoice:read" as const] : [])]),
       restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: true }) }, support, tokens, tickets: bridge, knowledge: new SupportKnowledgeService(knowledgeProvider), approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);

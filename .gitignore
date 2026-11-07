@@ -9,3 +9,5 @@ characterization-results/
 knowledge/
 *.log
 .DS_Store
+
+.agent-history/
