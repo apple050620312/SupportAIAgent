@@ -25,6 +25,7 @@ describe("Vercel read-only agent", () => {
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
     const result = await demoRunner(harness, root, model).run(request, signal);
     expect(result.reply).toBe(DEMO_ANSWER);
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(JSON.stringify(DEMO_ANSWER).slice(1, -1));
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
     expect(harness.providerCalls.some((path) => path.endsWith("/power"))).toBe(false);
     const tools = model.doGenerateCalls[0]?.tools ?? [];
@@ -84,9 +85,9 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls).toHaveLength(1);
   });
 
-  it("rejects an uncited or invented factual answer even when retrieval succeeds", async () => {
+  it.each(["Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
     const { root, harness, request, signal } = await setup();
-    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText("Everything is repaired. [invented.md:1-2]")] });
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(answer)] });
     expect((await demoRunner(harness, root, model).run(request, signal)).reply).toContain("I don't know");
   });
 

@@ -37,7 +37,7 @@ if (blockers.length) {
   process.exitCode = 1;
 } else {
   const history = await mkdtemp(join(tmpdir(), 'golden-history-'));
-  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; steps: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string })[] = [];
+  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string })[] = [];
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
@@ -46,11 +46,20 @@ if (blockers.length) {
       const turnStart = Date.now();
       let steps = 0; let handedOff = false; let answer = ''; let error = false;
       const toolErrors: string[] = [];
+      const modelFailures: { name: string; status: number | null }[] = [];
+      const finishReasons: string[] = [];
       const drafts: string[] = [];
       const evidence: { source: string; startLine: number; endLine: number; excerpt: string }[] = [];
       const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
         steps++;
-        const result = await doGenerate();
+        let result;
+        try { result = await doGenerate(); }
+        catch (error) {
+          const e = error as { name?: unknown; statusCode?: unknown };
+          modelFailures.push({ name: ['AI_APICallError', 'AbortError', 'TimeoutError', 'AI_NoOutputGeneratedError'].includes(String(e.name)) ? String(e.name) : 'OtherModelError', status: typeof e.statusCode === 'number' ? e.statusCode : null });
+          throw error;
+        }
+        finishReasons.push(result.finishReason.unified);
         drafts.push(result.content.filter(c => c.type === 'text').map(c => c.text).join(''));
         return result;
       } } });
@@ -78,7 +87,7 @@ if (blockers.length) {
       finally { await harness.app.close(); }
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
       const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
-      results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, steps, latencyMs: Date.now() - turnStart,
+      results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, latencyMs: Date.now() - turnStart,
         citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', ...score(item, answer, handedOff, error) });
       await writeFile(output, JSON.stringify({ ...metadata, kbStats, status: 'running', results }, null, 2), { mode: 0o600 });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);

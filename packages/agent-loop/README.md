@@ -60,7 +60,7 @@ the official path is construction-tested only because no official key is present
 - Require fresh KB retrieval each turn. The calibrated gate accepts passages
   with at least 0.2 lexical query coverage, or the best returned passage at
   0.1 (English tokens / Chinese bigrams), and a final answer containing an exact
-  returned excerpt plus `[source:start-end]`. Missing/irrelevant retrieval,
+  returned excerpt plus `[source:start-end]`. The system prompt explicitly requires copying a whole excerpt verbatim (including Markdown/line breaks), and each admitted match includes a ready-to-copy `requiredQuote`. The gate itself is unchanged. Missing/irrelevant retrieval,
   invalid tools, provider failure, missing citations or step exhaustion hands
   off. This conservative heuristic is not calibrated confidence or a semantic
   proof that every sentence is supported. Account-only requests also require KB

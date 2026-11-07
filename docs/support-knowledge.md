@@ -69,3 +69,9 @@ corepack pnpm knowledge:check
 參考 [文章範本](examples/support-knowledge-article.md)。每個問題應記錄症狀、搜尋關鍵字、適用版本、前提、診斷證據、處理步驟、風險和核准需求、驗證方式、人工接手條件與更新日期。文件描述的操作若沒有 Core 工具支援，AI 只能提出可供人工執行的指引或交班。
 
 接上真實知識庫後，逐篇以合成客服情境驗證搜尋、引用與工具可用性，再用實際授權測試環境驗證修復效果。目標仍是解決 80% 的重複問題，這次的 mock 測試不代表已達到該比例。
+
+## Published Coffee-Host import (step 5)
+
+Run `node --import tsx scripts/import-docs-kb.ts [absolute-content/docs-path]` to replace the ignored local `knowledge/` corpus. The default source is the read-only local Coffee-Host-docs clone. This intentionally deletes the previous draft corpus. It never reads the golden dataset. Fifty-one of 52 articles are retained, including company and VPS-provider terms (refund/cancellation/billing policy) and the landing-page FAQ; only the privacy notice is excluded. Frontmatter titles and component titles become Markdown headings, presentation wrappers/imports are removed, code fences and placeholders remain unchanged, and image components become Markdown links. Attribution and the draft-v1 review marker accompany every article; README.txt is deliberately not indexed.
+
+The source is the company's published documentation, still unreviewed as agent answers. A credential-pattern scan stops the import before replacement on known key formats; manual review of credential/account references found instructional placeholders, not live credentials or customer records. Images remain references and were not imported or OCRed. Re-run `pnpm knowledge:check` after import. No article authorizes any action.
