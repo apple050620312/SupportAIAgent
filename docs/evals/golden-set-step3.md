@@ -2,141 +2,52 @@
 
 ## Run status — 2026-11-07
 
-**Blocked, not measured.** Explicit-live smoke (10 items) and full (175 items)
-preflights both refused to make model calls: neither `SUB2API_API_KEY` nor
-`OPENAI_API_KEY` is available, and the default reviewed `knowledge/` corpus is
-absent. No endpoint compatibility, latency, cost or quality has been measured.
-No model output exists to quote as a real failure. Do not interpret the missing
-scores as zero scores or treat all items as handoffs. Raw blocked-run records
-are under gitignored `eval-results/`; they contain zero per-item results.
+**Measured with loop + draft KB v1 (unreviewed).** This is not a staff-reviewed KB score.
 
-| Run | Selected | Executed | Resolved-correct | Handoff-correct | Partial | Wrong |
-| --- | ---: | ---: | --- | --- | --- | --- |
-| Smoke | 10 | 0 | N/A | N/A | N/A | N/A |
-| Full | 175 | 0 | N/A | N/A | N/A | N/A |
+Full run: 175/175 executed. Resolved-correct **0/154 (0.0%)**, handoff-correct **21/21 (100.0%)**, partial **0/154 (0.0%)**, wrong **154/175 (88.0%)**. Offline resolution proxy: **0/175 (0.0%)**. Average model generation attempts: **1.00**; wall time 1,824.936 seconds; average item latency 10.43 seconds. Cost: **null** (endpoint instrumentation provides no price).
 
-True resolution means **no reopen within seven days**. This static set cannot
-observe that outcome: true-resolution rate/estimate is **not identifiable**.
-The harness reports a separate offline proxy, resolved-correct / all evaluated
-items, never counting correct staff handoff as autonomous resolution. Even a
-perfect offline answer is not evidence of a completed operation or no reopen.
-The set is selected for clear historical resolutions and is not the full ticket
-population; extrapolation would also introduce selection bias.
+Smoke (10): resolved-correct 0/9 (0.0%), handoff-correct 1/1 (100.0%), partial 0/9, wrong 9/10 (90.0%); average 1.00 step and 8.85 seconds/item.
 
-## Reproduce
+**Caveat:** scores measure “loop + draft KB v1 (unreviewed)”. They do not measure a staff-reviewed KB. A static set cannot establish seven-day true resolution or no reopen.
 
-Set keys securely in the shell environment, and point `SUPPORT_KNOWLEDGE_ROOT`
-at an absolute directory containing reviewed customer-safe Markdown. Do not
-create a KB from held-out staff answers/expected points. No `.env` files are
-loaded automatically. The golden file remains outside this repository.
 
-```sh
-# Optional: export GOLDEN_SET_PATH=/absolute/path/to/golden_set.json
-GOLDEN_LIVE_MODEL=1 pnpm eval:golden --limit 10
-GOLDEN_LIVE_MODEL=1 pnpm eval:golden
-```
+## Per-category coverage (full run)
 
-Default execution refuses live calls, even if a key is present. Missing KB also
-blocks: evaluating against synthetic recovery text or an empty corpus would not
-measure hosting-answer quality. Model is `gpt-6.1-sol`, sub2api Responses endpoint
-`https://sub2api.coffeehost.net/v1`; no fallback. Each item runs serially in a fresh
-synthetic Core/ticket harness and isolated temporary history, deleted afterwards.
-Status data is synthetic, invoice/log ports are unavailable: this is not a test
-of real account-state diagnosis. The unchanged loop enforces its four T0 tools,
-temperature 0.2, ten-step limit, existing timeouts and KB/citation gate.
+| Category | N | Resolved | Handoff | R | H | P | Wrong |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| account_access | 8 | 0/8 | 0/0 | 0 | N/A | 0 | 8 |
+| billing_other | 6 | 0/5 | 1/1 | 0 | 1 | 0 | 5 |
+| billing_payment | 11 | 0/10 | 1/1 | 0 | 1 | 0 | 10 |
+| billing_question | 3 | 0/3 | 0/0 | 0 | N/A | 0 | 3 |
+| cannot_connect | 19 | 0/18 | 1/1 | 0 | 1 | 0 | 18 |
+| custom_quote | 6 | 0/3 | 3/3 | 0 | 1 | 0 | 3 |
+| files_panel | 6 | 0/6 | 0/0 | 0 | N/A | 0 | 6 |
+| general_other | 9 | 0/8 | 1/1 | 0 | 1 | 0 | 8 |
+| lag_performance | 11 | 0/10 | 1/1 | 0 | 1 | 0 | 10 |
+| plan_cancel | 6 | 0/5 | 1/1 | 0 | 1 | 0 | 5 |
+| plan_upgrade | 8 | 0/8 | 0/0 | 0 | N/A | 0 | 8 |
+| plugin_mod | 13 | 0/12 | 1/1 | 0 | 1 | 0 | 12 |
+| pre_sales | 6 | 0/6 | 0/0 | 0 | N/A | 0 | 6 |
+| purchase_help | 5 | 0/4 | 1/1 | 0 | 1 | 0 | 4 |
+| refund | 6 | 0/6 | 0/0 | 0 | N/A | 0 | 6 |
+| server_other | 13 | 0/10 | 3/3 | 0 | 1 | 0 | 10 |
+| server_start_crash | 22 | 0/18 | 4/4 | 0 | 1 | 0 | 18 |
+| version_core | 9 | 0/7 | 2/2 | 0 | 1 | 0 | 7 |
+| world_backup | 8 | 0/7 | 1/1 | 0 | 1 | 0 | 7 |
 
-Input is `customer_problem`, followed by customer messages before the first
-non-customer conversation message, omitting exact duplicates of the problem.
-No staff/bot answers or later customer turns are fed to the loop. Over-6000-char
-inputs fail as errors; no silent truncation. Expected points, historical outcome,
-category and resolution summaries never enter the model prompt. Categories are
-used only for aggregation; their known imprecision is preserved.
+## Failure patterns observed
 
-## Scoring and observability
+- The dominant pattern was low-confidence retrieval: the loop retrieved KB passages but none of the 175 items met its existing 0.5 lexical overlap gate; it therefore delivered the fixed Traditional Chinese or English handoff. This produced 154 unexpected handoffs on historically resolved items.
+- Two billing items (GS-089 and GS-102) attempted the read-only invoice tool and recorded `/v1/me/invoice:HTTP_403`; they were handed off without runner errors.
+- Representative model drafts (diagnostic only; not delivered answers): “我先查詢目前可引用的主機方案與網路埠限制資料，再依查到的內容回答；帳戶或特定節點的可用性需要由客服以內部系統確認。” and “我先查看這張工單所對應主機的狀態與近期日誌，並查閱連線問題的支援文件。” Delivered replies were the fixed handoff, e.g. “我不知道，現有資料不足以確認答案，已轉交人工客服。”
+- These are de-identified synthetic-harness outputs. Lexical scoring does not assess semantic correctness, negation, or factual truth.
 
-Each expected point must occur **in full** in the delivered answer after NFKC,
-lowercasing, and punctuation/space removal. Coverage is matching points / total
-points. All points plus no handoff/error is resolved-correct; positive incomplete
-coverage without handoff/error is partial; zero coverage, unexpected handoff or
-runtime failure is wrong. For historical handoff items, only successful Core
-handoff with no turn error is correct: the shipped loop replaces any draft with
-its fixed non-confident staff-handoff reply. Resolved-correct and partial rates
-use the historical resolved denominator; handoff-correct uses the historical
-handoff denominator. Counts retain errors in the denominator.
 
-This strict lexical rule can reject valid paraphrases, cannot detect negation or
-contradictions, and cannot judge equivalent Chinese expressions or factual truth.
-Partial point coverage is not a pass. Historical case-specific compensation,
-quotes or backend work may be impossible from the initial question/read-only
-permissions; their failure is retained rather than inventing actions or leaking
-answers into input. Limitation explanations are scored by the same points.
+## Deferred work
 
-Raw results include delivered text, model draft text, matched-point flags,
-lifecycle handoff, per-item elapsed time, model generation attempts (including
-failed attempts), Core HTTP tool errors and runner errors. Average steps is the
-average model generation-attempt count, not a hidden reasoning count. The SDK's
-provider exceptions are deliberately not serialized. The loop internally swallows
-some provider/tool failures: their exact cause is unavailable and must not be
-inferred from a handoff. Price is not supplied by the endpoint instrumentation;
-cost remains null rather than guessed.
+Staff KB review, corpus improvement, shadow mode, tracing, semantic claim review, and a durable staff approval queue remain deferred. The synthetic harness still has no live provider/account state; no production integrations were added.
 
-`citationGateViolation` checks a delivered non-handoff answer for an exact
-retrieved excerpt and its source/line citation. Drafts rejected by the loop remain
-raw diagnostic output. **Semantic support is unassessed**: the existing gate
-requires one supported excerpt, not evidence for every assertion. It cannot
-identify an unrelated extra claim, a misleading citation or every hallucination.
-A zero gate-violation rate must never be advertised as zero hallucinations.
-Manual/semantic claim-to-passage assessment is still needed.
-
-## Per-category coverage (full set, unexecuted)
-
-Rates below are unavailable, not zero. R = resolved-correct / historical resolved;
-H = handoff-correct / historical handoff; P = partial / historical resolved.
-
-| Category | N | Resolved | Handoff | R | H | P | Offline resolution proxy |
-| --- | ---: | ---: | ---: | --- | --- | --- | --- |
-| account_access | 8 | 8 | 0 | N/A | N/A | N/A | N/A |
-| billing_other | 6 | 5 | 1 | N/A | N/A | N/A | N/A |
-| billing_payment | 11 | 10 | 1 | N/A | N/A | N/A | N/A |
-| billing_question | 3 | 3 | 0 | N/A | N/A | N/A | N/A |
-| cannot_connect | 19 | 18 | 1 | N/A | N/A | N/A | N/A |
-| custom_quote | 6 | 3 | 3 | N/A | N/A | N/A | N/A |
-| files_panel | 6 | 6 | 0 | N/A | N/A | N/A | N/A |
-| general_other | 9 | 8 | 1 | N/A | N/A | N/A | N/A |
-| lag_performance | 11 | 10 | 1 | N/A | N/A | N/A | N/A |
-| plan_cancel | 6 | 5 | 1 | N/A | N/A | N/A | N/A |
-| plan_upgrade | 8 | 8 | 0 | N/A | N/A | N/A | N/A |
-| plugin_mod | 13 | 12 | 1 | N/A | N/A | N/A | N/A |
-| pre_sales | 6 | 6 | 0 | N/A | N/A | N/A | N/A |
-| purchase_help | 5 | 4 | 1 | N/A | N/A | N/A | N/A |
-| refund | 6 | 6 | 0 | N/A | N/A | N/A | N/A |
-| server_other | 13 | 10 | 3 | N/A | N/A | N/A | N/A |
-| server_start_crash | 22 | 18 | 4 | N/A | N/A | N/A | N/A |
-| version_core | 9 | 7 | 2 | N/A | N/A | N/A | N/A |
-| world_backup | 8 | 7 | 1 | N/A | N/A | N/A | N/A |
-
-## Findings and deferred work
-
-No loop-quality findings are claimed until live results exist. Dataset inspection
-shows why semantic review will matter: GS-001 expects a specific VPS quote and
-a later undeliverable-order refund despite initially asking about availability;
-GS-002 expects staff backend inspection and a customer retest after an outage,
-without a documented backend fix. These are dataset examples, not observed model
-failures. A read-only assistant must not pretend to have performed either action.
-
-`pnpm eval:mock` is the step-2 wiring/security baseline (76 tests), not a model
-quality comparison and not evidence for any golden-set score. Source/scoring tests
-cover answer leakage, normalization, partial scoring, handoff/error treatment and
-undefined denominators. No loop tools or permissions were changed.
-
-Live smoke/full execution and a report of actual failure quotes remain blocked
-on the two missing prerequisites above. Shadow mode, tracing and a durable staff
-approval queue remain later steps. Discord, production provider adapters, new
-storage services and writes are outside this step.
 
 ## Validation
 
-`pnpm build` (also executed by `pnpm test`), `pnpm typecheck`, `pnpm test`
-(306 script tests plus 56 Support Core tests), `pnpm lint`, and `pnpm eval:mock`
-(76 tests) passed. Explicit-live smoke/full preflights exited nonzero as designed
-for absent key and KB; no billable model calls were attempted.
+`pnpm knowledge:check`, `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm eval:mock` passed. Raw full and smoke results are in ignored `eval-results/`; `knowledge/` is ignored and was not committed.
