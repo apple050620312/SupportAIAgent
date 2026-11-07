@@ -97,7 +97,11 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         model: options.model, instructions: SYSTEM_PROMPT, tools, temperature: 0.2, maxRetries: 0,
         providerOptions: { openai: { store: false } },
         toolCallConcurrency: 1,
-        stopWhen: [stepCountIs(10), () => handoff || failed]
+        // Always give the model a continuation after a gated retrieval/read failure.
+        // The tool returns an explicit unavailable/handoff instruction; the model can
+        // then emit a final handoff response. The application gate below still forces
+        // the deterministic Core handoff, so this does not weaken authorization.
+        stopWhen: [stepCountIs(10)]
       });
       let reply = "";
       try {

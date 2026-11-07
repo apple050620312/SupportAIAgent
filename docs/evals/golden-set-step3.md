@@ -220,3 +220,20 @@ The full run recorded 0 provider failures, 42 Core/read-tool errors (26 syntheti
 | Cost | null | null | unchanged |
 
 The lower handoff score reflects model/run variance and synthetic tool-state outcomes; it is not evidence that the continuation fix weakened the safety gate. The store fix removed the observed provider failure class. These scores remain a loop plus published-docs KB measurement, not reviewed customer answers or a seven-day resolution outcome.
+
+## Step 8 (2026-11-08): post-tool continuation diagnosis and fix
+
+Step 7's 124 tool-call-only outcomes were classified from the saved allowlisted traces. The dominant class was **retrieval/read gate early-stop: 59/124**, followed by synthetic Core read errors (42: 26 log 404 and 16 invoice 403) and provider/other failures in the remainder. In the dominant class, the final generation was absent because `stopWhen` included `handoff || failed`; retrieval rejection or a read exception set that flag during tool execution, so the loop terminated with `tool-calls` before the model could state the handoff. Representative de-identified cases included a refund question whose last call was knowledge search, a connectivity question whose last call was redacted logs, and a pre-sales question whose last call was knowledge search. Arguments were selector-free/allowlisted; no malformed selector or unauthorized dispatch was observed.
+
+| Classification of step-7 tool-call-only items | Count |
+| --- | ---: |
+| Retrieval gate rejected (no admitted evidence) | 59 |
+| Tool result error (synthetic Core: logs HTTP 404 / invoice HTTP 403) | 42 |
+| Tool-input validation failure | 0 observed |
+| Step cap reached | 0 observed |
+| Model/provider failure before final text | 23 |
+| Other/overlap | 0 |
+
+The single dominant cause was the application stop condition, supported by one-step traces with a tool-call finish reason immediately after `handoff`/`failed` became true and no final generation. The fix removes `handoff || failed` from `stopWhen` while retaining the ten-step cap. Gated tools return an explicit unavailable/handoff instruction; the model receives one continuation to emit final text, and the application still performs deterministic Core handoff and rejects every answer lacking fresh evidence and an exact citation. No retrieval threshold, citation rule, authorization rule, model, provider, or KB changed. Focused tests and the full safety suite remain green.
+
+Smoke and full-run results are recorded below after completion. Cost is null; latency is measured wall time only. Scores measure loop + published-docs KB (unreviewed as agent answers); the static set cannot establish 7-day true resolution.
