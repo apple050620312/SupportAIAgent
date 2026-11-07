@@ -104,3 +104,12 @@ text can contain secrets not known to the scrubber: local history is private
 customer data and needs a production privacy design. No golden set, tracing,
 approval queue, new database, live Discord integration or write capability is
 implemented in this step.
+
+## Golden-set evaluation (step 3)
+
+`GOLDEN_LIVE_MODEL=1 pnpm eval:golden --limit 10` runs an explicitly opted-in
+live-model evaluation through the unchanged runner and synthetic Core. A reviewed
+Markdown KB and an environment API key are required. See the [measurement report](../../docs/evals/golden-set-step3.md)
+for input isolation, strict lexical scoring, observability limits, per-category
+coverage and the currently blocked smoke/full runs. Offline correctness is not
+seven-day true resolution; this harness does not enable production delivery.

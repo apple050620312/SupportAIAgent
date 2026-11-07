@@ -11,3 +11,5 @@ knowledge/
 .DS_Store
 
 .agent-history/
+
+eval-results/

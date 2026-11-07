@@ -20,7 +20,8 @@
     "knowledge:check": "corepack pnpm build && node --env-file-if-exists=.env.ticket-support --import tsx scripts/check-support-knowledge.ts",
     "dev": "corepack pnpm --filter @openclaw-hosting/support-core dev",
     "start": "corepack pnpm --filter @openclaw-hosting/support-core start",
-    "demo:vercel": "corepack pnpm build && node --import tsx scripts/demo-vercel-agent.ts"
+    "demo:vercel": "corepack pnpm build && node --import tsx scripts/demo-vercel-agent.ts",
+    "eval:golden": "corepack pnpm build && node --import tsx scripts/eval-golden.ts"
   },
   "devDependencies": {
     "@openclaw-hosting/openclaw-plugin": "workspace:*",
