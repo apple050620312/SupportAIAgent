@@ -18,6 +18,15 @@ describe("MutationApprovalStore", () => {
     expect(store.consume(second.approvalId, scope, 4)?.operation).toEqual(operation);
     expect(store.consume(second.approvalId, scope, 4)).toBeNull();
   });
+  it("isolates the approved action/server from mutation of proposal inputs and outputs", () => {
+    const store = new MutationApprovalStore();
+    const input: MutationOperation = { operation: "power", serviceRef: "whmcs-service:1", action: "stop" };
+    const proposal = store.propose(scope, 1, input);
+    input.action = "kill";
+    proposal.operation.serviceRef = "whmcs-service:2";
+    store.approve(proposal.approvalId);
+    expect(store.consume(proposal.approvalId, scope, 1)?.operation).toEqual({ operation: "power", serviceRef: "whmcs-service:1", action: "stop" });
+  });
   it("rejects expired approvals", () => {
     const store = new MutationApprovalStore(0);
     const proposal = store.propose(scope, 1, operation);

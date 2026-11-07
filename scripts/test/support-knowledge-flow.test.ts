@@ -24,8 +24,9 @@ describe("knowledge to Core to OpenClaw workflow", () => {
       const match = search.matches[0]!;
       const article = (await tools.find((tool) => tool.name === "read_support_article")!.execute("read", { articleRef: match.articleRef, startLine: match.startLine })).details as KnowledgeReadResponse;
       expect(article.content).toContain("資源工具"); expect(article.trust).toBe("reference_only");
-      // Documentation lookup itself does not call WHMCS or Pterodactyl.
-      expect(demo.providerCalls).toEqual([]);
+      // Every tool re-resolves identity; knowledge does not access hosting providers.
+      expect(demo.providerCalls.length).toBeGreaterThan(0);
+      expect(demo.providerCalls.every((call) => ["GetClientID", "GetClientsDetails"].includes(call))).toBe(true);
       const resources = await tools.find((tool) => tool.name === "get_my_server_resources")!.execute("diagnose", { serviceRef: "whmcs-service:1" });
       expect(resources.details).toHaveProperty("memoryBytes");
       expect(JSON.stringify(article)).not.toContain(root);
@@ -96,7 +97,8 @@ describe("knowledge to Core to OpenClaw workflow", () => {
       expect(article.trust).toBe("reference_only");
       await expect(tools.find((tool) => tool.name === "get_my_server_status")!.execute("inject", { serviceRef: "whmcs-service:1", clientid: 5 })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
       await expect(tools.find((tool) => tool.name === "execute_approved_mutation")!.execute("unapproved", { approvalId: "00000000-0000-4000-8000-000000000001" })).rejects.toMatchObject({ code: "MUTATION_NOT_ALLOWED" });
-      expect(demo.providerCalls).toEqual([]);
+      expect(demo.providerCalls.length).toBeGreaterThan(0);
+      expect(demo.providerCalls.every((call) => ["GetClientID", "GetClientsDetails"].includes(call))).toBe(true);
     } finally { await demo.app.close(); }
   });
 

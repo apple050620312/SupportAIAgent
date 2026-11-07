@@ -1,4 +1,5 @@
 import {
+  OwnInvoiceSchema, RedactedServerLogsSchema,
   CustomerIdentitySchema,
   HostingServiceSchema,
   GameServerSchema,
@@ -24,6 +25,7 @@ import {
   UpstreamUnavailableError
 } from "../domain/errors.js";
 import type {
+  InvoiceProvider, RedactedServerLogProvider,
   CustomerIdentityResolver,
   GameServerProvider,
   GameServerFileProvider,
@@ -32,6 +34,8 @@ import type {
 } from "../ports/index.js";
 
 export interface HostingSupportDependencies {
+  readonly invoices?: InvoiceProvider;
+  readonly logs?: RedactedServerLogProvider;
   readonly identityResolver: CustomerIdentityResolver;
   readonly hostingServices: HostingServiceProvider;
   readonly gameServers: GameServerProvider;
@@ -42,6 +46,23 @@ export interface HostingSupportDependencies {
 export class HostingSupportService {
   #restartAt = new Map<string, number>();
   constructor(private readonly dependencies: HostingSupportDependencies) {}
+
+  async getInvoice(actor: ActorContext, invoiceRef: string) {
+    const customer = await this.resolveCustomer(actor);
+    if (!this.dependencies.invoices) throw new ServiceNotFoundError();
+    const record = await this.callUpstream("Invoice provider", () => this.dependencies.invoices!.find(invoiceRef, actor));
+    if (!record || record.customerRef !== customer.customerRef) throw new ServiceNotFoundError();
+    if (!Value.Check(OwnInvoiceSchema, record.invoice)) throw new UpstreamUnavailableError("Invoice provider");
+    return record.invoice;
+  }
+
+  async getServerLogs(actor: ActorContext, serviceRef: string) {
+    const server = await this.getMyServer(actor, serviceRef);
+    if (!this.dependencies.logs) throw new ServiceNotFoundError();
+    const logs = await this.callUpstream("Redacted server logs", () => this.dependencies.logs!.read(server, actor));
+    if (!Value.Check(RedactedServerLogsSchema, logs)) throw new UpstreamUnavailableError("Redacted server logs");
+    return logs;
+  }
 
   async resolveCustomer(actorContext: ActorContext): Promise<CustomerIdentity> {
     const customer = await this.callUpstream("Customer identity provider", () =>
@@ -160,11 +181,13 @@ export class HostingSupportService {
   }
 
   /** Called only by the approval workflow after it has consumed a single-use approval. */
-  async executeApprovedMutation(actorContext: ActorContext, operation: MutationOperation): Promise<void> {
+  async executeApprovedMutation(actorContext: ActorContext, operation: MutationOperation, binding: { customerRef: string; serverRef: string }): Promise<void> {
     if (!Value.Check(MutationOperationSchema, operation) || !this.dependencies.gameServerMutations) {
       throw new MutationNotAllowedError();
     }
+    const customer = await this.resolveCustomer(actorContext);
     const server = await this.getMyServer(actorContext, operation.serviceRef);
+    if (customer.customerRef !== binding.customerRef || server.serverRef !== binding.serverRef) throw new MutationNotAllowedError();
     if (server.serviceRef !== operation.serviceRef) throw new ServiceNotOwnedError();
     if (operation.operation === "update_startup_variable") {
       if (!this.dependencies.gameServerFiles) throw new MutationNotAllowedError();
@@ -184,8 +207,8 @@ export class HostingSupportService {
   async restartMyServer(actorContext: ActorContext, serviceRef: string): Promise<void> {
     if (!this.dependencies.gameServerMutations) throw new MutationNotAllowedError();
     const server = await this.getMyServer(actorContext, serviceRef);
-    if (!["running", "starting", "stopping"].includes(server.status)) throw new MutationNotAllowedError();
-    const key = `${actorContext.actor.discordUserId}:${serviceRef}`;
+    if (!["running"].includes(server.status)) throw new MutationNotAllowedError();
+    const key = server.serverRef;
     const now = Date.now();
     const previous = this.#restartAt.get(key) ?? 0;
     if (now - previous < 120_000) throw new MutationRateLimitedError();

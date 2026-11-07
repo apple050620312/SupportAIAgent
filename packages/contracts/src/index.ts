@@ -11,3 +11,4 @@ export * from "./service.js";
 export * from "./support.js";
 export * from "./ticket.js";
 export * from "./tools.js";
+export * from "./permission.js";

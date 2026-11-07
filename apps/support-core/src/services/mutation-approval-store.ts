@@ -4,6 +4,7 @@ import type { MutationOperation, TicketScope } from "@openclaw-hosting/contracts
 export type ApprovalState = "pending" | "approved" | "consumed" | "invalidated";
 export interface MutationApproval {
   readonly approvalId: string;
+  readonly binding?: { readonly customerRef: string; readonly serverRef: string };
   readonly operation: MutationOperation;
   readonly operationDigest: string;
   readonly scope: TicketScope;
@@ -24,11 +25,12 @@ export class MutationApprovalStore {
   #entries = new Map<string, MutationApproval>();
   constructor(private readonly ttlMs = 5 * 60_000) {}
 
-  propose(scope: TicketScope, ticketRevision: number, operation: MutationOperation): MutationApproval {
-    const approval: MutationApproval = { approvalId: randomUUID(), operation, operationDigest: digest(operation), scope,
+  propose(scope: TicketScope, ticketRevision: number, operation: MutationOperation, binding?: { customerRef: string; serverRef: string }): MutationApproval {
+    const approval: MutationApproval = { approvalId: randomUUID(), operation: structuredClone(operation), operationDigest: digest(operation), scope: structuredClone(scope),
+      ...(binding ? { binding: structuredClone(binding) } : {}),
       ticketRevision, expiresAt: Date.now() + this.ttlMs, state: "pending" };
     this.#entries.set(approval.approvalId, approval);
-    return { ...approval };
+    return structuredClone(approval);
   }
 
   approve(approvalId: string): boolean {
@@ -44,7 +46,7 @@ export class MutationApprovalStore {
       return null;
     }
     entry.state = "consumed";
-    return { ...entry };
+    return structuredClone(entry);
   }
 
   invalidateForTicket(scope: TicketScope): void {

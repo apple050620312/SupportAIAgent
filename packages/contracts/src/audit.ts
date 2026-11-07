@@ -3,7 +3,7 @@ import { Type, type Static } from "@sinclair/typebox";
 /** No customer selectors, actor IDs, text, tokens, provider payloads or raw errors. */
 export const SupportAuditEventSchema = Type.Object({
   operation: Type.Union([
-    Type.Literal("identify_customer"), Type.Literal("list_my_services"), Type.Literal("get_service_details"),
+    Type.Literal("get_invoice"), Type.Literal("get_server_logs"), Type.Literal("identify_customer"), Type.Literal("list_my_services"), Type.Literal("get_service_details"),
     Type.Literal("list_my_servers"), Type.Literal("get_my_server_status"), Type.Literal("get_my_server_resources"),
     Type.Literal("handoff_to_staff"), Type.Literal("ticket_admitted"), Type.Literal("human_takeover"),
     Type.Literal("ticket_retired"), Type.Literal("agent_turn"), Type.Literal("restart_server"),

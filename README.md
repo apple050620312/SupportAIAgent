@@ -22,6 +22,8 @@ Support Core is the trusted authorization boundary. It resolves a Discord actor 
 - `packages/openclaw-hosting-plugin`: bounded tool factory, native OpenClaw 2026.9.8 entry/turn route and support Skill.
 - `docs`: architecture, security, integration questions, and decisions.
 
+The frozen [Support Core permission matrix](docs/decisions/0008-support-core-permission-matrix.md) declares each tool tier and scope. Opt-in customer delivery requires an append-only invocation audit sink and trusted ticket resource selection; writes additionally require trusted grants, restart confirmation/recovery policy, or a durable human approval adapter. The offline in-memory approval prototype alone cannot authorize T2 execution.
+
 ## Markdown support knowledge
 
 Place reviewed customer-safe UTF-8 `.md` files under the ignored `knowledge/` directory, or set `SUPPORT_KNOWLEDGE_ROOT` to an absolute folder in `.env.ticket-support`. Run `corepack pnpm knowledge:check` for an offline corpus check. The manual ticket launcher loads this corpus before starting the bot. OpenClaw can search in Chinese/English, read cited pages and use existing Core tools to attempt resolution, verify results or hand off. See [the knowledge guide](docs/support-knowledge.md) and [article template](docs/examples/support-knowledge-article.md).

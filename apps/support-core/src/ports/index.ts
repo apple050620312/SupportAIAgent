@@ -1,4 +1,5 @@
 import type {
+  OwnInvoice, RedactedServerLogs,
   ActorContext,
   CustomerIdentity,
   GameServer,
@@ -63,4 +64,13 @@ export interface GameServerFileProvider {
   listFiles(server: GameServer, path: string, actorContext: ActorContext): Promise<FileListResponse>;
   readFile(server: GameServer, path: string, actorContext: ActorContext): Promise<FileContentsResponse>;
   getStartupConfig(server: GameServer, actorContext: ActorContext): Promise<StartupConfigResponse>;
+}
+
+/** No generic query capability; records remain internal until Core checks ownership. */
+export interface InvoiceProvider {
+  find(invoiceRef: string, actor: ActorContext): Promise<{ customerRef: string; invoice: OwnInvoice } | null>;
+}
+export interface RedactedServerLogProvider {
+  /** Adapter must redact secrets/PII before returning bounded untrusted lines. */
+  read(server: GameServer, actor: ActorContext): Promise<RedactedServerLogs>;
 }

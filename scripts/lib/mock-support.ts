@@ -128,7 +128,9 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
     gameServers: pteroProvider, gameServerMutations: pteroProvider,
     gameServerFiles: pteroProvider });
   const approvals = new MutationApprovalStore();
-  const app = buildApp({ logger: false, readOnly: { support, tokens, tickets: bridge, knowledge: new SupportKnowledgeService(knowledgeProvider), approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
+  const app = buildApp({ logger: false, readOnly: { selectedResources: { serviceForTicket: (scope) => Promise.resolve(scope.discordUserId === MOCK_SCOPE.discordUserId ? "whmcs-service:1" : "whmcs-service:2"), invoiceForTicket: () => Promise.resolve(null) }, invocationAudit: { append: () => Promise.resolve() },
+    permissions: { grants: () => Promise.resolve(["customer:read", "server:read", "knowledge:read", "ticket:handoff", "server:restart", "server:propose", "server:mutate"]),
+      restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: true }) }, support, tokens, tickets: bridge, knowledge: new SupportKnowledgeService(knowledgeProvider), approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await app.inject({
