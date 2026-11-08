@@ -378,3 +378,147 @@ Scores measure **loop + published-docs KB (unreviewed as agent answers)**. The
 static set cannot establish **7-day true resolution**, no reopen, or reviewed
 semantic correctness. Better retrieval does not supply missing authoritative
 account state, staff approval, or verified write/restore outcomes.
+
+
+## Step 10 — semantic review of step-9 delivered answers (2026-11-08)
+
+### Judge design and defaults
+
+`scripts/judge-semantic.ts` selects exactly `handedOff === false` from
+`eval-results/golden-2026-11-08T01-30-48-210Z-175.json`: **38 items**,
+listed exhaustively in the table below (35 expected-resolved, three
+expected-handoff). It verifies the completed 175-item source, unique selected
+IDs, one golden match per ID, and the original dataset SHA-256. The external
+reference remains `/home/hatch/workspace/coffee-host-golden/golden_set.json`;
+it is not copied into this repository.
+
+The judge is **gpt-6.1-sol via sub2api Responses**, temperature **0.1**,
+`store:false`, deliberately different from the answering model gpt-6-luna.
+Each item request contains only **customer_problem, answer (the delivered final
+answer), expected_points, and staff_resolution**. No conversation, draft,
+retrieved evidence, tool trace, category, ID, outcome, or lexical score is sent.
+The rubric and evaluation instructions are the only additional model context.
+The harness applies the expected-handoff override locally, retaining the
+content judgment and whether its content was reasonable in the private reason.
+
+Rubric (verbatim):
+
+- **correct** — every expected point is substantively present in the delivered answer (paraphrase allowed, exact wording NOT required) AND no statement in the answer contradicts the staff resolution.
+- **partial** — at least one expected point substantively present, but at least one missing.
+- **wrong** — no expected point substantively present, or any statement contradicting the staff resolution.
+- Items whose golden-set outcome is should-hand-off but which received an answer: verdict is **wrong (should have handed off)** regardless of content; still record whether the content itself was reasonable in the reason field.
+- The judge must output, per item: per-point verdicts (covered/partial/missing), overall verdict, and a 1–2 sentence reason. No other claims.
+
+Defaults: a point is `covered` only when substantively complete; incomplete
+support is `partial`, absent support is `missing`. With no fully covered point,
+the overall verdict is wrong; any contradiction overrides coverage. Advice to
+perform an operation does not establish that it was performed. References and
+answers are treated as untrusted data. The harness validates point counts,
+allowed verdicts, and coverage consistency, and stops rather than silently
+accepting malformed output. There is no second judge, voting, or adjudication.
+
+Invocation (credentials are supplied only to the wrapper process):
+
+```sh
+/home/hatch/workspace/run-with-sub2api-key.sh node --import tsx scripts/judge-semantic.ts
+```
+
+The intended design is one call per item with no automatic retries. **Execution
+deviation:** the first invocation saved 18 judgments and stopped during the
+GS-086 attempt; its original sanitized error handler did not retain enough
+information to classify the failure. After adding checkpoint resumption and
+private response capture, a second wrapper invocation resumed at GS-086 and
+completed the remaining 20 judgments. Thus there are **38 retained judgments
+and one additional unsuccessful item attempt**; completed judgments were never
+rerun. This is not a claim of exactly 38 attempted requests. The script records
+resume metadata for subsequent resumptions and refuses mismatched checkpoints.
+
+Per-point verdicts, detailed reasons, model, rubric version `step10-v1`,
+timestamps and input hashes are stored only in ignored
+`eval-results/semantic-review-step9.json` (completed). Private response artifacts
+from the resumed invocation are also ignored. No key or provider exception body
+is logged. The following table uses manually shortened, de-identified reasons;
+it contains no customer text, staff answers, or expected-point text.
+
+### Semantic results (LLM-judge proxy)
+
+**1 correct / 5 partial / 32 wrong out of 38** (2.6% / 13.2% / 84.2%).
+Among **35 expected-resolved** answers: **1 correct / 5 partial / 29 wrong**.
+Among **three expected-handoff** answers: **0 correct / 0 partial / 3 wrong**;
+all three receive `wrong (should have handed off)` regardless of content.
+
+### Per-item summary
+
+| ID | Category | Verdict | Short reason |
+| --- | --- | --- | --- |
+| GS-005 | plan_upgrade | wrong | Availability advice contradicts the reference and omits required guidance. |
+| GS-006 | lag_performance | wrong | Omits the specific remediation and post-change connection guidance. |
+| GS-011 | pre_sales | wrong | Omits the specific recommendation, upgrade terms, and service limits. |
+| GS-024 | files_panel | wrong | Covers one connection detail but contradicts service availability. |
+| GS-032 | account_access | wrong | Discusses account linkage rather than the required activation resolution. |
+| GS-034 | custom_quote | wrong | Omits pricing, payment requirements, and the follow-up procedure. |
+| GS-035 | general_other | wrong | Suggests a status inquiry without explaining the required activation path. |
+| GS-037 | purchase_help | partial | Covers cancellation but omits compensation and account-specific timing. |
+| GS-043 | cannot_connect | wrong | Generic support referral omits the required completion and verification steps. |
+| GS-051 | world_backup | wrong | Omits retrieval terms and the required download procedure. |
+| GS-053 | billing_payment | wrong | Leaves restoration unresolved and omits the retention limitation. |
+| GS-055 | cannot_connect | partial | Covers joining the server but omits configuration details. |
+| GS-061 | billing_question | wrong | Partially describes suspension but omits precise policy and timing. |
+| GS-071 | server_start_crash | partial | Covers staff involvement but incompletely explains configuration restrictions and recovery. |
+| GS-074 | custom_quote | wrong (should have handed off) | Handoff required; content is cautious but only partially addresses requirements. |
+| GS-077 | custom_quote | wrong (should have handed off) | Handoff required; offered assistance conflicts with service scope. |
+| GS-078 | custom_quote | wrong | Omits the unsupported-service limitation and appropriate alternative. |
+| GS-084 | account_access | wrong | Generic password advice omits the specific diagnosis and navigation procedure. |
+| GS-086 | server_start_crash | wrong | Partially describes installation but omits required configuration and troubleshooting steps. |
+| GS-093 | plugin_mod | partial | Covers version entry and reinstallation but omits the required runtime change. |
+| GS-095 | billing_payment | wrong | Omits retrieval terms, backup timing, and restoration responsibilities. |
+| GS-098 | billing_payment | wrong | Omits the required verification and subsequent activation path. |
+| GS-099 | plugin_mod | wrong | Requests generic diagnostics but omits the required evidence and installation fallback. |
+| GS-106 | server_other | wrong | Requests more information instead of describing the backend resolution. |
+| GS-116 | refund | wrong | Omits the specific workaround, compensation, and diagnostic evidence requirements. |
+| GS-118 | account_access | wrong | Incomplete verification guidance also contradicts the transfer procedure. |
+| GS-122 | server_other | wrong | Generic support referral omits backend investigation and recovery verification. |
+| GS-141 | plugin_mod | partial | Covers diagnostic evidence but incompletely addresses installation diagnosis and follow-up. |
+| GS-144 | account_access | wrong | Omits the required verification workaround, exemption, and activation path. |
+| GS-148 | general_other | wrong | Omits the retrieval procedure and contradicts the reference service state. |
+| GS-149 | version_core | wrong | Omits the specific installation workaround and support prerequisites. |
+| GS-159 | general_other | wrong (should have handed off) | Handoff required; content only partly addresses account checks and omits activation confirmation. |
+| GS-162 | plugin_mod | wrong | Omits the specific plugin recommendation and service limits; backup guidance is incomplete. |
+| GS-163 | purchase_help | correct | Judge finds the activation and startup guidance substantively complete and consistent. |
+| GS-165 | purchase_help | wrong | Omits document constraints, official guidance, and required diagnostic evidence. |
+| GS-169 | files_panel | wrong | Omits the required connection and credential details. |
+| GS-172 | refund | wrong | Partially mentions refund restrictions but omits the applicable resolution and completion. |
+| GS-173 | server_start_crash | wrong | Omits the recovery limitation and required investigation and support procedure. |
+
+### Failure patterns and interpretation
+
+The dominant pattern is **missing specific facts or procedures**, rather than
+mere wording differences: policy limits, service availability, prices, timing,
+configuration steps, and account-specific activation or recovery outcomes.
+Generic troubleshooting, requests for more information, and referrals to
+support frequently substitute for the reference resolution. The point arrays
+show **31/38 items with no fully covered expected point**. Five more have
+partial overall coverage; one covers a point but is wrong because of a
+contradiction. The remaining item is the sole correct proxy verdict.
+Contradictions include service availability, procedure, and synthetic service
+state; three items additionally fail the mandatory lifecycle handoff rule.
+
+The strict **0/154** therefore hides **one semantically correct candidate**
+(GS-163), equivalent to **1/154 = 0.65%** of expected-resolved items if Muse
+confirms it, plus **five partially covered answers** that lexical scoring
+missed. It is a scoring artefact for some coverage, but the proxy does **not**
+support interpreting the zero as a large hidden resolution success: **34/35**
+delivered expected-resolved answers remain incomplete or wrong. The other
+**119/154 expected-resolved items handed off** and were outside this review;
+this is not a semantic re-evaluation of those answers or the entire 175-item
+run. The original strict score is unchanged. Missing authoritative account
+state, policy facts and actionable procedures remain substantive constraints.
+
+This is an **LLM-judge proxy, not ground truth**. The judge comes from the same
+provider family as the answering model despite using a different model, so
+correlated errors and preferences remain possible. It sees only the prescribed
+four fields; omitted conversation context, reference quality, and subtle
+contradictions can affect its judgment. Low temperature does not guarantee
+repeatability. **Muse will independently verify every “correct” verdict
+(GS-163 here) before it is relied on.** No seven-day true resolution or real
+operational success is established.
