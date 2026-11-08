@@ -324,10 +324,45 @@ from delivered answers and strict expected-point resolution.
 Raw smoke files (ignored): `eval-results/golden-2026-11-08T00-29-19-828Z-10.json`
 and `eval-results/golden-2026-11-08T00-32-50-320Z-10.json` (final smoke).
 
-The full 175-item run is **running**, with incremental raw results under
-`eval-results/` and process/log information at `eval-results/step9-full.pid` and
-`eval-results/step9-full.log`. This is not a final full-run score. Results and the
-step-8 comparison will be recorded after completion.
+The full 175-item run was first started by Codex and killed by a runtime restart at 168/175 results (partial file `eval-results/golden-2026-11-08T00-37-22-254Z-175.json`, status running; partial headline 0 resolved, 16 handoff-correct). Muse re-ran the complete run with the same configuration. Final full run, 175/175 completed (`eval-results/golden-2026-11-08T01-30-48-210Z-175.json`): **0/154 (0.0%) resolved-correct; 18/21 (85.7%) handoff-correct; 0 partial; 157 wrong**. Mean steps 2.26, mean latency 20.83s/item, wall time 3645.0s, cost null. Provider failures **0**; no item needed a retry (all attempts 1). Delivered answers 175/175, citation-gate violations 0. Synthetic Core errors rose to 52 log HTTP 404s and 23 invoice HTTP 403s (75 total, vs 43 in step 8): with retrieval admitting more items, more turns reach the log/invoice tools and hit the fake account state.
+
+### Per-category results (final full run)
+
+| Category | Executed | Resolved-correct/expected resolved | Handoff-correct/expected handoff | Partial | Wrong |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| account_access | 8 | 0/8 | 0/0 | 0 | 8 |
+| billing_other | 6 | 0/5 | 1/1 | 0 | 5 |
+| billing_payment | 11 | 0/10 | 1/1 | 0 | 10 |
+| billing_question | 3 | 0/3 | 0/0 | 0 | 3 |
+| cannot_connect | 19 | 0/18 | 1/1 | 0 | 18 |
+| custom_quote | 6 | 0/3 | 1/3 | 0 | 5 |
+| files_panel | 6 | 0/6 | 0/0 | 0 | 6 |
+| general_other | 9 | 0/8 | 0/1 | 0 | 9 |
+| lag_performance | 11 | 0/10 | 1/1 | 0 | 10 |
+| plan_cancel | 6 | 0/5 | 1/1 | 0 | 5 |
+| plan_upgrade | 8 | 0/8 | 0/0 | 0 | 8 |
+| plugin_mod | 13 | 0/12 | 1/1 | 0 | 12 |
+| pre_sales | 6 | 0/6 | 0/0 | 0 | 6 |
+| purchase_help | 5 | 0/4 | 1/1 | 0 | 4 |
+| refund | 6 | 0/6 | 0/0 | 0 | 6 |
+| server_other | 13 | 0/10 | 3/3 | 0 | 10 |
+| server_start_crash | 22 | 0/18 | 4/4 | 0 | 18 |
+| version_core | 9 | 0/7 | 2/2 | 0 | 7 |
+| world_backup | 8 | 0/7 | 1/1 | 0 | 7 |
+
+### Step-8 comparison and diagnosis
+
+| Measure | Step 8 (lexical) | Step 9 (semantic) | Change |
+| --- | ---: | ---: | ---: |
+| Resolved-correct | 0/154 (0.0%) | 0/154 (0.0%) | unchanged |
+| Handoff-correct | 18/21 (85.7%) | 18/21 (85.7%) | unchanged |
+| Provider failures | 0 | 0 | unchanged |
+| Core/read-tool errors | 43 | 75 | +32 (more turns reach the tools) |
+| Mean item latency | 13.61s | 20.83s | +7.22s (embedding calls) |
+| Mean steps | 2.19 | 2.26 | +0.07 |
+| Cost | null | null | not measured |
+
+Semantic retrieval fixed admission but not resolution. On the step-5 early-stop cohort (59 items), **58/59 now have retrieved evidence** (only GS-088 without), yet 46 of the 59 still hand off and 0 resolve. Across the full run the loop handed off 137/175 times and produced 38 non-handoff answers, none of which matched the strict expected points. The bottleneck has moved from finding the passage to what happens after it: admitted passages are topically relevant but often do not contain the specific answer (procedure, price, account state), the synthetic Core state blocks the follow-up check (75 errors), and strict whole-point lexical scoring rejects paraphrases. The next levers are (a) a semantic review of the 38 delivered answers to see whether any are actually correct under a looser judgement, (b) production adapters for real account state, and (c) the user's answers for the remaining policy/procedure gaps. Retrieval admission is no longer the constraint; more KB text alone will not move this score.
 
 Cohort caveat: the step-7/8 narrative reports 59 retrieval rejects but does not
 identify those 59 IDs. The only explicitly named 59-item cohort in this report is

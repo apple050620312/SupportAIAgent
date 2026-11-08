@@ -94,7 +94,7 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls).toHaveLength(2);
   });
 
-  it.each(["Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
+  it.each([DEMO_ANSWER.slice(0, DEMO_ANSWER.indexOf(" [")), "Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(answer)] });
     expect((await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal)).reply).toContain("I don't know");
