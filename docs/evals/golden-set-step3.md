@@ -532,3 +532,76 @@ Muse read the raw records for the sole correct verdict and four spot-checks:
 - **GS-006 (wrong) — agrees.** The answer gives generic TPS information and asks for more details; it never suggests trying a different node or mentions the migration/new address.
 
 The judge's verdicts hold on all five items checked. The verified semantic score stands at **1 correct, 5 partial, 32 wrong** out of 38 delivered answers.
+
+## Step 11 — KB gaps filled from owner answers (2026-11-08)
+
+Todo item 1 of 5 (no production adapters yet). The user answered all 12 KB gap
+questions from the step-5/step-10 gap lists on 2026-11-08 ~15:10, from their own
+knowledge of the business. No golden-set staff answers were used as source
+material, per the KB rule (past tickets only prioritise topics and surface
+gaps).
+
+### New KB articles (10, owner-provided)
+
+`knowledge/` is gitignored, so the articles themselves are not in this commit;
+this section is the committable record of what was added.
+
+- `store/services/modpack-install-pricing.md` — custom modpack install pricing
+  per install: one-click installer NT$360; already downloaded on NAS, just run
+  a command NT$480; installer cannot install directly, no download from China
+  NT$560; Server Pack included, must download from China NT$640; build the
+  Server Pack by hand NT$720.
+- `store/services/suspension-retention.md` — overdue suspends service
+  immediately; paying within 7 days lifts the suspension (data still on the
+  node); after node deletion, another 7 days before deletion from the backup
+  server.
+- `practice/install/neoforge-1211.md` — NeoForge 1.21.1: confirm the egg is
+  neoforge, fill in the startup config, then reinstall the server.
+- `store/services/cancel-withdraw.md` — immediate cancellation can be
+  withdrawn by contacting support before the end of the same day; end-of-term
+  cancellation should be self-withdrawable (contact support if that fails).
+- `store/services/plan-availability.md` — as of 2026-11-08, all plans can be
+  bought and all upgrades/downgrades are available; to be updated if this
+  changes. This supersedes the GS-005 situation (E-series upgrades paused at
+  eval time).
+- `store/services/payment-credit.md` — per the checkout page, all payments are
+  credited immediately.
+- `store/services/refund-policy.md` — as a rule no refunds, unless the problem
+  is our fault.
+- `store/services/upgrade-pricing.md` — WHMCS calculates the upgrade/downgrade
+  price difference; if the system says an upgrade/downgrade is possible, it is.
+- `store/account/login-recovery.md` — account linking / login recovery: contact
+  human support.
+- `store/services/support-channels.md` — support via Discord server ticket;
+  escalate to a human when too many attempts have failed to resolve the issue.
+
+Not added: NetherNet — the owner says it is too new and not yet decided, so no
+procedure was written. It remains an open gap.
+
+Already covered, no new article: CPU/RAM/SSD recommendations — the published
+選購指南 is already in the KB at `store/description/mc-guide.md` (player
+counts, RAM sizes, series recommendations).
+
+### Validation
+
+`pnpm knowledge:check` passes: **61 Markdown articles, 551 searchable
+sections** (was 51 articles / 534 sections). No code was changed.
+
+### Process notes
+
+- Two Codex runs to write these articles were killed by runtime restarts
+  (15:10 and 15:34, both 0-byte logs, no files written, no commit). Muse wrote
+  the articles directly from the owner's answers instead.
+- The semantic index (`.kb-index/passages.json`, gitignored) was NOT rebuilt:
+  rebuilding needs the official OpenAI embeddings key, which the owner supplied
+  in chat for the step-9 run only and was deliberately not stored. The index
+  must be rebuilt (key supplied again) before the next eval re-run, or the new
+  articles will not be retrievable by the semantic provider.
+
+### Remaining todo items (2–5)
+
+2. Fix contradiction answers (GS-005 type) — check-restrictions-before-answering
+   rule + a current-restrictions article. 3. Shadow mode (Discord draft-only).
+   4. Semantic scoring as the primary metric, with the golden set split into
+   docs-answerable vs needs-account-state. 5. KB staff review (the 51 published-
+   docs articles are still draft v1 awaiting staff review).
