@@ -605,3 +605,24 @@ sections** (was 51 articles / 534 sections). No code was changed.
    4. Semantic scoring as the primary metric, with the golden set split into
    docs-answerable vs needs-account-state. 5. KB staff review (the 51 published-
    docs articles are still draft v1 awaiting staff review).
+
+### Todo item 2 — contradiction fix (same day)
+
+The KB half was already done above: `plan-availability.md` states the current
+availability as of 2026-11-08, so a future GS-005-type question now has a
+retrievable passage stating the true current state.
+
+The loop half is a `SYSTEM_PROMPT` rule in `packages/agent-loop/src/index.ts`:
+before confirming that something is available, allowed, or currently possible,
+the model must check the retrieved passages for any current restriction, pause,
+or limit; a procedure-only passage does not establish that something is
+currently allowed; if a restriction is retrieved, state it instead of
+confirming; if no passage addresses current availability, hand off rather than
+confirming from general knowledge. This targets the GS-005 failure mode
+(answer said "can upgrade" while staff said E-series upgrades were paused)
+without changing any safety gate.
+
+Verification: `pnpm typecheck` clean, `pnpm lint` clean, `pnpm test` green,
+`pnpm eval:mock` 76/76 passed with the new prompt. No live re-run yet — that
+waits for the semantic index rebuild (needs the OpenAI key again) and the
+remaining todo items.
