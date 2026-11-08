@@ -6,6 +6,7 @@ import { wrapLanguageModel } from 'ai';
 import type { KnowledgeSearchResponse } from '@openclaw-hosting/contracts';
 import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from '@openclaw-hosting/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
+import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, summarize, type GoldenItem } from './lib/golden-eval.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
@@ -26,6 +27,7 @@ const endpoint = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://
 const modelId = process.env.MODEL_ID || process.env.AGENT_LIVE_MODEL_ID || 'gpt-6.1-sol';
 const metadata = { model: modelId, provider, endpoint, datasetSha256: createHash('sha256').update(source).digest('hex'), selected: items.length, total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring; no semantic judgement', trueResolution7d: null };
 const blockers: string[] = [];
+if (process.env.EMBEDDING_PROVIDER && process.env.EMBEDDING_PROVIDER !== 'openai') blockers.push('EMBEDDING_PROVIDER must be openai or unset');
 if (process.env.GOLDEN_LIVE_MODEL !== '1') blockers.push('GOLDEN_LIVE_MODEL=1 required; no model calls made');
 if (!((provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.SUB2API_API_KEY) || '').trim()) blockers.push(`${provider === 'openai' ? 'OPENAI_API_KEY' : 'SUB2API_API_KEY'} absent`);
 const knowledge = new MarkdownKnowledgeProvider(supportKnowledgeRoot(process.env));
@@ -37,8 +39,12 @@ if (blockers.length) {
   console.log(JSON.stringify({ status: 'blocked', blockers, output }));
   process.exitCode = 1;
 } else {
+  const semantic = process.env.EMBEDDING_PROVIDER === 'openai'
+    ? await SemanticKnowledgeProvider.load(knowledge, new OpenAIEmbeddings(), resolve(process.env.KB_INDEX_PATH || '.kb-index/passages.json')) : undefined;
+  const retrieval = semantic ? { provider: 'openai', model: semantic.index.model, threshold: 0.4, hybrid: 'cosine + 0.02/(lexical rank + 1)', digest: semantic.index.digest } : { provider: 'lexical' };
+  Object.assign(metadata, { retrieval });
   const history = await mkdtemp(join(tmpdir(), 'golden-history-'));
-  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string })[] = [];
+  const results: (ReturnType<typeof score> & { id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] })[] = [];
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
@@ -50,6 +56,7 @@ if (blockers.length) {
       const modelFailures: { name: string; status: number | null }[] = [];
       const finishReasons: string[] = [];
       const drafts: string[] = [];
+      const semanticScores: { source: string; startLine: number; score: number }[] = [];
       const evidence: { source: string; startLine: number; endLine: number; excerpt: string }[] = [];
       const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
         steps++;
@@ -65,7 +72,7 @@ if (blockers.length) {
         drafts.push(result.content.filter(c => c.type === 'text').map(c => c.text).join(''));
         return result;
       } } });
-      const harness = createMockSupport(undefined, knowledge);
+      const harness = createMockSupport(undefined, semantic ?? knowledge);
       const core = new SupportCoreClient('https://synthetic-core.example.invalid/', async (url, init) => {
         const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
         const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)), ...(typeof init?.body === 'string' ? { payload: init.body } : {}) });
@@ -74,7 +81,11 @@ if (blockers.length) {
         if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
         return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
       });
-      const runner = createVercelTicketRunner({ model, core, history: new FileHistoryStore(join(history, item.id)), authenticate: async ({ sessionId, ticketToken }) => {
+      const runner = createVercelTicketRunner({ model, core, ...(semantic ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
+        const score = await semantic.similarity(query, passage);
+        semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
+        return score;
+      } } } : {}), history: new FileHistoryStore(join(history, item.id)), authenticate: async ({ sessionId, ticketToken }) => {
         const scope = harness.tokens.verify(ticketToken);
         if (sessionId !== scope.channelId || !await harness.bridge.read(scope)) throw new Error('Session mismatch');
         return { scope, selectedServiceRef: 'whmcs-service:1', assertCurrent: async () => {
@@ -104,7 +115,7 @@ if (blockers.length) {
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
       const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
       results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', ...score(item, answer, handedOff, error) });
+        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, ...score(item, answer, handedOff, error) });
       await writeFile(output, JSON.stringify({ ...metadata, kbStats, status: 'running', results }, null, 2), { mode: 0o600 });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

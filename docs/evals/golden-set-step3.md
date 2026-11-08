@@ -237,3 +237,109 @@ Step 7's 124 tool-call-only outcomes were classified from the saved allowlisted 
 The single dominant cause was the application stop condition, supported by one-step traces with a tool-call finish reason immediately after `handoff`/`failed` became true and no final generation. The fix removes `handoff || failed` from `stopWhen` while retaining the ten-step cap. Gated tools return an explicit unavailable/handoff instruction; the model receives one continuation to emit final text, and the application still performs deterministic Core handoff and rejects every answer lacking fresh evidence and an exact citation. No retrieval threshold, citation rule, authorization rule, model, provider, or KB changed. Focused tests and the full safety suite remain green.
 
 Smoke and full-run results are recorded below after completion. Cost is null; latency is measured wall time only. Scores measure loop + published-docs KB (unreviewed as agent answers); the static set cannot establish 7-day true resolution.
+
+### Full run (2026-11-08, restarted by Muse after Codex's session ended at 69/175)
+
+Full live run, 175/175 completed, `MODEL_ID=gpt-6-luna`, `MODEL_PROVIDER=sub2api`, via `/home/hatch/workspace/run-with-sub2api-key.sh`: **0/154 (0.0%) resolved-correct; 18/21 (85.7%) handoff-correct; 0 partial; 157 wrong**. Raw results: `eval-results/golden-2026-11-07T19-55-19-182Z-175.json` (status completed). Smoke (10, completed by Codex): 0/9 resolved-correct, 1/1 handoff-correct, 0 citation violations.
+
+The continuation fix worked mechanically: **all 175 items now end with a normal `stop` and a delivered final answer** (finish reasons: tool-calls 209, stop 175; delivered answers 175/175; citation-gate violations 0). Mean steps rose 1.42 → 2.19 (mostly 2 steps; 25 items at 3, 3 at 4, 1 at 5), mean latency 13.61s/item, wall time 2381.9s. **Provider failures: 0** (the step-7 store fix held); no item needed a retry (attempts: all 1). Synthetic Core errors remained: 29 log HTTP 404s and 14 invoice HTTP 403s.
+
+But resolution did not move: the loop now completes as a handoff instead of dying at the tool call, so the score is unchanged. Handoff-correct stayed 18/21 (same 3 items as step 7 did not recover). The remaining dominant failure is still the retrieval gate rejecting relevant passages (59 items in step 7's classification) plus synthetic account state the harness cannot provide. The next lever is retrieval quality (lexical matching on colloquial Chinese questions), not the loop's continuation behaviour.
+
+## Step 9 — official OpenAI embeddings, hybrid retrieval (2026-11-08)
+
+### Design and calibration
+
+The official OpenAI embeddings probe accepted **text-embedding-3-small** (HTTP 200,
+1,536 dimensions), so no fallback model was probed. Chat remains
+**gpt-6-luna / sub2api / Responses**, with `store:false` and the existing retry
+policy. Every live chat invocation used `/home/hatch/workspace/run-with-sub2api-key.sh`.
+Embeddings use only the fixed `https://api.openai.com/v1/embeddings` endpoint with
+`EMBEDDING_PROVIDER=openai`, `EMBEDDING_MODEL=text-embedding-3-small`, and **the
+official OpenAI key from the environment**. Future runs require `OPENAI_API_KEY`
+in the environment; no key is stored in source, configuration, index, or results.
+
+The new Core knowledge adapter implements the existing domain port and combines
+**cosine similarity + 0.02 / (lexical rank + 1)** for passages in the lexical top
+eight (zero lexical bonus otherwise). Semantic similarity determines the ranking;
+the small lexical bonus breaks close topical ties. The independent agent gate
+admits only returned passages with **cosine >= 0.40 against the original customer
+prompt**. Lexical overlap cannot override a semantic rejection. Without explicit
+semantic configuration, offline/default lexical behavior remains available; a
+failed semantic request fails closed rather than falling back to lexical admission.
+
+Semantic search uses the first 300 characters of the original customer prompt
+(the existing query contract bound), requesting eight candidates; gate scoring
+uses the full original prompt. This avoids model query drift. The initial smoke
+exposed that drift on GS-006: the customer question had a relevant TPS passage at
+0.405, but model-reworded search omitted it. After the fix that passage is admitted;
+the item still hands off when synthetic logs return 404. The whole-excerpt plus
+exact-citation gate, only four T0 tools, trusted ownership selection, lifecycle
+checks, no writes, and prompt-injection constraints remain enforced.
+
+`node --import tsx scripts/build-kb-index.ts` (after `pnpm build`, with embedding
+configuration above) embeds all **534** canonical returned passages from the
+**51-article** corpus in batches of 32. Input is title + heading + the same bounded
+excerpt returned by search, not hidden article text. The ignored
+`.kb-index/passages.json` records model, content digest, passages and vectors;
+loading rejects a stale corpus/model or invalid vectors. Rebuild after any
+`knowledge/` change. `KB_INDEX_PATH` overrides the index path. The measured build
+took **13.948 seconds**. Indexing cost, query-embedding cost and chat cost are
+**null** (not instrumented). No knowledge files, vectors, or raw eval results are
+committed.
+
+`node --import tsx scripts/calibrate-kb-retrieval.ts` projects golden input to
+**IDs and customer problems only**, then compares those problems with KB passages
+and six unrelated control questions. **Threshold calibration never used expected
+points or staff answers.** The largest unrelated-control cosine was **0.376176**
+(a dentist appointment question); others ranged 0.156689–0.284002. A 0.35 threshold
+would incorrectly admit that control. We selected 0.40 to leave a margin above the
+controls while retaining colloquial relevant pairs such as the TPS question at
+0.405. At 0.40, **172/175** customer problems have an admissible top passage, versus
+175 at 0.35 and 165 at 0.45. These are relevance diagnostics, not correct-answer
+scores. The three excluded problems score 0.372 (specific plan switch), 0.386
+(account charge dispute), and 0.399 (unspecified "what do I need to do"). This is a
+conservative tradeoff that still misses a relevant upgrade passage. It is not a
+universal OOD guarantee: vague/in-domain questions can match generic documentation,
+and cosine does not prove every answer claim.
+
+Safety tests cover colloquial retrieval over a lexical distractor, unrelated
+question handoff, original-question scoring, exact/missing/fabricated citations,
+write/foreign-selector injection after semantic admission, corrupt vectors/index,
+query caching, fixed official embedding endpoint, sanitized provider failures,
+and embedding-specific credentials/configuration. Four old test assertions were
+updated to expect step 8's final-answer continuation rather than immediate stop.
+
+### Smoke and full-run status
+
+Initial smoke (model-query search): 10/10 completed, **0/9 resolved-correct,
+1/1 handoff-correct**, zero provider failures, 189.741 seconds. After the
+original-question search fix, final smoke: 10/10 completed, **0/9 resolved-correct,
+1/1 handoff-correct**, zero partial, nine wrong; **10/10** admitted evidence,
+two non-handoff answers, six synthetic Core read errors, zero delivered
+citation violations. All ten items used one attempt; mean 2.7 generation steps,
+17.298 seconds/item, wall time 172.977 seconds. These separate retrieval admission
+from delivered answers and strict expected-point resolution.
+
+Raw smoke files (ignored): `eval-results/golden-2026-11-08T00-29-19-828Z-10.json`
+and `eval-results/golden-2026-11-08T00-32-50-320Z-10.json` (final smoke).
+
+The full 175-item run is **running**, with incremental raw results under
+`eval-results/` and process/log information at `eval-results/step9-full.pid` and
+`eval-results/step9-full.log`. This is not a final full-run score. Results and the
+step-8 comparison will be recorded after completion.
+
+Cohort caveat: the step-7/8 narrative reports 59 retrieval rejects but does not
+identify those 59 IDs. The only explicitly named 59-item cohort in this report is
+the earlier step-5 early-stop list; its causes were originally acknowledged to be
+mixed. We will report recovery on that reproducible published cohort separately,
+without calling it an exact reconstruction of step 7. Calibration admits **56/59**
+of that named cohort; GS-089, GS-151 and GS-175 remain below threshold. Actual
+full-run admissions, non-handoff answers and strict resolutions must be counted
+from the live run. The historical aggregate alone cannot establish an exact
+59-item step-7 recovery rate.
+
+Scores measure **loop + published-docs KB (unreviewed as agent answers)**. The
+static set cannot establish **7-day true resolution**, no reopen, or reviewed
+semantic correctness. Better retrieval does not supply missing authoritative
+account state, staff approval, or verified write/restore outcomes.

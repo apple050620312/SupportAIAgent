@@ -101,6 +101,14 @@ export class MarkdownKnowledgeProvider implements SupportKnowledgeProvider {
     return { articles: index.articles.size, chunks: index.chunks.length, bytes: index.bytes };
   }
 
+  /** Canonical bounded excerpts for reproducible offline embedding indexes. */
+  async passages(): Promise<KnowledgeSearchResponse["matches"]> {
+    return (await this.current()).chunks.map(chunk => ({
+      articleRef: chunk.article.articleRef, source: chunk.article.source, title: chunk.article.title,
+      heading: chunk.heading, startLine: chunk.startLine, endLine: chunk.endLine, excerpt: chunk.text.slice(0, 800)
+    }));
+  }
+
   async search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> {
     const index = await this.current();
     const query = normalized(request.query.trim());

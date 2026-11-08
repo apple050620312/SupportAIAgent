@@ -1,0 +1,15 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
+import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
+import { OpenAIEmbeddings, corpusDigest, passageText, type PassageIndex } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
+import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
+const started = Date.now();
+const embeddings = new OpenAIEmbeddings();
+const passages = await new MarkdownKnowledgeProvider(supportKnowledgeRoot(process.env)).passages();
+const vectors: number[][] = [];
+for (let i = 0; i < passages.length; i += 32) vectors.push(...await embeddings.embed(passages.slice(i, i + 32).map(passageText)));
+const index: PassageIndex = { model: embeddings.model, digest: corpusDigest(passages), passages, vectors };
+const output = resolve(process.env.KB_INDEX_PATH || '.kb-index/passages.json');
+await mkdir(dirname(output), { recursive: true, mode: 0o700 });
+await writeFile(output, JSON.stringify(index), { mode: 0o600 });
+console.log(JSON.stringify({ model: embeddings.model, passages: passages.length, elapsedMs: Date.now() - started, cost: null, output }));

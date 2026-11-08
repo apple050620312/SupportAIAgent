@@ -35,6 +35,9 @@ export function citation(match: KnowledgeSearchResponse["matches"][number]): str
 }
 export interface AgentRunnerOptions {
   model: LanguageModel;
+  /** Host-supplied semantic relevance port; scores the original customer prompt, never model-selected text. */
+  semanticRelevance?: { threshold: number; similarity(query: string, passage: KnowledgeSearchResponse["matches"][number]): Promise<number> };
+
   core: SupportCoreClient;
   history: FileHistoryStore;
   /** Must authenticate capsule, bind sessionId to channelId, and resolve selection from authoritative host data. */
@@ -43,6 +46,7 @@ export interface AgentRunnerOptions {
 
 /** Existing TicketAgentRunner interface; deliberately not installed into the live Discord launcher. */
 export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAgentRunner {
+  if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
     if (request.sessionId !== session.scope.channelId || !request.prompt.trim() || request.prompt.length > 6000) throw new Error("Invalid agent session");
@@ -74,7 +78,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       const tools: ToolSet = {
         search_support_knowledge: makeTool(KnowledgeSearchRequestSchema, "Search reviewed KB; reference-only passages with citations.", async (input) => {
           searched = true;
-          const result = await call("v1/me/knowledge/search", input, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+          // Semantic retrieval uses customer wording, so model query drift cannot
+          // hide the relevant passage before original-question admission scoring.
+          const searchInput = options.semanticRelevance ? { query: prompt.slice(0, 300), limit: 8 } : input;
+          const result = await call("v1/me/knowledge/search", searchInput, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -82,9 +89,13 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           // passage at 0.1 coverage (or any passage at 0.2), preserving citation.
           const strong = scored.filter(({ score }) => score >= 0.2).map(({ match }) => match);
           const best = scored[0];
-          evidence = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
+          if (options.semanticRelevance) {
+            const relevance = options.semanticRelevance;
+            const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
+            evidence = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
+          } else evidence = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
           if (!evidence.length) handoff = true;
-          return { ...result, matches: evidence.map(match => ({ ...match, requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
+          return { ...result, matches: evidence.map(match => ({ ...match, requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
         }),
         get_my_server_status: makeTool(EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();

@@ -38,7 +38,7 @@ Set `MODEL_PROVIDER=sub2api` (the default) with `SUB2API_API_KEY`, or
 `MODEL_PROVIDER=openai` with `OPENAI_API_KEY` for the official API. Both use
 `gpt-6.1-sol` through the OpenAI-compatible Responses API. Hosting, ticket storage
 and Discord remain synthetic. The sub2api path is live-tested by the golden eval;
-the official path is construction-tested only because no official key is present.
+the official chat path remains construction-tested only; step 9 uses official OpenAI for embeddings only.
 
 ## DECISIONS
 
@@ -57,10 +57,10 @@ the official path is construction-tested only because no official key is present
   0600/0700; atomic replacement plus a cross-process lock fails closed on
   contention. An abandoned lock needs operator removal after confirming no turn
   is active. This is a single-host interim store, without DB/Redis/queue.
-- Require fresh KB retrieval each turn. The calibrated gate accepts passages
+- Require fresh KB retrieval each turn. The default offline lexical gate accepts passages
   with at least 0.2 lexical query coverage, or the best returned passage at
   0.1 (English tokens / Chinese bigrams), and a final answer containing an exact
-  returned excerpt plus `[source:start-end]`. The system prompt explicitly requires copying a whole excerpt verbatim (including Markdown/line breaks), and each admitted match includes a ready-to-copy `requiredQuote`. The gate itself is unchanged. Missing/irrelevant retrieval,
+  returned excerpt plus `[source:start-end]`. The system prompt explicitly requires copying a whole excerpt verbatim (including Markdown/line breaks), and each admitted match includes a ready-to-copy `requiredQuote`. The optional semantic mode below replaces lexical admission. Missing/irrelevant retrieval,
   invalid tools, provider failure, missing citations or step exhaustion hands
   off. This conservative heuristic is not calibrated confidence or a semantic
   proof that every sentence is supported. Account-only requests also require KB
@@ -114,3 +114,45 @@ Markdown KB and an environment API key are required. See the [measurement report
 for input isolation, strict lexical scoring, observability limits, per-category
 coverage and the currently blocked smoke/full runs. Offline correctness is not
 seven-day true resolution; this harness does not enable production delivery.
+
+## Semantic retrieval (step 9)
+
+Chat and embedding configuration are independent. The comparable live eval uses
+`MODEL_PROVIDER=sub2api MODEL_ID=gpt-6-luna` and the wrapper below for chat.
+Embeddings use `EMBEDDING_PROVIDER=openai EMBEDDING_MODEL=text-embedding-3-small`
+and **the official OpenAI key from the environment**, only against
+`https://api.openai.com/v1/embeddings`. Future builds/runs require
+`OPENAI_API_KEY` in the process environment; never put it in a file. Embeddings
+are opt-in; existing offline mocks retain lexical retrieval. No automatic
+fallback from a failed semantic request to permissive lexical admission exists.
+
+After changing `knowledge/`, rebuild the ignored content-fingerprinted index:
+
+```sh
+pnpm build
+EMBEDDING_PROVIDER=openai EMBEDDING_MODEL=text-embedding-3-small node --import tsx scripts/build-kb-index.ts
+EMBEDDING_PROVIDER=openai EMBEDDING_MODEL=text-embedding-3-small node --import tsx scripts/calibrate-kb-retrieval.ts
+MODEL_PROVIDER=sub2api MODEL_ID=gpt-6-luna GOLDEN_LIVE_MODEL=1 EMBEDDING_PROVIDER=openai EMBEDDING_MODEL=text-embedding-3-small /home/hatch/workspace/run-with-sub2api-key.sh pnpm eval:golden --limit 10
+```
+
+The build embeds canonical returned excerpts (title + heading + up to 800 excerpt
+characters), batches 32 passages per request, and stores vectors in
+`.kb-index/passages.json` (override `KB_INDEX_PATH`). Loading rejects a changed
+corpus/model or invalid vectors. The Core knowledge adapter implements the same
+domain port; no business logic calls a provider HTTP client. Rank is cosine plus
+`0.02 / (lexical rank + 1)` for the lexical top eight. The agent's host-supplied
+semantic relevance port admits returned passages only at cosine **0.40** against
+the original customer prompt, independently of the model's search wording. Semantic search itself uses the first
+300 characters of that original prompt and returns eight candidates, avoiding
+model query drift before admission; admission scores the full prompt.
+Only exact returned excerpts can be admitted; unknown passages score -1.
+
+The checked-in calibration script projects the golden data to IDs and customer
+problems only; it never uses expected points or staff answers. Six unrelated
+controls and manual inspection of customer-problem/passage pairs set the
+threshold. This is an empirical relevance heuristic, not a semantic proof of an
+answer or account authority. Vague/in-domain-but-unsupported questions can still
+match generic documentation. Exact excerpt/citation checks, no writes, fresh
+ownership checks, tool validation and deterministic handoff continue to apply.
+
+Official API reference: [OpenAI embeddings guide](https://developers.openai.com/api/docs/guides/embeddings). The account probe, rather than documentation alone, established model access.

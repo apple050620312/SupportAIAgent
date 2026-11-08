@@ -18,7 +18,7 @@ export function mockCall(name: string, input: unknown = {}) {
 export function createDemoModel() {
   return new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
 }
-export function demoRunner(harness: ReturnType<typeof createMockSupport>, historyRoot: string, model: LanguageModel = createDemoModel(), selection?: string) {
+export function demoRunner(harness: ReturnType<typeof createMockSupport>, historyRoot: string, model: LanguageModel = createDemoModel(), selection?: string, semanticRelevance?: Parameters<typeof createVercelTicketRunner>[0]["semanticRelevance"]) {
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await harness.app.inject({
@@ -28,7 +28,7 @@ export function demoRunner(harness: ReturnType<typeof createMockSupport>, histor
     });
     return new Response(response.body, { status: response.statusCode, headers: { "content-type": "application/json" } });
   };
-  return createVercelTicketRunner({ model, core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
+  return createVercelTicketRunner({ model, ...(semanticRelevance ? { semanticRelevance } : {}), core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
     authenticate: async ({ sessionId, ticketToken }): Promise<TrustedAgentSession> => {
       const scope = harness.tokens.verify(ticketToken);
       if (scope.channelId !== sessionId) throw new Error("Wrong session");
