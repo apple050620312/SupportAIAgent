@@ -522,3 +522,13 @@ contradictions can affect its judgment. Low temperature does not guarantee
 repeatability. **Muse will independently verify every “correct” verdict
 (GS-163 here) before it is relied on.** No seven-day true resolution or real
 operational success is established.
+
+### Independent verification by Muse (2026-11-08)
+Muse read the raw records for the sole correct verdict and four spot-checks:
+- **GS-163 (correct) — confirmed, with a caveat.** The expected point is that after purchase the customer waits for staff activation, then starts the server from the control panel. The delivered answer gives exactly that flow (activation notice → set password → panel console → Start → accept EULA) with a verbatim citation. Caveat: its opening line claims the server is already "running", which comes from the synthetic harness state, not a real check — the claim is noise, not a contradiction of the staff resolution (staff confirmed the service was activated).
+- **GS-037 (partial) — agrees.** The answer covers cancelling auto-renewal via the cancellation doc but never mentions the 7-day compensation expiry date (8/26) — one of two points missing.
+- **GS-055 (partial) — agrees.** The answer covers friends joining via the panel connection address but explicitly hands off the server-password question and never addresses in-game parameters — one of three points covered.
+- **GS-005 (wrong) — agrees, and the error is worse than a miss.** The answer says "可以升級" (yes, you can upgrade) while the staff resolution is that E-series upgrades are temporarily unavailable under high load — a direct contradiction, not just an omission.
+- **GS-006 (wrong) — agrees.** The answer gives generic TPS information and asks for more details; it never suggests trying a different node or mentions the migration/new address.
+
+The judge's verdicts hold on all five items checked. The verified semantic score stands at **1 correct, 5 partial, 32 wrong** out of 38 delivered answers.
