@@ -145,7 +145,8 @@ describe("Vercel read-only agent", () => {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
           { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
-          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt }
+          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt },
+          velocity
         ] }),
         read: () => Promise.resolve(null)
       });
@@ -154,13 +155,41 @@ describe("Vercel read-only agent", () => {
       return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
     }
 
+    const wrapQuote = (quote: string) => quote.split("\n").map(line => `  > ${line}`).join("\n");
+
+    it("repairs one layer of Markdown wrapping before checking GS-138 completeness", async () => {
+      const draft = velocityDraft(velocity.excerpt.trimEnd());
+      const { result, state } = await runDraft(velocityDraft(wrapQuote(velocity.excerpt.trimEnd())));
+      expect(result).toMatchObject({
+        reply: draft, answerComplete: true,
+        citationGate: { status: "passed", matched: [velocityCitation], failures: [] },
+        citationGateRepair: {
+          attempted: true, repaired: true,
+          before: { status: "failed", matched: [], failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }] },
+          after: { status: "passed", matched: [velocityCitation] }
+        }
+      });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("still rejects changed quote text after removing blockquote formatting", async () => {
+      const altered = velocity.excerpt.trimEnd().replace("連線品質不保證", "連線品質有保證");
+      const { result, state } = await runDraft(velocityDraft(wrapQuote(altered)));
+      const mismatch = { status: "failed", matched: [], failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }] };
+      expect(result).toMatchObject({
+        citationGate: mismatch,
+        citationGateRepair: { attempted: true, repaired: false, before: mismatch, after: mismatch }
+      });
+      expect(result.reply).not.toContain("連線品質有保證");
+      expect(state).toBe("HUMAN_NEEDED");
+    });
+
     it("hands off a cited draft that gives no action", async () => {
       const excerpt = "The panel displays the current status.";
       const draft = `${excerpt} ${second} The status indicator reflects the current state of the server.`;
       const { result, state } = await runDraft(draft, excerpt);
       expect(result).toMatchObject({ answerComplete: false, citationGate: { status: "passed" } });
-      expect(result.reply).toContain("I've handed this to support staff.");
-      expect(result.reply).not.toContain(draft);
+      expect(result.reply).toBe(draft + "\n\nI've handed this to support staff.");
       expect(state).toBe("HUMAN_NEEDED");
     });
 
@@ -182,15 +211,19 @@ describe("Vercel read-only agent", () => {
     });
 
     it.each([
-      ["wrong_lines", `${other} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
+      ["wrong_lines", `${wrapQuote(other)} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
       ["missing_citation", other, second],
-      ["unknown_citation", `${other} [invented.md:3-5]`, "[invented.md:3-5]"],
+      ["unknown_citation", `${wrapQuote(other)} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
       const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
       const expectedStatus = reason === "unknown_citation" || reason === "wrong_lines" || reason === "missing_citation" ? "failed" : "passed";
       expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
       expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
+      if (expectedStatus === "failed") {
+        expect(result.reply).not.toContain(first);
+        expect(result.reply).toContain("I've handed this to support staff.");
+      }
     });
 
     it("passes a repeated citation when one occurrence has an exact excerpt", async () => {

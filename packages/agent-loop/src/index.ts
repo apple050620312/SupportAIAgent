@@ -8,9 +8,15 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, hasBlockingCitationFailure, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
+export type CitationGateRepair = {
+  attempted: boolean;
+  repaired: boolean;
+  before: CitationGate | null;
+  after: CitationGate | null;
+};
 export type { TrustedAgentSession };
 export { createLiveModel } from "./model.js";
 
@@ -115,7 +121,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null; handoffMarkerPresent: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; citationGateRepair: CitationGateRepair; answerComplete: boolean | null; handoffMarkerPresent: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -285,6 +291,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       let answerComplete: boolean | null = null;
       let handoffMarkerPresent = false;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
+      let citationGateRepair: CitationGateRepair = { attempted: false, repaired: false, before: null, after: null };
       try {
         // sub2api may create Responses with store=false regardless of the requested
         // default. Keep every continuation self-contained: the OpenAI provider
@@ -300,21 +307,37 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
         citationGate = evaluateCitationGate(reply, evidence, clean);
+        if (citationGate.status === "failed") {
+          // Remove one wrapper level, preserving Markdown markers in the source excerpt.
+          const unwrapped = reply.replace(/^[ \t]*>[ \t]?/gm, "");
+          if (unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation")) {
+            const after = evaluateCitationGate(unwrapped, evidence, clean);
+            const repaired = after.status === "passed";
+            citationGateRepair = { attempted: true, repaired, before: citationGate, after };
+            if (repaired) {
+              reply = unwrapped;
+              citationGate = after;
+            }
+          }
+        }
         answerComplete = answerCompletenessCheck(reply, prompt, evidence);
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
-        if (acceptable && reply.length <= 5800) {
+        const fitsHandoff = reply.length <= 5800;
+        if (!invalidTool && fitsHandoff && citationGate.matched.length && !hasBlockingCitationFailure(citationGate)) {
           supportedPartial = reply;
+        }
+        if (acceptable && fitsHandoff) {
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
         }
         // Optional account reads provide context. A failed read must not discard a
         // complete, cited KB procedure. Escalate only when the draft is incomplete
         // or the missing account state is required to answer the question.
-        handoff ||= !acceptable || requestedHandoff || (failedRequiredRead && !supportedPartial);
+        handoff ||= !acceptable || requestedHandoff || (failedRequiredRead && !fitsHandoff);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate, answerComplete, handoffMarkerPresent, admittedEvidence };
+        return { reply: checkpoint, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, admittedEvidence };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -333,7 +356,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate, answerComplete, handoffMarkerPresent, admittedEvidence };
+      return { reply, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, admittedEvidence };
     });
   } };
 }

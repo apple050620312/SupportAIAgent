@@ -21,6 +21,13 @@ export type CitationGate = {
   claimSupport?: boolean;
 };
 
+export function hasBlockingCitationFailure(gate: Pick<CitationGate, "failures">): boolean {
+  return gate.failures.some(failure =>
+    failure.reason === "unknown_citation" || failure.reason === "wrong_lines"
+    || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
+  );
+}
+
 const citationPattern = /\[([^[\]\r\n]+):\d+-\d+\]/g;
 const normalizeLineEndings = (text: string) => text.replaceAll("\r\n", "\n");
 
@@ -99,11 +106,7 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
   }
   // Pass when at least one matched pair grounds the draft and every citation is admitted.
   // Repeat quote mismatches remain diagnostics, while unknown and wrong-line citations block.
-  const blockingFailure = failures.some(failure =>
-    failure.reason === "unknown_citation" || failure.reason === "wrong_lines"
-      || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
-  );
-  const status = matched.size > 0 && !blockingFailure ? "passed" : "failed";
+  const status = matched.size > 0 && !hasBlockingCitationFailure({ failures }) ? "passed" : "failed";
   const firstSentence = draft.split(/[.!?。！？]/u)[0] ?? "";
   const claimSupport = matched.size > 0 && firstSentence.length >= 12;
   return { status, grounded: matched.size > 0, matched: [...matched], failures, claimSupport };
