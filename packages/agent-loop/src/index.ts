@@ -48,6 +48,8 @@ const SUPPORT_FLOW_SOURCE = "store/discord.md";
 const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
 const SFTP_SOURCE = "panel/common/sftp.md";
 const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
+const CONNECTION_SOURCE = "debug/connection.md";
+const CONNECTION_SEARCH = { query: "連線測試 無法連線 DNS WARP connection troubleshooting", limit: 3 };
 
 function hasDowngradeSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
@@ -65,7 +67,12 @@ function hasReinstallSymptom(prompt: string): boolean {
 
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
-  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket/iu.test(text);
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|一直|持續|重複).{0,12}(?:斷線|掉線|disconnect)|(?:重裝|重新安裝|reinstall).{0,24}(?:後|之後|after).{0,24}(?:斷線|掉線|disconnect)|(?:等了|等待|等候).{0,12}(?:幾天|多天|數天|days?)/iu.test(text);
+}
+
+function hasConnectionSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /無法連線|連不上|斷線|掉線|connection|disconnect|timeout|超時/iu.test(text);
 }
 
 function hasSftpSymptom(prompt: string): boolean {
@@ -151,6 +158,33 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
+function repairRequiredTaskDraft(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): string {
+  let repaired = answer;
+  const normalized = normalizeCoverageText(repaired);
+  const append = (text: string, match: KnowledgeSearchResponse["matches"][number]) => {
+    repaired += `\n\n${text} ${citation(match)}`;
+  };
+  const reinstall = evidence.find(match => match.source === REINSTALL_SOURCE);
+  if (reinstall && hasReinstallSymptom(prompt) &&
+      !(/重新安裝|reinstall/iu.test(normalized) && /重啟|重新啟動|再開機|restart/iu.test(normalized) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized))) {
+    if (!/重新安裝|reinstall/iu.test(normalized)) append("請在設定頁面選擇「重新安裝伺服器」進行重新安裝。", reinstall);
+    if (!/重啟|重新啟動|再開機|restart/iu.test(normalized)) append("完成後請重新啟動伺服器。", reinstall);
+    if (!/世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized)) append("若刪除全部伺服器資料，代表世界已被重置，會建立全新的世界。", reinstall);
+  }
+  const start = evidence.find(match => match.source === "panel/start-server.md");
+  if (start && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
+      !/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(normalized)) {
+    append("購買伺服器後，請先等待客服開通或啟用服務，再依照面板步驟啟動。", start);
+  }
+  if (hasSftpSymptom(prompt)) {
+    for (const source of [SFTP_SOURCE, "panel/manage/upload.md"]) {
+      const match = evidence.find(item => item.source === source);
+      if (match && !repaired.includes(citation(match))) append(match.excerpt, match);
+    }
+  }
+  return repaired;
+}
+
 export function contentCoverageCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   if (!answerCompletenessCheck(answer, prompt, evidence)) return false;
   const text = answer.trim();
@@ -280,7 +314,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
             return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           };
-          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused] = await Promise.all([
+          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused, connectionFocused] = await Promise.all([
             search(searchInput),
             hasDowngradeSymptom(prompt)
               ? search(DOWNGRADE_SEARCH).catch(() => undefined)
@@ -293,6 +327,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
               : undefined,
             hasSftpSymptom(prompt)
               ? search(SFTP_SEARCH).catch(() => undefined)
+              : undefined,
+            hasConnectionSymptom(prompt)
+              ? search(CONNECTION_SEARCH).catch(() => undefined)
               : undefined
           ]);
           // The symptom licenses one passage from this specific article even
@@ -301,6 +338,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const reinstall = reinstallFocused?.matches.find(match => match.source === REINSTALL_SOURCE);
           const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
+          const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -314,7 +352,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp]) {
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp, connection]) {
             if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
@@ -336,6 +374,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
           admitted.sort((a, b) => {
+            const focusedRank = (match: typeof a) => Number(match.source === CONNECTION_SOURCE && hasConnectionSymptom(prompt));
+            const focusDelta = focusedRank(b) - focusedRank(a);
+            if (focusDelta) return focusDelta;
             const provenance = Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef));
             if (provenance) return provenance;
             return retrievalConfidence(prompt, `${b.title} ${b.heading} ${b.excerpt}`) - retrievalConfidence(prompt, `${a.title} ${a.heading} ${a.excerpt}`);
@@ -404,6 +445,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
+        reply = repairRequiredTaskDraft(reply, prompt, evidence);
         const inspection = inspectCitationGate(reply, evidence, clean);
         citationGate = inspection.gate;
         if (citationGate.status === "failed") {
