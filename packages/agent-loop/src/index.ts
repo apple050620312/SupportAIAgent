@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, inspectCitationGate, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, inspectCitationGate, normalizeFencedDraft, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
 export type CitationGateRepair = {
@@ -398,7 +398,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           // Remove one wrapper level, preserving Markdown markers in the source excerpt.
           const unwrapped = reply.replace(/^[ \t]*>[ \t]?/gm, "");
           const canUnwrap = unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation");
-          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : null);
+          const fenced = normalizeFencedDraft(reply);
+          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : fenced !== reply ? fenced : null);
           if (candidate !== null) {
             const repairedDraft = clean(candidate);
             const after = evaluateCitationGate(repairedDraft, evidence, clean);

@@ -295,6 +295,13 @@ describe("Vercel read-only agent", () => {
       });
     });
 
+    it.each(["```\n", "```markdown\n"])("grounds a verbatim quote inside a %s fence", (opening) => {
+      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n```\n${velocityCitation}`;
+      expect(evaluateCitationGate(velocityDraft(fenced), [velocity], value => value)).toMatchObject({
+        status: "passed", grounded: true, matched: [velocityCitation], failures: []
+      });
+    });
+
     it("rejects changed words in the GS-138 Velocity quote", () => {
       const altered = velocityQuote.replace("連線品質不保證", "連線品質有保證");
       expect(evaluateCitationGate(velocityDraft(altered), [velocity], value => value)).toMatchObject({

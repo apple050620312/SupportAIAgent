@@ -33,6 +33,11 @@ function isBlockingCitationFailure(failure: CitationFailure, grounded: boolean):
 const citationPattern = /\[([^[\]\r\n]+):\d+-\d+\]/g;
 const normalizeLineEndings = (text: string) => text.replaceAll("\r\n", "\n");
 
+/** Remove Markdown code-fence delimiter lines before locating verbatim quotes. */
+export function normalizeFencedDraft(text: string): string {
+  return text.replace(/^\s*```(?:[A-Za-z0-9_-]+)?\s*$/gmu, "");
+}
+
 function quoteStart(before: string, excerpt: string): number {
   const exactStart = before.lastIndexOf(excerpt);
   if (exactStart >= 0 && /^\s+$/.test(before.slice(exactStart + excerpt.length))) return exactStart;
@@ -65,7 +70,7 @@ export function inspectCitationGate(rawDraft: string, evidence: Passage[], scrub
   gate: CitationGate;
   missingCitationDraft: string | null;
 } {
-  const draft = normalizeLineEndings(rawDraft);
+  const draft = normalizeFencedDraft(normalizeLineEndings(rawDraft));
   const matched = new Set<string>();
   const failures: CitationFailure[] = [];
   const passages = new Map(evidence.filter(match => match.excerpt.trim()).map(match => [
