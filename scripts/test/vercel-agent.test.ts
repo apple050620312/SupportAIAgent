@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { FileHistoryStore, READ_ONLY_TOOLS, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
@@ -162,6 +162,58 @@ describe("Vercel read-only agent", () => {
     const model = new MockLanguageModelV4({ doGenerate: () => Promise.resolve(mockCall("search_support_knowledge", { query: "status" })) });
     expect((await demoRunner(harness, root, model).run(request, signal)).reply).toContain("I don't know");
     expect(model.doGenerateCalls).toHaveLength(10);
+  });
+
+  it("keeps a cited procedure when staff still need to verify a separate detail", async () => {
+    const { root, harness, request, signal } = await setup();
+    const partial = `${DEMO_ANSWER}\n\nI could not verify when it stopped. Check the panel and share the time shown.`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "status" }), mockText(`${partial}\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(result.reply).toBe(`${partial}\n\nI've handed this to support staff.`);
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
+  it("forces status and log reads on a reported power error", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.resolve({ trust: "untrusted_data", lines: ["synthetic power error"] }) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_my_server_status"), mockCall("get_server_logs"),
+      mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)
+    ] });
+    await demoRunner(harness, root, model).run({ ...request, prompt: "My server status after a power error" }, signal);
+    expect(model.doGenerateCalls.slice(0, 3).map(call => call.toolChoice)).toEqual([
+      { type: "tool", toolName: "get_my_server_status" }, { type: "tool", toolName: "get_server_logs" },
+      { type: "tool", toolName: "search_support_knowledge" }
+    ]);
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("synthetic power error");
+  });
+
+  it("returns the persisted backend status if drafting reaches the internal deadline", async () => {
+    const { root, harness, request, signal } = await setup();
+    const deadline = new AbortController();
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const clock = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => ms === 60_000 ? deadline.signal : realTimeout(ms));
+    const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
+    const model = new MockLanguageModelV4({ doGenerate: () => {
+      const next = reads.shift();
+      if (next) return Promise.resolve(next);
+      deadline.abort();
+      return Promise.reject(new Error("draft interrupted"));
+    } });
+    try {
+      const result = await demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      expect(result.reply).toContain("Backend server status: running.");
+      expect(result.reply).toContain("I could not verify a complete answer.");
+      const [file] = await readdir(root);
+      expect(JSON.parse(await readFile(join(root, file!), "utf8"))).toEqual([
+        { role: "user", content: "My server status" }, { role: "assistant", content: result.reply }
+      ]);
+      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    } finally { clock.mockRestore(); }
   });
 
   it("uses Chinese for a Chinese customer when refusing", async () => {

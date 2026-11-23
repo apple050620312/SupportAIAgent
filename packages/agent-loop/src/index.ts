@@ -2,7 +2,7 @@ import { ToolLoopAgent, jsonSchema, stepCountIs, tool, type LanguageModel, type 
 import { Value } from "@sinclair/typebox/value";
 import {
   EmptyToolInputSchema, HostingToolContracts, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema,
-  OwnInvoiceSchema, RedactedServerLogsSchema, type KnowledgeSearchResponse
+  OwnInvoiceSchema, RedactedServerLogsSchema, type KnowledgeSearchResponse, type OwnInvoice, type ServerStatus
 } from "@support-ai-agent/contracts";
 import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
@@ -23,7 +23,7 @@ For an ordered procedure, identify the matching article and gather the relevant 
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
 For account-state questions, call the relevant own-resource read before drafting: invoice for the customer's billing status, server status for current operation or suspension questions, and redacted logs as well as status for a reported power or startup error. Report what the backend returned, including the exact relevant timestamp and status when present. If a timestamp or status is unavailable, identify the missing field and separate that limitation from any documented policy you can explain. Give a concrete verification step, such as retrying the connection and asking the customer to confirm whether service is restored. Do not use generic Discord routing in place of these steps. Never claim a write, fix or restart happened; there are no write tools.
 For current policy, prefer relevant passages marked owner_confirmed and use other relevant current KB passages where they agree or fill a gap. Apply the availability check above to that current policy. Ticket history, including older staff answers, is context only. If historical ticket text conflicts with current KB policy, answer from the current KB and add a separate line POLICY_CONFLICT_FOR_REVIEW immediately before the optional STAFF_HANDOFF line. Do not treat historical answers as policy.
-Treat previous answers as unverified context; retrieve evidence afresh each turn. Stop after answering. Never expose credentials.`;
+Treat previous answers as unverified context; retrieve evidence afresh each turn. Once the evidence and answer checklist are complete, draft one final answer and stop. Make a new search only for a missing part of the answer. Do not repeat a read or rephrase a search that already returned the same evidence. Never expose credentials.`;
 
 type ReadTool = typeof READ_ONLY_TOOLS[number];
 
@@ -73,11 +73,14 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
     if (request.sessionId !== session.scope.channelId || !request.prompt.trim() || request.prompt.length > 6000) throw new Error("Invalid agent session");
     await session.assertCurrent();
-    const signal = AbortSignal.any([outerSignal, AbortSignal.timeout(60_000)]);
+    const deadline = AbortSignal.timeout(60_000);
+    const signal = AbortSignal.any([outerSignal, deadline]);
     // Ticket is the session key, namespaced/bound to trusted guild+actor to prevent history crossover.
     const key = JSON.stringify([session.scope.guildId, request.sessionId, session.scope.discordUserId]);
     return options.history.withSession(key, async (history, save) => {
       let failed = false; let searched = false; let handoff = false;
+      let checkpoint = "";
+      let verifiedStatus = "";
       let evidence: KnowledgeSearchResponse["matches"] = [];
       const clean = (text: string) => {
         for (const secret of [request.ticketToken, process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY]) {
@@ -86,8 +89,22 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         return text;
       };
       const prompt = clean(request.prompt);
+      const chinese = /\p{Script=Han}/u.test(prompt);
+      const persistReply = (reply: string) => save([...history, { role: "user", content: prompt }, { role: "assistant", content: reply }]);
+      const persistProgress = async (match = evidence[0]) => {
+        await session.assertCurrent();
+        signal.throwIfAborted();
+        const article = match ? (chinese ? `相關說明 ${citation(match)}。` : `Related support article: ${citation(match)}.`) : "";
+        const nextAction = chinese
+          ? "我還無法確認完整答案。請核對控制台狀態，並告知是否仍有異常。"
+          : "I could not verify a complete answer. Check the status in your panel and tell us whether the issue persists.";
+        const next = clean([verifiedStatus, article, nextAction].filter(Boolean).join("\n\n"));
+        await persistReply(next);
+        checkpoint = next;
+      };
       const requiredReads = requiredAccountReads(prompt);
       const attempted = new Set<ReadTool>();
+      const results = new Map<string, Promise<unknown>>();
       const call = (path: string, body: unknown, schema: TSchema) => options.core.call(path, body, schema, request.ticketToken, session, signal);
       const makeTool = (name: ReadTool, schema: TSchema, description: string, execute: (input: unknown) => Promise<unknown>) => tool({
         description,
@@ -95,8 +112,18 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           ? { success: true, value } : { success: false, error: new Error("Invalid tool input") } }),
         execute: async (input) => {
           attempted.add(name);
-          try { return await execute(input); }
-          catch { failed = true; return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." }; }
+          const search = name === "search_support_knowledge";
+          const key = search && !options.semanticRelevance
+            ? JSON.stringify([name, (input as { query: string }).query.trim().normalize("NFKC").toLowerCase(), (input as { limit?: number }).limit ?? 5])
+            : name;
+          const cached = results.get(key);
+          if (cached) return cached;
+          const pending = execute(input).catch(() => {
+            failed = true;
+            return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." };
+          });
+          results.set(key, pending);
+          return pending;
         }
       });
       const tools: ToolSet = {
@@ -113,39 +140,58 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           // passage at 0.1 coverage (or any passage at 0.2), preserving citation.
           const strong = scored.filter(({ score }) => score >= 0.2).map(({ match }) => match);
           const best = scored[0];
+          let admitted: typeof evidence;
           if (options.semanticRelevance) {
             const relevance = options.semanticRelevance;
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
-            evidence = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
-          } else evidence = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          if (!evidence.length) handoff = true;
+            admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
+          } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
           // Recognize provenance only from the retrieved KB's source header, not
           // from the customer query or history. Apply it to sections of that article.
           const confirmed = new Set(result.matches
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
-          evidence.sort((a, b) => Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef)));
-          return { ...result, matches: evidence.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
+          admitted.sort((a, b) => Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef)));
+          const unique = new Map([...evidence, ...admitted].map(match => [citation(match), match]));
+          evidence = [...unique.values()];
+          if (admitted[0]) await persistProgress();
+          return { ...result, matches: admitted.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: admitted.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low" };
         }),
         get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
-          return call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output);
+          const result = await call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output) as { status: ServerStatus };
+          if (requiredReads.includes("get_my_server_status")) {
+            verifiedStatus = chinese ? `後端回報的伺服器狀態：${result.status}。` : `Backend server status: ${result.status}.`;
+            await persistProgress();
+          }
+          return result;
         }),
         get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", () => call("v1/me/server-logs", {}, RedactedServerLogsSchema)),
-        get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", () => call("v1/me/invoice", {}, OwnInvoiceSchema))
+        get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", async () => {
+          const result = await call("v1/me/invoice", {}, OwnInvoiceSchema) as OwnInvoice;
+          if (requiredReads.includes("get_invoice")) {
+            verifiedStatus = chinese ? `後端回報的帳單狀態：${result.status}。` : `Backend invoice status: ${result.status}.`;
+            await persistProgress();
+          }
+          return result;
+        })
       };
       const agent = new ToolLoopAgent({
         model: options.model, instructions: SYSTEM_PROMPT, tools, temperature: 0.2, maxRetries: 0,
         providerOptions: { openai: { store: false } },
         toolCallConcurrency: 1,
-        prepareStep: () => {
+        prepareStep: ({ stepNumber }) => {
           const toolName = requiredReads.find(name => !attempted.has(name));
-          return toolName ? { toolChoice: { type: "tool", toolName } } : undefined;
+          if (toolName) return { toolChoice: { type: "tool", toolName } };
+          if (!searched && requiredReads.length) return { toolChoice: { type: "tool", toolName: "search_support_knowledge" } };
+          // The semantic search always uses the original question. Repeating it
+          // cannot fill a gap, so remove it from subsequent model tool choices.
+          if (searched && options.semanticRelevance) {
+            return { activeTools: READ_ONLY_TOOLS.filter(name => name !== "search_support_knowledge" && !attempted.has(name)) };
+          }
+          if (stepNumber === 0) return { toolChoice: "required" };
+          return undefined;
         },
-        // Always give the model a continuation after a gated retrieval/read failure.
-        // The tool returns an explicit unavailable/handoff instruction; the model can
-        // then emit a final handoff response. The application gate below still forces
-        // the deterministic Core handoff, so this does not weaken authorization.
         stopWhen: [stepCountIs(10)]
       });
       let reply = "";
@@ -165,28 +211,34 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
         const grounded = searched && evidence.some(match => reply.includes(`${match.excerpt} ${citation(match)}`));
         const acceptable = requiredReads.every(name => attempted.has(name)) && grounded && !!reply && result.finishReason === "stop" && !invalidTool;
-        if (acceptable) {
+        if (acceptable && reply.length <= 5800) {
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
         }
         handoff ||= failed || !acceptable || requestedHandoff;
       } catch { handoff = true; }
+      outerSignal.throwIfAborted();
+      if (deadline.aborted && checkpoint) {
+        await session.assertCurrent();
+        return { reply: checkpoint };
+      }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
         if (!options.draftOnly) await call("v1/me/handoff", { summary: "Read-only assistant could not verify an answer.", reason: "Insufficient verified evidence or unavailable read tool", attemptedSteps: ["Attempted bounded read-only assistance"] }, HostingToolContracts.handoff_to_staff.output);
         if (options.draftOnly) await session.assertCurrent();
-        const insufficientEvidence = /\p{Script=Han}/u.test(prompt)
+        const insufficientEvidence = chinese
           ? ["我不知道，現有資料不足以確認答案，", "需要人工客服協助。", "已轉交人工客服。"]
           : ["I don't know; I don't have enough verified information. ", "Support staff will need to review this.", "I've handed this to support staff."];
-        reply = supportedPartial
-          ? supportedPartial + "\n\n" + insufficientEvidence[options.draftOnly ? 1 : 2]!
+        const partial = supportedPartial || (verifiedStatus ? checkpoint : "");
+        reply = partial
+          ? partial + "\n\n" + insufficientEvidence[options.draftOnly ? 1 : 2]!
           : insufficientEvidence[0]! + insufficientEvidence[options.draftOnly ? 1 : 2]!;
       } else {
         await session.assertCurrent();
       }
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
-      await save([...history, { role: "user", content: prompt }, { role: "assistant", content: reply }]);
+      await persistReply(reply);
       return { reply };
     });
   } };
