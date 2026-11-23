@@ -167,10 +167,16 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           // Semantic retrieval uses customer wording, so model query drift cannot
           // hide the relevant passage before original-question admission scoring.
           const symptomCue = /\b(?:paper|connection|connect|network|encryption|address|port|timeout|downgrade|version)\b|連線|網路|加密|降級|版本/iu.test(prompt);
-          const searchQuery = symptomCue
-            ? `${prompt.slice(0, 260)} Paper downgrade version backup compatible world restart connection troubleshooting`
-            : prompt.slice(0, 300);
-          const searchInput = options.semanticRelevance ? { query: searchQuery, limit: 8 } : input;
+          const originalQuery = prompt.trim().slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
+          const expandedSearch = {
+            query: `${originalQuery} Paper downgrade version backup compatible world restart connection troubleshooting`,
+            limit: 8
+          };
+          // Keep the original customer wording if expansion would exceed Core's query budget.
+          const searchInput = options.semanticRelevance
+            ? symptomCue && Value.Check(KnowledgeSearchRequestSchema, expandedSearch)
+              ? expandedSearch : { query: originalQuery, limit: 8 }
+            : input;
           const result = await call("v1/me/knowledge/search", searchInput, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));

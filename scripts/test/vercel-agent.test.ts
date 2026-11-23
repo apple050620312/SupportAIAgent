@@ -34,6 +34,33 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls[0]?.temperature).toBe(0.2);
   });
 
+  it("admits test-server evidence when symptom expansion exceeds Core's query limit", async () => {
+    const prompt = `連線到測試伺服器失敗\n${"測試訊息".repeat(61)}`;
+    const source = "practice/advanced/test-server.md";
+    const excerpt = "Synthetic test-server passage for checking citation admission.";
+    const search = vi.fn(() => Promise.resolve({ trust: "reference_only" as const, matches: [
+      { articleRef: `kb:${"a".repeat(64)}`, source, title: "Test server", heading: "Connection", startLine: 1, endLine: 7, excerpt }
+    ] }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const rejected = await harness.app.inject({
+      method: "POST", url: "/v1/me/knowledge/search",
+      headers: { authorization: `Bearer ${request.ticketToken}` },
+      payload: { query: `${prompt} Paper downgrade version backup compatible world restart connection troubleshooting`, limit: 8 }
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(search).not.toHaveBeenCalled();
+
+    const cite = `[${source}:1-7]`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "test server" }), mockText(`${excerpt} ${cite} Check the support documentation.`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 });
+    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }));
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
+  });
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";
