@@ -92,6 +92,8 @@ describe("Vercel read-only agent", () => {
     const { matches } = content.output.value as { matches: { requiredQuote: string }[] };
     expect(matches).toHaveLength(8);
     expect(matches.filter(match => match.requiredQuote.endsWith(cite))).toHaveLength(1);
+    expect(result.admittedEvidence).toContainEqual({ source, startLine: 1, endLine: 12 });
+    expect(JSON.stringify(content.output.value)).toContain("POSSIBLE_ROOT_CAUSE");
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
   });
 
