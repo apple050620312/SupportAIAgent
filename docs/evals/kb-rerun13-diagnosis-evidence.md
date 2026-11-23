@@ -10,7 +10,7 @@ Sources: rerun-13 checkpoint `eval-results/golden-2026-11-23T19-17-04-458Z-13.js
 | Rerun 11 (same 13) | 1 | 6 | 6 | 0 | 4 |
 | Rerun 14 (GS-140 + GS-166 only) | 0 | 1 | 1 | 0 | 0 |
 
-Rerun-13 per-item verdicts: correct GS-018? No — correct: GS-049, GS-084, GS-094, GS-108. Partial: GS-018, GS-023, GS-030, GS-053. Wrong: GS-056, GS-062, GS-140, GS-163, GS-166. Handoffs: GS-163, GS-166.
+Rerun-13 per-item verdicts: correct: GS-049, GS-084, GS-094, GS-108. Partial: GS-018, GS-023, GS-030, GS-053. Wrong: GS-056, GS-062, GS-140, GS-163, GS-166. Handoffs: GS-163, GS-166.
 
 ## GS-056 — wrong, delivered
 
