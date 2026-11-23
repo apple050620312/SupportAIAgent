@@ -1,0 +1,60 @@
+# KB rerun 16 diagnosis evidence
+
+| Alias | Checkpoint under `eval-results/` | Retrieval digest | Result |
+|---|---|---|---|
+| R15 | `golden-2026-11-23T20-33-56-444Z-13.json` | clean | 3 correct / 4 partial / 6 wrong, 3 handoffs |
+| R16 | `golden-2026-11-23T21-16-38-246Z-13.json` | clean | 3 correct / 3 partial / 7 wrong, 2 handoffs |
+| A | `golden-2026-11-23T21-26-59-874Z-1.json` | clean | GS-023 wrong, delivered |
+| B | `golden-2026-11-23T21-28-10-433Z-1.json` | clean | GS-023 wrong, delivered |
+| C | `golden-2026-11-23T21-29-17-878Z-1.json` | clean | GS-108 partial, delivered |
+| D | `golden-2026-11-23T21-30-24-582Z-1.json` | clean | GS-108 correct, delivered |
+| E | `golden-2026-11-23T21-32-44-241Z-1.json` | fix 4 | GS-056 correct, delivered |
+
+Clean is `6b7b4b6d68e2e0e19f9d6977f6e9c3a6fd23dde28cba54e4283895edfae7bec5`. Fix 4 is `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a`. The checkpoints record OpenAI retrieval and 72 articles / 570 passages. The results above were tallied from individual `semantic.verdict` and `handedOff` values. Both full runs scored every item without model failures or item errors. Tool errors are separate. The golden set SHA-256 is `5d774be134d5287bb93200f8f0c74d0abd6cf234481f560147ed4536487bdc3c`, matching R16.
+
+The local index metadata reports the fix-4 digest. For clean admission, use the checkpoint's `admittedEvidence` source and line references. The harness saves search excerpts in the separate `evidence` field. Companion reads may appear only as admission references, so the corresponding read-only KB lines are identified as such below. `drafts` captures model text before repair. The main semantic score uses the final answer and lifecycle, and the handoff diagnostic judges the last nonempty raw draft. See `scripts/eval-golden.ts:139,165,212–217`.
+
+## GS-062 and GS-140
+
+The actual GS-062 customer prompt includes 「一直反复断开网络又重新连接」, 「反复重装系统」 and 「找你们几天了一直没给我回复」. Fix 1 (`d62ab56`) adds repeated disconnect and waiting cues at `packages/agent-loop/src/index.ts:68–70`. Its Chinese alternatives include `反覆`, `斷線|掉線`, `重裝`, `後|之後`, and `等了|等待|等候` followed by `幾天|多天|數天`. English alternatives and forms shared by both scripts also exist. The raw prompt misses. NFKC does not convert between scripts. The classifier does not call `normalizeCoverageText`, which removes quote prefixes, normalizes whitespace, applies NFKC and lowercases at lines 124–133. A tracked-source and dependency search found no script conversion.
+
+For the count, reconstruct the input per `scripts/lib/golden-eval.ts:17–23` using the customer problem plus distinct initial customer messages before the first noncustomer turn. Apply NFKC and compare against ICU `uconv -x Hans-Hant`. Six of 175 prompts change (GS-034, GS-046, GS-062, GS-115, GS-121, GS-175), including one of the 13 docs items (GS-062). This is a script-marker heuristic, so a changed character in a name or pasted content does not make the whole prompt Simplified. Using the customer problem alone gives five changes overall and one in docs. Mirroring all five `has*Symptom` predicates at lines 55–83 gave **zero new matches from conversion alone** on the full prompts and on the customer problems. GS-062 still says `斷開網絡` and `找你們幾天了` after conversion, which the existing patterns do not cover. An additional repeated `斷開網[絡路]` variant on converted text finds GS-062 only. Thus there are zero other demonstrated misses from this symptom wording and conversion test across either group. This is not a count of every possible semantic miss outside these five predicates.
+
+R16 GS-062 admits `debug/connection.md`, `debug/mtr.md`, `index.md` and `practice/advanced/automation.md`. It admits neither `store/discord.md` nor the duplicate-ticket policy. Its gate matches `debug/connection.md:103-109` and completeness passes, but the draft still omits after-sales routing, general-ticket scope, and the duplicate-ticket rule. R15 did admit support-flow material per its admission list and still missed the routing. In current code the classifier gates the focused search (lines 325–327) and the completeness requirement also needs the exact `store/discord.md` source (lines 140–141). The route is documented at `knowledge/store/discord.md:13–18` and duplicate guidance at `knowledge/store/services/duplicate-tickets.md:6–12`. The focused search currently promotes only the Discord article. GS-140's customer prefix describes a modpack deployment failure and being referred by the AI. Its support-process cues appear in the reference, and R16 admits no support-flow source. This is a reference/observability limitation for that item.
+
+## GS-056
+
+R16 admits `panel/common/settings.md:1-14`. The matching saved search excerpt ends with 「點擊右下方『重新安裝伺服器』可重新安裝您的伺服器」 and the reinstall image. It matches the read-only KB content before the fix-4 sentence at line 15, ignoring trailing whitespace. Neither the reset consequence nor the restart instruction appears in that clean excerpt. E admits `:1-16`, whose saved excerpt includes both, consistent with the local fix-4 KB and index.
+
+R16 raw draft conditions 「先別重啟或重新安裝」 on wanting to preserve data. It has no positive reset branch. The delivered answer adds only 「若刪除全部伺服器資料，代表世界已被重置，會建立全新的世界。」 with the settings citation. Fix 2 (`eee62fd`, lines 161–173) counts both negative mentions and appends only the consequence. The gate records settings `excerpt_mismatch` but has a valid `index.md:18-19` backup quote. Completeness changes false → true from R15 to R16. The R16 judge covers the consequence and misses the reinstall/restart point. E's raw draft itself contains separate preserve and reset branches, including the positive reinstall and restart instructions, and quotes the new sentence. E also moved settings from below several other admissions to first, so the comparison changes the evidence the model sees as well as its ordering.
+
+## GS-023
+
+R16 and A/B show the same admitted order. The leading `debug/connection.md` ranges are 23–32, 33–47, 55–66, 72–78, 79–84, 85–98, 9–13, 48–54, 14–17, 18–22 and 67–71. `practice/advanced/automation.md:228-235` follows them. The R16 search excerpt records the firewall/alternate address section and the admitted companion ref 33–47 corresponds to the KB section 「設定 Google DNS 並清除快取」. That read-only section links Google DNS, gives a Windows flush command, and asks the user to retry the Minecraft connection after checking DNS. The companion's exact tool response is absent from the checkpoint's search-only excerpt array.
+
+After the status limitation, R16 opens its troubleshooting with DiscordSRV and quotes notification events from automation 228–235 before citing connection 23–32. A similarly leads with DiscordSRV and the firewall procedure. B treats DiscordSRV as an uncertain cause and turns to evidence collection and DNS lookup, but still omits flushing, Google DNS and the conditional rejoin advice. Fix 3 (`468b9f0`, lines 331–356 and 378–391) prioritizes the connection source while retaining competing material. All three gates pass and coverage stays false.
+
+## GS-018, GS-108, and the historical GS-163 comparator
+
+- GS-018 R16 correctly distinguishes upload failure from Minecraft runtime errors and recommends SFTP if panel upload still fails. Its sole citation `practice/install/mod.md:101-183` accompanies only the upload subsection instead of the admitted passage. The gate found no matched quote and the repair still reported `excerpt_mismatch`. Completeness also failed. The excerpt-prefix requirement at lines 151–157 is consistent with the shortened quote and no other admitted prefix. The gate alone is sufficient to discard the draft. The resulting fallback is generic.
+- GS-108 R16 recommends reinstall when the core JAR is missing and asks for the complete console error on continued failure. All citations miss. The gate reports `excerpt_mismatch` on `debug/nojar.md:45-50,31-38,51-56,57-67` and startup 34–39, and `wrong_lines` on startup 1–33. The other excerpts are paraphrased or shortened, including the quoted custom-JAR section with an omitted gap. Wrong lines preclude the blockquote unwrap candidate. No citation repair was attempted, completeness and coverage are true, and the fallback retains only a server-status checkpoint and handoff. Both items finished with `stop`; both raw draft judges marked all expected points covered.
+- R13 GS-163 comparison is historical only. The raw `golden-2026-11-23T19-17-04-458Z-13.json` checkpoint (reported digest prefix `898c35b5b203`) is absent here. The prior trace records complete quotes obstructed by fences plus a missing activation-wait point. R15 independently shows GS-163 with a passed gate but failed completeness. R16's generated startup answer still lacks the explicit wait instruction. Fix 2 adds it, completeness passes and the answer is delivered. Its appended sentence incurs a settings-style excerpt mismatch on startup 1–14, with independently matching startup quotes keeping the gate passed. [Prior diagnosis](kb-rerun13-diagnosis.md)
+
+## GS-049
+
+The two raw drafts have the same cancellation and retention quote bodies and ordered admitted citation list. Both have the same repair result (blockquote normalization matches both citations), completeness true, coverage true, final stop, invoice HTTP 403, a handoff marker that is overridden, and delivery. The preceding tool-call draft contains 46 text characters in R15 and is empty in R16. Main answer differences grouped by field:
+
+| Field | R15 | R16 |
+|---|---|---|
+| Renewal | Apply end-of-cycle cancellation, no new renewal bill | Same, with a more explicit framing for stopping the next renewal |
+| Procedure | Cancellation article, including both types | Same quotation |
+| Retention | Temporary retention and the documented suspension/deletion schedule | Same retained-file schedule and source |
+| Backup timing | 「請在到期前自行備份重要檔案」 | 「在檔案仍保留期間完成完整備份」, without an explicit before-expiry warning |
+| Recontracting | Documentation cannot confirm reuse/remount, ask staff before cancellation | Documentation cannot confirm reuse/recovery, ask staff about retention and recovery |
+| Account state | Cannot verify billing cycle, expiry or cancellation status | Cannot verify expiry or cancellation status and adds a check for successful submission |
+
+The saved retention quote gives suspension after 3 days, node deletion 7 days later and backup deletion 7 days after that (17 days from expiry). The golden expects downloading before expiry and no retained files. R15's judge accepts the preventive advice despite that same quote. R16's judge flags retention and the later backup window. Both reference-conflict fields say no owner-confirmed current-KB passage was available to that diagnostic even though the admitted quote identifies owner-supplied documentation. Treat current-policy reconciliation as unresolved and review provenance separately from verdict.
+
+## GS-166
+
+R15 raw draft cited partial upload and SFTP quotes and suggested panel upload for 10–100 MB single files. The gate found no match, its unwrap repair failed, completeness was true, and the lifecycle handed off. R16 raw draft says to use SFTP for whole folders without compression, keeps the panel limit quote, and omits a SFTP citation. The SFTP symptom is true. Fix 2 sees the missing citation and appends the exact admitted `panel/common/sftp.md:1-47` excerpt. R16's first recorded gate passes on that match with an upload excerpt mismatch. `citationGateRepair.attempted=false`. Completeness remains true and content coverage remains false. The judge covers SFTP for large files, partially credits whole-folder upload because it lacks explicit drag/drop, and misses choosing the destination by file type. The SFTP article covers whole folders and connection setup. The upload article's drag instruction is for panel file upload, and it documents a 100 MB ceiling. The golden prompt mentions 10 MB, which is not a verified global threshold. The relevant SFTP passages lack an explicit drag/drop instruction and file-type destination guidance.
