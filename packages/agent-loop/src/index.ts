@@ -137,7 +137,7 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
   const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
   const sources = new Set(evidence.map(match => match.source));
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) {
-    const positiveInstall = /(?:請|可|要|選擇|select|click|use).{0,24}(?:重新安裝|重新安装|reinstall)/iu.test(text) || /(?:重新安裝|重新安装|reinstall).{0,32}(?:重啟|重新啟動|再開機|restart)/iu.test(text);
+    const positiveInstall = /重新安裝|重新安装|reinstall/iu.test(text) && !/(?:先別|不要|勿|不必|do not|don.t).{0,12}(?:重新安裝|重新安装|reinstall)/iu.test(text);
     const positiveRestart = !/(?:先別|不要|勿|不必|do not|don.t|先不).{0,12}(?:重啟|重新啟動|再開機|restart)/iu.test(text) && /重啟|重新啟動|再開機|restart/iu.test(text);
     const sourceSupportsWorld = evidence.some(match => match.source === REINSTALL_SOURCE && /世界.{0,16}(?:重製|重置)|reset.{0,16}world/iu.test(match.excerpt));
     const worldCovered = !sourceSupportsWorld || /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(text);
