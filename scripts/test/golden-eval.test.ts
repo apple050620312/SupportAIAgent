@@ -59,7 +59,7 @@ describe('semantic measurement', () => {
   });
   it('scores handoff draft content separately while lifecycle remains primary', async () => {
     const neededHandoff = { ...item, outcome: 'handoff' } as const;
-    const judge = vi.fn(async (): Promise<Verdict> => ({ verdict: 'correct', points: ['covered', 'covered'], reason: 'Complete draft.' }));
+    const judge = vi.fn((): Promise<Verdict> => Promise.resolve({ verdict: 'correct', points: ['covered', 'covered'], reason: 'Complete draft.' }));
     const primary = await scoreSemantic(neededHandoff, { answer: 'draft', handedOff: true, error: false }, judge);
     const content = await scoreHandoffContent(neededHandoff, 'draft', judge);
     expect(primary).toMatchObject({ verdict: 'correct', basis: 'lifecycle' });
