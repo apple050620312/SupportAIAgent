@@ -35,7 +35,11 @@ const normalizeLineEndings = (text: string) => text.replaceAll("\r\n", "\n");
 
 /** Remove Markdown code-fence delimiter lines before locating verbatim quotes. */
 export function normalizeFencedDraft(text: string): string {
-  return text.replace(/^\s*```(?:[A-Za-z0-9_-]+)?\s*$/gmu, "");
+  const unfenced = text.replace(/^\s*```(?:[A-Za-z0-9_-]+)?\s*$/gmu, "");
+  // Models sometimes wrap a verbatim excerpt in one Markdown blockquote.
+  // Remove the wrapper marker while preserving `> Source:` lines that belong
+  // to the KB excerpt itself.
+  return unfenced.replace(/^(>[ \t?])(?!Source:)/gmu, "");
 }
 
 function quoteStart(before: string, excerpt: string): number {
