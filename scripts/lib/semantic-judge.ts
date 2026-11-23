@@ -86,14 +86,11 @@ export async function scoreSemantic(
   judge: (reference: Reference, answer: string) => Promise<Verdict>,
 ): Promise<SemanticResult> {
   if (attempt.error) return { verdict: null, basis: 'agent-error' };
-  if (attempt.handedOff) {
-    return { verdict: reference.outcome === 'handoff' ? 'correct' : 'wrong', basis: 'lifecycle' };
-  }
   if (!attempt.answer.trim()) return { verdict: 'wrong', basis: 'lifecycle' };
   for (let i = 0; i < 3; i++) {
     try {
       const judgment = await judge(reference, attempt.answer);
-      if (reference.outcome === 'handoff') return { verdict: 'wrong', judgment, basis: 'lifecycle' };
+      if (attempt.handedOff) return { verdict: reference.outcome === 'handoff' ? 'correct' : 'wrong', judgment, basis: 'lifecycle' };
       return { verdict: judgment.verdict, judgment, basis: 'judge' };
     } catch {
       // Provider errors and malformed output must not leak into logs or count as bad answers.
