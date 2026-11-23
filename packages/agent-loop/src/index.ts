@@ -96,7 +96,7 @@ function normalizeCoverageText(value: string): string {
 }
 
 /** Checks content coverage independently from citation formatting. */
-export function answerCompletenessCheck(answer: string, _prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+export function answerCompletenessCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
   if (text.length < 80 || !evidence.length) return false;
   const answerText = normalizeCoverageText(text);
@@ -104,7 +104,7 @@ export function answerCompletenessCheck(answer: string, _prompt: string, evidenc
   const citedEvidence = evidence.some(match => answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)));
   const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
-  const downgradeCovered = !admittedDowngrade || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
+  const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
   return actionable && citedEvidence && downgradeCovered;
 }
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
@@ -269,7 +269,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const unique = new Map([...evidence, ...admitted].map(match => [citation(match), match]));
           evidence = [...unique.values()];
           if (admitted[0]) await persistProgress();
-          return { ...result, matches: admitted.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", requiredQuote: `${match.excerpt} ${citation(match)}`, ...(match.source === DOWNGRADE_SOURCE ? { priority: "POSSIBLE_ROOT_CAUSE: handle this downgrade branch before network troubleshooting" } : {}) })), confidence: admitted.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low" };
+          return { ...result, matches: admitted.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", requiredQuote: `${match.excerpt} ${citation(match)}`, ...(match.source === DOWNGRADE_SOURCE && hasDowngradeSymptom(prompt) ? { priority: "POSSIBLE_ROOT_CAUSE: handle this downgrade branch before network troubleshooting" } : {}) })), confidence: admitted.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low" };
         }),
         get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
