@@ -102,7 +102,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null; handoffMarkerPresent: boolean }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -244,6 +244,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       let reply = "";
       let supportedPartial = "";
       let answerComplete: boolean | null = null;
+      let handoffMarkerPresent = false;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       try {
         // sub2api may create Responses with store=false regardless of the requested
@@ -253,6 +254,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const result = await agent.generate({ messages: [...history, { role: "user", content: prompt }], abortSignal: signal });
         reply = clean(result.text).trim();
         const requestedHandoff = /(?:^|\n)STAFF_HANDOFF$/.test(reply);
+        handoffMarkerPresent = requestedHandoff;
         if (requestedHandoff) reply = reply.replace(/(?:^|\n)STAFF_HANDOFF$/, "").trimEnd();
         // Require a completed, grounded answer and all required reads to have been attempted.
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
@@ -273,7 +275,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate, answerComplete };
+        return { reply: checkpoint, citationGate, answerComplete, handoffMarkerPresent };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -292,7 +294,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate, answerComplete };
+      return { reply, citationGate, answerComplete, handoffMarkerPresent };
     });
   } };
 }
