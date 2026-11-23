@@ -323,7 +323,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it.each(["```\n", "```markdown\n"])("grounds a verbatim quote inside a %s fence", (opening) => {
-      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n\`\`\`\n${velocityCitation}`;
+      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n\`\`\``;
       expect(evaluateCitationGate(velocityDraft(fenced), [velocity], value => value)).toMatchObject({
         status: "passed", grounded: true, matched: [velocityCitation], failures: []
       });
