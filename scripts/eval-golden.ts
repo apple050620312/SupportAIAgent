@@ -90,7 +90,8 @@ if (blockers.length) {
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
   try {
     for (const [index, item] of items.entries()) {
-      if (index < results.length) continue;
+      const saved = results[index];
+      if (saved && saved.semantic.verdict !== null) continue;
       const turnStart = Date.now();
       let steps = 0; let handedOff = false; let answer = ''; let error = false; let attempts = 0; let transientFailure = false;
       const toolErrors: string[] = [];
@@ -113,54 +114,61 @@ if (blockers.length) {
         drafts.push(result.content.filter(c => c.type === 'text').map(c => c.text).join(''));
         return result;
       } } });
-      const harness = createMockSupport(undefined, semanticSearch ?? knowledge);
-      const core = new SupportCoreClient('https://synthetic-core.example.invalid/', async (url, init) => {
-        const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
-        const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)), ...(typeof init?.body === 'string' ? { payload: init.body } : {}) });
-        if (response.statusCode >= 400) toolErrors.push(`${path}:HTTP_${response.statusCode}`);
-        if (path.endsWith('/handoff') && response.statusCode < 400) handedOff = true;
-        if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
-        return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
-      });
-      const runner = createVercelTicketRunner({ model, core, ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
-        const score = await semanticSearch.similarity(query, passage);
-        semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
-        return score;
-      } } } : {}), history: new FileHistoryStore(join(history, item.id)), authenticate: async ({ sessionId, ticketToken }) => {
-        const scope = harness.tokens.verify(ticketToken);
-        if (sessionId !== scope.channelId || !await harness.bridge.read(scope)) throw new Error('Session mismatch');
-        return { scope, selectedServiceRef: 'whmcs-service:1', assertCurrent: async () => {
-          harness.tokens.verify(ticketToken);
-          const snapshot = await harness.bridge.read(scope);
-          if (!snapshot || !['AI_ACTIVE', 'WAITING_CUSTOMER'].includes(snapshot.state)) throw new Error('Retired session');
-        } };
-      } });
-      try {
       do {
         attempts++;
+        answer = '';
+        handedOff = false;
         error = false;
+        toolErrors.length = 0;
+        evidence.length = 0;
+        semanticScores.length = 0;
         transientFailure = false;
         const failuresBeforeAttempt = modelFailures.length;
+        const harness = createMockSupport(undefined, semanticSearch ?? knowledge);
+        const core = new SupportCoreClient('https://synthetic-core.example.invalid/', async (url, init) => {
+          const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
+          const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)), ...(typeof init?.body === 'string' ? { payload: init.body } : {}) });
+          if (response.statusCode >= 400) toolErrors.push(`${path}:HTTP_${response.statusCode}`);
+          if (path.endsWith('/handoff') && response.statusCode < 400) handedOff = true;
+          if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
+          return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
+        });
+        const runner = createVercelTicketRunner({ model, core, ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
+          const score = await semanticSearch.similarity(query, passage);
+          semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
+          return score;
+        } } } : {}), history: new FileHistoryStore(join(history, item.id, String(attempts))), authenticate: async ({ sessionId, ticketToken }) => {
+          const scope = harness.tokens.verify(ticketToken);
+          if (sessionId !== scope.channelId || !await harness.bridge.read(scope)) throw new Error('Session mismatch');
+          return { scope, selectedServiceRef: 'whmcs-service:1', assertCurrent: async () => {
+            harness.tokens.verify(ticketToken);
+            const snapshot = await harness.bridge.read(scope);
+            if (!snapshot || !['AI_ACTIVE', 'WAITING_CUSTOMER'].includes(snapshot.state)) throw new Error('Retired session');
+          } };
+        } });
         try {
           answer = (await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal)).reply;
-          transientFailure = modelFailures.slice(failuresBeforeAttempt).some(f => f.status === 502 || f.status === 503 || f.status === 504 || f.name === 'StoreContinuationError');
         } catch (caught) {
           error = true;
           const detail = caught instanceof Error ? caught.message : '';
-          transientFailure ||= /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(detail);
-          if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+          transientFailure = (caught instanceof Error && ['TimeoutError', 'AbortError'].includes(caught.name)) ||
+            /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(detail);
+        } finally {
+          await harness.app.close();
         }
+        transientFailure ||= modelFailures.slice(failuresBeforeAttempt).some(f =>
+          f.status === 502 || f.status === 503 || f.status === 504 ||
+          ['StoreContinuationError', 'TimeoutError', 'AbortError'].includes(f.name));
+        if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
       } while (transientFailure && attempts < 3);
-      }
-      finally { await harness.app.close(); }
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
       const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
       const semantic = await scoreSemantic(item, { answer: scrub(answer), handedOff, error }, async (reference, delivered) => {
         const judgment = parseJudgment(await requestJudgment(reference, delivered, judgeKey ?? ''), reference.expected_points.length);
         return { ...judgment, reason: scrub(judgment.reason) };
       });
-      results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerability[index] ?? 'unclassified', lexical: score(item, answer, handedOff, error) });
+      results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
+        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerability[index] ?? 'unclassified', lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }
@@ -172,7 +180,7 @@ if (blockers.length) {
       overall: lexicalSummary(results),
       perCategory: Object.fromEntries(categories.map(category => [category, lexicalSummary(results.filter(r => r.category === category))])),
     };
-    const report = { ...metadata, kbStats, status: 'completed', elapsedMs: previousElapsedMs + Date.now() - started, semanticSummary, byAnswerability: summarizeAnswerability(results), perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
+    const report = { ...metadata, kbStats, status: semanticSummary.unscored > 0 ? 'running' : 'completed', elapsedMs: previousElapsedMs + Date.now() - started, semanticSummary, byAnswerability: summarizeAnswerability(results), perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
     await writeCheckpoint(report);
     console.log(JSON.stringify({ ...report, results: undefined, output }, null, 2));
     if (semanticSummary.unscored > 0) process.exitCode = 1;
