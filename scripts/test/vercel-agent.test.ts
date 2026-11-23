@@ -34,6 +34,62 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls[0]?.temperature).toBe(0.2);
   });
 
+  describe("citation gate", () => {
+    const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
+    const first = "[synthetic/mod.md:101-183]";
+    const other = "Check the status in the panel.";
+    const second = "[synthetic/status.md:3-5]";
+
+    async function runDraft(draft: string) {
+      const { root, harness, request, signal } = await setup({
+        search: () => Promise.resolve({ trust: "reference_only", matches: [
+          { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
+          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: other }
+        ] }),
+        read: () => Promise.resolve(null)
+      });
+      const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(draft)] });
+      const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal);
+      return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
+    }
+
+    it("passes a full 83-line quote with CRLF and a second exact citation", async () => {
+      expect(long.split("\n")).toHaveLength(83);
+      const draft = `${long.replaceAll("\n", "\r\n")}\r\n${first}\n\n${other} ${second}`;
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({ reply: draft, citationGate: { status: "passed", grounded: true, matched: [first, second], failures: [] } });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("records a truncated 83-line quote on handoff even when another citation is exact", async () => {
+      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second}\nSTAFF_HANDOFF`);
+      expect(state).toBe("HUMAN_NEEDED");
+      expect(result).toMatchObject({ citationGate: {
+        status: "failed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
+      } });
+      expect(result.reply).not.toContain(other);
+    });
+
+    it.each([
+      ["wrong_lines", `${other} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
+      ["missing_citation", other, second],
+      ["whitespace_mismatch", `${other.replace("the status", "the  status")} ${second}`, second],
+      ["unknown_citation", `${other} [invented.md:3-5]`, "[invented.md:3-5]"],
+      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
+    ])("identifies a second citation with %s", async (reason, tail, citation) => {
+      const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
+      expect(state).toBe("HUMAN_NEEDED");
+      expect(result).toMatchObject({ citationGate: { status: "failed", grounded: true, matched: [first], failures: [{ citation, reason }] } });
+    });
+
+    it("reports a gate pass when a grounded draft still asks for handoff", async () => {
+      const { result, state } = await runDraft(`${other} ${second}\nSTAFF_HANDOFF`);
+      expect(state).toBe("HUMAN_NEEDED");
+      expect(result).toMatchObject({ citationGate: { status: "passed", grounded: true, matched: [second], failures: [] } });
+      expect(result.reply).toContain(other);
+    });
+  });
+
   it("keeps Responses tool-loop continuations self-contained when storage is unavailable", async () => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });

@@ -5,7 +5,7 @@ import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { wrapLanguageModel } from 'ai';
 import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
-import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from '@support-ai-agent/agent-loop';
+import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type CitationGate } from '@support-ai-agent/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
@@ -14,7 +14,7 @@ import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgmen
 import { answerabilityForItem, classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
-type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
+type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; citationGateAttempts?: (CitationGate | null)[]; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
 type GoldenCheckpoint = Record<string, unknown> & {
   status: string;
   selected: number;
@@ -106,6 +106,7 @@ if (blockers.length) {
       const modelFailures: { name: string; status: number | null }[] = [];
       const finishReasons: string[] = [];
       const drafts: string[] = [];
+      const citationGateAttempts: (CitationGate | null)[] = [];
       const semanticScores: { source: string; startLine: number; score: number }[] = [];
       const evidence: { source: string; startLine: number; endLine: number; excerpt: string }[] = [];
       const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
@@ -124,6 +125,7 @@ if (blockers.length) {
       } } });
       do {
         attempts++;
+        let citationGate: CitationGate | null = null;
         answer = '';
         handedOff = false;
         error = false;
@@ -155,7 +157,8 @@ if (blockers.length) {
           } };
         } });
         try {
-          answer = (await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal)).reply;
+          const result = await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal);
+          ({ reply: answer, citationGate } = result);
         } catch (caught) {
           error = true;
           const detail = caught instanceof Error ? caught.message : '';
@@ -164,19 +167,19 @@ if (blockers.length) {
         } finally {
           await harness.app.close();
         }
+        citationGateAttempts.push(citationGate);
         transientFailure ||= modelFailures.slice(failuresBeforeAttempt).some(f =>
           f.status === 502 || f.status === 503 || f.status === 504 ||
           ['StoreContinuationError', 'TimeoutError', 'AbortError'].includes(f.name));
         if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
       } while (transientFailure && attempts < 3);
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
-      const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
       const semantic = await scoreSemantic(item, { answer: scrub(answer), handedOff, error }, async (reference, delivered) => {
         const judgment = parseJudgment(await requestJudgment(reference, delivered, judgeKey ?? ''), reference.expected_points.length);
         return { ...judgment, reason: scrub(judgment.reason) };
       });
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
+        citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", citationGateAttempts, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

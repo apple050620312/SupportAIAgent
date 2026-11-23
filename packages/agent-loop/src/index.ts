@@ -8,7 +8,9 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-export { FileHistoryStore, SupportCoreClient };
+import { citation, evaluateCitationGate, type CitationGate } from "./citation-gate.js";
+export { FileHistoryStore, SupportCoreClient, citation };
+export type { CitationGate };
 export type { TrustedAgentSession };
 export { createLiveModel } from "./model.js";
 
@@ -53,10 +55,6 @@ export function retrievalConfidence(query: string, passage: string): number {
   const text = passage.normalize("NFKC").toLowerCase();
   return tokens.size ? [...tokens].filter((token) => text.includes(token)).length / tokens.size : 0;
 }
-export function citation(match: KnowledgeSearchResponse["matches"][number]): string {
-  return `[${match.source}:${match.startLine}-${match.endLine}]`;
-}
-
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
   admitted: KnowledgeSearchResponse["matches"],
@@ -93,7 +91,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAgentRunner {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -226,6 +224,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       });
       let reply = "";
       let supportedPartial = "";
+      let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       try {
         // sub2api may create Responses with store=false regardless of the requested
         // default. Keep every continuation self-contained: the OpenAI provider
@@ -239,8 +238,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
-        const grounded = searched && evidence.some(match => reply.includes(`${match.excerpt} ${citation(match)}`));
-        const acceptable = requiredReads.every(name => attempted.has(name)) && grounded && !!reply && result.finishReason === "stop" && !invalidTool;
+        citationGate = evaluateCitationGate(reply, evidence, clean);
+        const acceptable = requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         if (acceptable && reply.length <= 5800) {
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
@@ -250,7 +249,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint };
+        return { reply: checkpoint, citationGate };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -269,7 +268,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply };
+      return { reply, citationGate };
     });
   } };
 }
