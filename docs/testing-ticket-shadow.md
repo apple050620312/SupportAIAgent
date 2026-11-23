@@ -1,17 +1,24 @@
 # Discord shadow mode
 
-Shadow mode runs the Vercel agent for explicitly admitted test tickets. It uses
+Shadow mode runs the Vercel agent for admitted test tickets. It uses
 the T0 tools through Support Core and posts drafts only in a private review
 thread under each ticket. Staff handle customer replies separately.
 
 1. Keep the same `TICKET_STAFF_USER_IDS` in the test launcher configuration.
    Those accounts are the reviewers and their messages in the ticket channel
    trigger human takeover.
-2. In Discord, enable Developer Mode and use **Copy Channel ID** on the first
-   3–5 open test ticket text channels in `TEST_TICKET_GUILD_ID`. Put those
-   IDs, comma separated, in `SHADOW_TICKET_CHANNEL_IDS` in the local
-   `.env.ticket-support` file. The checked-in example leaves it empty. An
-   empty list exits before loading the bot.
+2. Auto-admission is on by default. A new ticket text channel created in
+   `TEST_TICKET_GUILD_ID` while the launcher is listening is eligible. On a
+   non-bot message, the bot checks the baseline ticket record before admitting
+   the channel. If the record is still being saved, a later message can retry.
+   Existing channels, including reopened channels, require explicit admission
+   through the allowlist.
+   - Leave `SHADOW_TICKET_CHANNEL_IDS` empty to admit new tickets without copying
+     IDs. Set it to a comma-separated list to restrict shadow mode to those
+     channels. Listed open tickets are also admitted at startup.
+   - Set `SHADOW_AUTO_ADMIT=false` in `.env.ticket-support` and restart to use
+     only the explicit list. With auto-admission off and the list empty, the
+     launcher exits before loading the bot.
 3. Use the authorized test baseline and reviewed shared documentation. Give
    the bot permission to create and send in private threads, add staff, and
    delete its draft messages. Reviewers need access to the parent channel.
@@ -20,7 +27,7 @@ thread under each ticket. Staff handle customer replies separately.
    test guild. The launcher rejects a ticket owner with elevated access.
 4. Run `pnpm start:ticket-support` from the repository root with the reviewed
    test configuration. Keep `MODEL_PROVIDER` set to the chosen chat provider.
-   To disable shadow mode, stop the launcher and clear the allowlist.
+   To stop drafting immediately, stop the launcher.
 
 In the private review thread, use `!draft <id> accept`,
 `!draft <id> edit <replacement>`, or `!draft <id> reject`. These commands
