@@ -139,7 +139,7 @@ No other staff-versus-KB conflict was promoted to a convention. Items above rema
 
 ## 4. No usable answer
 
-The exact aggregate counts are 186 tickets with zero staff messages and 127 tickets with only bot messages. These overlap. The combined no-usable-answer total, counting each ticket once, is **198 of 837**. Per-category no-usable-answer counts are: server_start_crash 7/46; cannot_connect 8/80; plugin_mod 7/44; lag_performance 3/40; version_core 1/18; world_backup 3/22; files_panel 2/15; server_other 111/224; billing_other 9/34; billing_payment 5/30; billing_question 2/5; plan_upgrade 2/26; plan_cancel 9/22; refund 0/12; account_access 7/41; purchase_help 5/24; pre_sales 13/64; custom_quote 5/15; general_other 28/75. These tickets teach nothing reliable about handling and must not become patterns.
+The exact aggregate counts are 218 tickets with zero staff messages and 127 tickets with only bot messages. Bot-only tickets are a subset of zero-staff tickets, so their union is 218. The combined no-usable-answer total, counting each ticket once, is **227 of 837**, which is the sum of the per-category counts below. Per-category no-usable-answer counts are: server_start_crash 7/46; cannot_connect 8/80; plugin_mod 7/44; lag_performance 3/40; version_core 1/18; world_backup 3/22; files_panel 2/15; server_other 111/224; billing_other 9/34; billing_payment 5/30; billing_question 2/5; plan_upgrade 2/26; plan_cancel 9/22; refund 0/12; account_access 7/41; purchase_help 5/24; pre_sales 13/64; custom_quote 5/15; general_other 28/75. These tickets teach nothing reliable about handling and must not become patterns.
 
 ## 5. Conventions versus procedures
 
