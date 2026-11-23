@@ -51,14 +51,31 @@ describe("Vercel read-only agent", () => {
     expect(answerCompletenessCheck(quoted, "Velocity", evidence)).toBe(true);
   });
 
-  it("requires the downgrade branch only when downgrade evidence is admitted", () => {
+  it("requires the downgrade branch only for a downgrade symptom with admitted evidence", () => {
     const excerpt = "Check the connection settings and retry.";
     const downgrade = [{ excerpt, source: "practice/advanced/version-downgrade.md", startLine: 1, endLine: 12 }] as never;
     const network = [{ excerpt, source: "debug/connection.md", startLine: 1, endLine: 4 }] as never;
     const base = `${excerpt} Check the connection and retry. [practice/advanced/version-downgrade.md:1-12]`;
-    expect(answerCompletenessCheck(base, "connection", downgrade)).toBe(false);
-    expect(answerCompletenessCheck(`${base} If downgraded, make a backup and use a new world.`, "connection", downgrade)).toBe(true);
+    expect(answerCompletenessCheck(base, "connection", downgrade)).toBe(true);
+    const symptom = "Minecraft version mismatch after downgrade";
+    expect(answerCompletenessCheck(base, symptom, downgrade)).toBe(false);
+    expect(answerCompletenessCheck(`${base} If downgraded, make a backup and use a new world.`, symptom, downgrade)).toBe(true);
     expect(answerCompletenessCheck(`${excerpt} Check the connection and retry. [debug/connection.md:1-4]`, "connection", network)).toBe(true);
+  });
+
+  it("does not require downgrade coverage for an incidental primary-search hit", () => {
+    const downgrade = [{ excerpt: "Velocity can run on your host. Set the configuration and check the result.", source: "practice/advanced/version-downgrade.md", startLine: 1, endLine: 12 }] as never;
+    const draft = "Velocity can run on your host. Set the configuration and check the result. [practice/advanced/version-downgrade.md:1-12]";
+    expect(answerCompletenessCheck(draft, "Can I run Velocity with Paper?", downgrade)).toBe(true);
+    expect(answerCompletenessCheck(draft, "Docker Java 8 server issue", downgrade)).toBe(true);
+  });
+
+  it("replays GS-138 coverage without the incidental downgrade passage", () => {
+    const velocity = [{ excerpt: "Velocity can run on your host. Paper can run on your own host.", source: "practice/advanced/velocity.md", startLine: 1, endLine: 3 }] as never;
+    const downgrade = { excerpt: "Check the connection settings and retry.", source: "practice/advanced/version-downgrade.md", startLine: 1, endLine: 12 };
+    const draft = "Velocity can run on your host. Set the configuration and check the result. [practice/advanced/velocity.md:1-3]";
+    expect(answerCompletenessCheck(draft, "Can Velocity connect to an external Paper server?", [...velocity, downgrade] as never)).toBe(true);
+    expect(answerCompletenessCheck(draft, "Can Velocity connect to an external Paper server?", velocity)).toBe(true);
   });
 
   it.each(["Check the result.", ""]) ("rejects drafts without enough actionable content: %s", draft => {
