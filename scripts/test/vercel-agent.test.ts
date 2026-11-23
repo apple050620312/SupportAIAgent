@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
@@ -19,6 +19,27 @@ async function setup(knowledge?: Parameters<typeof createMockSupport>[1], reads?
   const request = { sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: "status" };
   return { root, harness, request, signal: new AbortController().signal };
 }
+
+describe("hasAccountBlockerCue", () => {
+  it.each([
+    "映像欄位鎖住，我需要 Java 8", "我的帳戶被鎖定", "無法更改映像", "版本不能改",
+    "麻煩幫我解鎖", "需要開通功能", "需要管理員權限", "權限不足",
+    "The image field is LOCKED", "I cannot change the image", "I can’t edit the field",
+    "Please unlock my account", "I need admin permission", "Permission denied"
+  ])("detects a blocker in %s", prompt => {
+    expect(hasAccountBlockerCue(prompt)).toBe(true);
+  });
+
+  it.each([
+    "試用伺服器連不上，請問該怎麼檢查？",
+    "Velocity 和外部 Paper 這樣架設符合條款嗎？",
+    "I cannot connect to the public test server.",
+    "Can I run Velocity with Paper on my own host?",
+    "The connection is blocked at the firewall."
+  ])("leaves general guidance eligible for direct delivery in %s", prompt => {
+    expect(hasAccountBlockerCue(prompt)).toBe(false);
+  });
+});
 
 describe("Vercel read-only agent", () => {
   it("exposes only four matrix T0 reads and cites the exact retrieved KB passage", async () => {
@@ -141,7 +162,7 @@ describe("Vercel read-only agent", () => {
       });
     });
 
-    async function runDraft(draft: string, statusExcerpt = other) {
+    async function runDraft(draft: string, statusExcerpt = other, prompt = "status") {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
           { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
@@ -151,7 +172,7 @@ describe("Vercel read-only agent", () => {
         read: () => Promise.resolve(null)
       });
       const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(draft)] });
-      const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal);
+      const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run({ ...request, prompt }, signal);
       return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
     }
 
@@ -168,6 +189,21 @@ describe("Vercel read-only agent", () => {
           before: { status: "failed", matched: [], failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }] },
           after: { status: "passed", matched: [velocityCitation] }
         }
+      });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("delivers the GS-138 architecture guidance after repair despite a marker about inventory", async () => {
+      const stockNote = "客服需要再確認庫存。";
+      const draft = velocityDraft(velocity.excerpt.trimEnd()) + "\n" + stockNote;
+      const { result, state } = await runDraft(
+        velocityDraft(wrapQuote(velocity.excerpt.trimEnd())) + "\n" + stockNote + "\nSTAFF_HANDOFF",
+        other,
+        "可以用 Velocity 連到我自己的 Paper 主機嗎？這樣符合條款嗎？"
+      );
+      expect(result).toMatchObject({
+        reply: draft, answerComplete: true, citationGateRepair: { repaired: true },
+        handoffMarkerPresent: true, handoffMarkerOverridden: true
       });
       expect(state).toBe("AI_ACTIVE");
     });
@@ -202,7 +238,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it("records a truncated 83-line quote on handoff even when another citation is exact", async () => {
-      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`);
+      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`, other, "My panel is locked");
       expect(state).toBe("HUMAN_NEEDED");
       expect(result).toMatchObject({ citationGate: {
         status: "passed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
@@ -233,10 +269,13 @@ describe("Vercel read-only agent", () => {
       expect(result.citationGate.failures).toEqual([{ citation: second, reason: "excerpt_mismatch" }]);
     });
 
-    it("reports a gate pass when a grounded draft still asks for handoff", async () => {
-      const { result, state } = await runDraft(`${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`);
+    it("retains a marker when a grounded draft fails completeness", async () => {
+      const { result, state } = await runDraft(`${other} ${second}\nSTAFF_HANDOFF`);
       expect(state).toBe("HUMAN_NEEDED");
-      expect(result).toMatchObject({ citationGate: { status: "passed", grounded: true, matched: [second], failures: [] } });
+      expect(result).toMatchObject({
+        citationGate: { status: "passed", matched: [second] }, answerComplete: false,
+        handoffMarkerPresent: true, handoffMarkerOverridden: false
+      });
       expect(result.reply).toContain(other);
     });
   });
@@ -406,14 +445,59 @@ describe("Vercel read-only agent", () => {
     expect(harness.sent).toHaveLength(0);
   });
 
-  it("keeps a cited procedure when staff still need to verify a separate detail", async () => {
-    const { root, harness, request, signal } = await setup();
-    const partial = `${DEMO_ANSWER}\n\nI could not verify when it stopped. Check the panel and share the time shown.`;
+  it.each([
+    {
+      scenario: "GS-096 test server guidance",
+      prompt: "我購買前想試連測試服，但目前連不上，怎麼檢查？",
+      excerpt: "請先開啟 Discord #測試伺服，檢查公告的位址和版本，再用公告列出的資料重試連線。",
+      marker: true, handoff: false
+    },
+    {
+      scenario: "GS-041 locked image field",
+      prompt: "我需要 Java 8，但映像欄位鎖住，不能改。",
+      excerpt: "請先備份伺服器資料，再到控制台檢查目前的映像選項。如果可以選擇相容的映像，套用後重啟並檢查結果。",
+      marker: true, handoff: true
+    },
+    {
+      scenario: "GS-084 direct delivery control",
+      prompt: "無法登入管理介面，怎麼重設密碼？",
+      excerpt: "請先開啟管理介面的登入頁，選擇忘記密碼並輸入帳戶的電子郵件，再依信件指示重設密碼。",
+      marker: false, handoff: false
+    }
+  ])("routes $scenario while preserving self-service guidance", async ({ prompt, excerpt, marker, handoff }) => {
+    const source = "synthetic/guidance.md";
+    const { root, harness, request, signal } = await setup({
+      search: () => Promise.resolve({ trust: "reference_only", matches: [{
+        articleRef: `kb:${"a".repeat(64)}`, source, title: "Guidance", heading: "Procedure",
+        excerpt, startLine: 1, endLine: 2
+      }] }),
+      read: () => Promise.resolve(null)
+    });
+    const draft = `請依照下方步驟操作，並在完成後確認結果。\n\n${excerpt} [${source}:1-2]`;
     const model = new MockLanguageModelV4({ doGenerate: [
-      mockCall("search_support_knowledge", { query: "status" }), mockText(`${partial}\nSTAFF_HANDOFF`)
+      mockCall("search_support_knowledge", { query: prompt }), mockText(draft + (marker ? "\nSTAFF_HANDOFF" : ""))
+    ] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.7) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({
+      reply: draft + (handoff ? "\n\n已轉交人工客服。" : ""),
+      answerComplete: true, citationGate: { status: "passed" },
+      handoffMarkerPresent: marker, handoffMarkerOverridden: marker && !handoff
+    });
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe(handoff ? "HUMAN_NEEDED" : "AI_ACTIVE");
+  });
+
+  it("retains a marker when the citation gate rejects the draft", async () => {
+    const { root, harness, request, signal } = await setup();
+    const draft = "Check the panel and retry the connection after verifying the address. [invented.md:1-2]";
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "status" }), mockText(draft + "\nSTAFF_HANDOFF")
     ] });
     const result = await demoRunner(harness, root, model).run(request, signal);
-    expect(result.reply).toBe(`${partial}\n\nI've handed this to support staff.`);
+    expect(result).toMatchObject({
+      citationGate: { status: "failed" }, handoffMarkerPresent: true, handoffMarkerOverridden: false
+    });
+    expect(result.reply).toContain("I've handed this to support staff.");
     expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
@@ -444,21 +528,24 @@ describe("Vercel read-only agent", () => {
     expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
-  it("keeps grounded KB guidance when a required status read fails", async () => {
+  it.each([false, true])("keeps guidance after a required status read fails (marker: %s)", async marker => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
       logs: { read: () => Promise.resolve({ trust: "untrusted_data", lines: ["synthetic power error"] }) }
     });
     const model = new MockLanguageModelV4({ doGenerate: [
       mockCall("get_my_server_status"), mockCall("get_server_logs"),
-      mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)
+      mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER + (marker ? "\nSTAFF_HANDOFF" : ""))
     ] });
     const result = await demoRunner(harness, root, model, "whmcs-service:2")
       .run({ ...request, prompt: "My server status after a power error" }, signal);
     expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
-    expect(result.reply).toContain(DEMO_ANSWER);
-    expect(result.reply).not.toContain("I've handed this to support staff.");
-    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    expect(result).toMatchObject({
+      reply: DEMO_ANSWER + (marker ? "\n\nI've handed this to support staff." : ""),
+      answerComplete: true, citationGate: { status: "passed" },
+      handoffMarkerPresent: marker, handoffMarkerOverridden: false
+    });
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe(marker ? "HUMAN_NEEDED" : "AI_ACTIVE");
   });
 
   it("forces status and log reads on a reported power error", async () => {

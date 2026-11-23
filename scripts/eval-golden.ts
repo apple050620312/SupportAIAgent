@@ -14,8 +14,8 @@ import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgmen
 import { answerabilityForItem, classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
-type EventLog = { attempt: number; kind: 'tool' | 'gate' | 'judge'; name: string; status: string; detail?: string };
-type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; citationGateRepair?: CitationGateRepair | null; answerCompletenessAttempts?: (boolean | null)[]; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
+type EventLog = { attempt: number; kind: 'tool' | 'gate' | 'judge' | 'diagnostic'; name: string; status: string; detail?: string };
+type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; citationGateRepair?: CitationGateRepair | null; answerCompletenessAttempts?: (boolean | null)[]; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; handoffMarkerOverridden?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
 type GoldenCheckpoint = Record<string, unknown> & {
   status: string;
   selected: number;
@@ -113,6 +113,8 @@ if (blockers.length) {
       const semanticScores: { source: string; startLine: number; score: number }[] = [];
       const evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[] = [];
       let admittedEvidence: { source: string; startLine: number; endLine: number }[] = [];
+      let handoffMarkerPresent = false;
+      let handoffMarkerOverridden = false;
       const eventLog: EventLog[] = [];
       const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
         steps++;
@@ -135,6 +137,8 @@ if (blockers.length) {
         citationGateRepair = null;
         answer = '';
         handedOff = false;
+        handoffMarkerPresent = false;
+        handoffMarkerOverridden = false;
         error = false;
         toolErrors.length = 0;
         evidence.length = 0;
@@ -166,8 +170,9 @@ if (blockers.length) {
         } });
         try {
           const result = await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal);
-          ({ reply: answer, citationGate, citationGateRepair, answerComplete, admittedEvidence } = result);
-          (eventLog as unknown[]).push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarker', status: result.handoffMarkerPresent ? 'present' : 'absent' });
+          ({ reply: answer, citationGate, citationGateRepair, answerComplete, admittedEvidence, handoffMarkerPresent, handoffMarkerOverridden } = result);
+          eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarker', status: handoffMarkerPresent ? 'present' : 'absent' });
+          if (handoffMarkerPresent) eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarkerDecision', status: handoffMarkerOverridden ? 'overridden' : 'retained' });
         } catch (caught) {
           error = true;
           const detail = caught instanceof Error ? caught.message : '';
@@ -206,7 +211,7 @@ if (blockers.length) {
       const referenceConflict = reconcileReference(`${item.staff_resolution} ${item.expected_points.join(' ')}`, handoffContentVerdict && 'judgment' in handoffContentVerdict ? handoffContentVerdict.judgment?.reason ?? '' : semantic && 'judgment' in semantic ? semantic.judgment?.reason ?? '' : '', evidence);
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
         citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", currentPolicyCoverage: answerCompletenessAttempts.at(-1) === true && evidence.length > 0, ungroundedDelivery: !error && !handedOff && !hasGateEvidence,
-        citationGateAttempts, citationGateRepair, answerCompletenessAttempts, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), admittedEvidence: admittedEvidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine })), semanticSupport: 'not assessed', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
+        citationGateAttempts, citationGateRepair, answerCompletenessAttempts, handoffMarkerPresent, handoffMarkerOverridden, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), admittedEvidence: admittedEvidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine })), semanticSupport: 'not assessed', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

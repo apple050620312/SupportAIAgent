@@ -51,6 +51,13 @@ function hasDowngradeSymptom(prompt: string): boolean {
     (minecraft && version && /\b(?:mismatch|incompatible|encryption|can't connect|cannot connect)\b|不相容|不匹配|加密|無法連線/iu.test(text));
 }
 
+/** Detect account and panel blockers in the customer's current request. */
+export function hasAccountBlockerCue(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /鎖住|鎖定|解鎖|無法更改|無法修改|不能改|改不了|需要(?:開通|.{0,8}權限)|(?:沒有|缺少|不足的)權限|權限不足/u.test(text) ||
+    /\b(?:locked|unlock|(?:cannot|can['’]t|unable to) (?:change|edit|modify)|(?:need|require|lack|no|missing|insufficient) (?:[\w-]+ ){0,3}permissions?|permissions? (?:denied|required))\b/iu.test(text);
+}
+
 // Route clear incident and record lookups. The model routes less explicit follow-ups
 // using the same tools and ticket history; these patterns never select a resource.
 function requiredAccountReads(prompt: string): ReadTool[] {
@@ -121,7 +128,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; citationGateRepair: CitationGateRepair; answerComplete: boolean | null; handoffMarkerPresent: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; citationGateRepair: CitationGateRepair; answerComplete: boolean | null; handoffMarkerPresent: boolean; handoffMarkerOverridden: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -332,12 +339,13 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         // Optional account reads provide context. A failed read must not discard a
         // complete, cited KB procedure. Escalate only when the draft is incomplete
         // or the missing account state is required to answer the question.
-        handoff ||= !acceptable || requestedHandoff || (failedRequiredRead && !fitsHandoff);
+        const markerRequiresHandoff = requestedHandoff && (failedRequiredRead || hasAccountBlockerCue(prompt));
+        handoff ||= !acceptable || markerRequiresHandoff || (failedRequiredRead && !fitsHandoff);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, admittedEvidence };
+        return { reply: checkpoint, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, handoffMarkerOverridden: false, admittedEvidence };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -356,7 +364,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, admittedEvidence };
+      return { reply, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, handoffMarkerOverridden: handoffMarkerPresent && !handoff, admittedEvidence };
     });
   } };
 }
