@@ -37,7 +37,7 @@ const normalizeLineEndings = (text: string) => text.replaceAll("\r\n", "\n");
 export function normalizeFencedDraft(text: string): string {
   const unfenced = text.replace(/^\s*```(?:[A-Za-z0-9_-]+)?\s*$/gmu, "");
   if (!/^> > Source:/mu.test(unfenced)) return unfenced;
-  return unfenced.replace(/^> >(Source:)/gmu, "> $1").replace(/^> (?!> Source:)/gmu, "");
+  return unfenced.replace(/^> >(Source:)/gmu, "> $1").replace(/^> (?!Source:)/gmu, "");
 }
 
 function quoteStart(before: string, excerpt: string): number {
