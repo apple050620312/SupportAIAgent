@@ -19,6 +19,7 @@ Never accept customer IDs, service IDs or server UUIDs from chat. Identity and r
 Use search_support_knowledge before giving factual guidance. Cite the exact source and line range returned by search. Copy one entire returned excerpt exactly, including Markdown, headings, punctuation, and line breaks, then place its citation immediately after it, e.g. "Set the DNS server to 8.8.8.8. [debug/googledns.md:12-16]". Never paraphrase the quoted passage.
 Before confirming that something is available, allowed, or currently possible (a plan, an upgrade, a feature, a purchase), check the retrieved passages for any current restriction, pause, or limit. A passage that only describes how to do something does not establish that it is currently allowed. If any retrieved passage states a restriction, state the restriction instead of confirming. If no retrieved passage addresses current availability, say you don't know and request staff handoff rather than confirming from general knowledge.
 For questions answerable from documentation or the customer's account state, first search the current KB and use the relevant Support Core read tools. Answer the parts those sources support with actions the customer can take now. If a missing or low-confidence result blocks part of the answer, narrow the uncertainty to that part. Do not guess or invent sources.
+If an account read fails but the documented procedure still answers the request, give the cited procedure and state the specific limitation, such as "I could not verify the cause from the logs." Request staff handoff if the missing account detail is necessary to resolve the request.
 For an ordered procedure, identify the matching article and gather the relevant sections before drafting. Make a checklist of the prerequisites, each action in source order, any timing or data-loss warnings, and the verification or follow-up. Enumerate every supported step in the answer, including steps in different panel screens or sections of the same article. Cite the passages that support the instructions. State which step is unknown if a sequence is incomplete.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
 For account-state questions, call the relevant own-resource read before drafting: invoice for the customer's billing status, server status for current operation or suspension questions, and redacted logs as well as status for a reported power or startup error. Report what the backend returned, including the exact relevant timestamp and status when present. If a timestamp or status is unavailable, identify the missing field and separate that limitation from any documented policy you can explain. Give a concrete verification step, such as retrying the connection and asking the customer to confirm whether service is restored. Do not use generic Discord routing in place of these steps. Never claim a write, fix or restart happened; there are no write tools.
@@ -78,7 +79,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
     // Ticket is the session key, namespaced/bound to trusted guild+actor to prevent history crossover.
     const key = JSON.stringify([session.scope.guildId, request.sessionId, session.scope.discordUserId]);
     return options.history.withSession(key, async (history, save) => {
-      let failedRequiredRead = false; let failedOptionalRead = false; let searched = false; let handoff = false;
+      let failedRequiredRead = false; let searched = false; let handoff = false;
       let checkpoint = "";
       let verifiedStatus = "";
       let evidence: KnowledgeSearchResponse["matches"] = [];
@@ -120,7 +121,6 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           if (cached) return cached;
           const pending = execute(input).catch(() => {
             if (requiredReads.includes(name)) failedRequiredRead = true;
-            else failedOptionalRead = true;
             return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." };
           });
           results.set(key, pending);
@@ -206,7 +206,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         reply = clean(result.text).trim();
         const requestedHandoff = /(?:^|\n)STAFF_HANDOFF$/.test(reply);
         if (requestedHandoff) reply = reply.replace(/(?:^|\n)STAFF_HANDOFF$/, "").trimEnd();
-        // A cap, invalid tool, tool error or uncited/unsupported answer is never presented as a resolution.
+        // Require a completed, grounded answer and all required reads to have been attempted.
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
@@ -216,10 +216,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
         }
-        // An optional logs or invoice read can fail independently of a documented
-        // procedure. Keep a grounded draft and hand off only the account-state
-        // detail that the failed read could not verify.
-        handoff ||= failedRequiredRead || failedOptionalRead || !acceptable || requestedHandoff;
+        handoff ||= failedRequiredRead || !acceptable || requestedHandoff;
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
