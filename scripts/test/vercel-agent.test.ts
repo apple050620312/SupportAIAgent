@@ -58,7 +58,7 @@ describe("Vercel read-only agent", () => {
     const base = `${excerpt} Check the connection and retry. [practice/advanced/version-downgrade.md:1-12]`;
     expect(answerCompletenessCheck(base, "connection", downgrade)).toBe(false);
     expect(answerCompletenessCheck(`${base} If downgraded, make a backup and use a new world.`, "connection", downgrade)).toBe(true);
-    expect(answerCompletenessCheck(`${excerpt} Check the connection and retry.`, "connection", network)).toBe(true);
+    expect(answerCompletenessCheck(`${excerpt} Check the connection and retry. [debug/connection.md:1-4]`, "connection", network)).toBe(true);
   });
 
   it.each(["Check the result.", ""]) ("rejects drafts without enough actionable content: %s", draft => {
