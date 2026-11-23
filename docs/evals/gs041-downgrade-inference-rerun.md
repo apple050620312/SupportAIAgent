@@ -10,15 +10,13 @@ When the prompt has a downgrade symptom, the passage remains admitted and retain
 
 ## Verification
 
-Results will be recorded after the full checks complete.
-
 | Command | Result |
 | --- | --- |
-| `pnpm build` | TBD |
-| `pnpm typecheck` | TBD |
-| `pnpm test` | TBD |
-| `pnpm run eval:mock` | TBD |
-| `pnpm lint` | TBD |
+| `pnpm build` | Passed |
+| `pnpm typecheck` | Passed |
+| `pnpm test` | Passed, 395 script tests and 56 Support Core tests |
+| `pnpm run eval:mock` | Passed, 76 tests |
+| `pnpm lint` | Passed |
 
 ## Golden-set cases
 
