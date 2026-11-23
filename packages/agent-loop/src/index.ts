@@ -65,7 +65,7 @@ function hasReinstallSymptom(prompt: string): boolean {
 
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
-  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket/iu.test(text);
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|一直|持續|重複).{0,12}(?:斷線|掉線|disconnect)|(?:重裝|重新安裝|reinstall).{0,24}(?:後|之後|after).{0,24}(?:斷線|掉線|disconnect)|(?:等了|等待|等候).{0,12}(?:幾天|多天|數天|days?)/iu.test(text);
 }
 
 function hasSftpSymptom(prompt: string): boolean {
