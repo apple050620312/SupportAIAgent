@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, inspectCitationGate, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, inspectCitationGate, normalizeFencedDraft, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
 export type CitationGateRepair = {
@@ -125,6 +125,18 @@ function normalizeCoverageText(value: string): string {
     .trim();
 }
 
+function requiredTaskCoverage(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+  const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
+  const sources = new Set(evidence.map(match => match.source));
+  if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt) &&
+      !(/重新安裝|reinstall/iu.test(text) && /重啟|重新啟動|再開機|restart/iu.test(text) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(text))) return false;
+  if (sources.has(SUPPORT_FLOW_SOURCE) && hasSupportFlowSymptom(prompt) &&
+      !(/售後|after[- ]sales/iu.test(text) && /客服單|ticket/iu.test(text) && /重複|duplicate/iu.test(text))) return false;
+  if (sources.has("panel/start-server.md") && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
+      !(/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(text))) return false;
+  return true;
+}
+
 /** Checks the content required for delivery independently from citation formatting. */
 export function answerCompletenessCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
@@ -135,7 +147,7 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
   const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
   const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
-  return actionable && citedEvidence && downgradeCovered;
+  return actionable && citedEvidence && downgradeCovered && requiredTaskCoverage(text, prompt, evidence);
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
@@ -398,7 +410,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           // Remove one wrapper level, preserving Markdown markers in the source excerpt.
           const unwrapped = reply.replace(/^[ \t]*>[ \t]?/gm, "");
           const canUnwrap = unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation");
-          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : null);
+          const fenced = normalizeFencedDraft(reply);
+          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : fenced !== reply ? fenced : null);
           if (candidate !== null) {
             const repairedDraft = clean(candidate);
             const after = evaluateCitationGate(repairedDraft, evidence, clean);
