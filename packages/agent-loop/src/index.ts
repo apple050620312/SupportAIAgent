@@ -129,10 +129,12 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
   const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
   const sources = new Set(evidence.map(match => match.source));
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt) &&
-      !(/重新安裝|reinstall/iu.test(text) && /重啟|restart/iu.test(text) && /重製|重置|reset/iu.test(text))) return false;
+      !(/重新安裝|reinstall/iu.test(text) && /重啟|重新啟動|再開機|restart/iu.test(text) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(text))) return false;
   if (sources.has(SUPPORT_FLOW_SOURCE) && hasSupportFlowSymptom(prompt) &&
       !(/售後|after[- ]sales/iu.test(text) && /客服單|ticket/iu.test(text) && /重複|duplicate/iu.test(text))) return false;
-  return !(sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) || /重新安裝|reinstall/iu.test(text);
+  if (sources.has("panel/start-server.md") && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
+      !(/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(text))) return false;
+  return true;
 }
 
 /** Checks the content required for delivery independently from citation formatting. */

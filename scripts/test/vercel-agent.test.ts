@@ -101,6 +101,33 @@ describe("Vercel read-only agent", () => {
     expect(contentCoverageCheck(draft, prompt, evidence)).toBe(false);
   });
 
+  it.each([
+    {
+      prompt: "已經購買伺服器要如何啟動呢",
+      source: "panel/start-server.md",
+      incomplete: "請先確認服務是否已開通，再登入控制面板。點擊啟動之後，請等待伺服器載入。",
+      required: ["請先等待客服開通服務，開通後再到控制面板啟動伺服器。"]
+    },
+    {
+      prompt: "我剛剛把資料全刪了 會影響嗎",
+      source: "panel/common/settings.md",
+      incomplete: "請先檢查控制面板內的設定。",
+      required: ["刪除全部資料後世界會重置。", "到設定選擇重新安裝伺服器。", "接著重啟伺服器。"]
+    }
+  ])("requires every documented step for $source", ({ prompt, source, incomplete, required }) => {
+    const excerpt = "請先登入控制面板，並檢查畫面上顯示的伺服器名稱與目前的服務狀態。";
+    const evidence = [{ excerpt, source, startLine: 1, endLine: 1 }] as never;
+    const draft = `${excerpt} [${source}:1-1] ${incomplete}`;
+    const complete = draft + required.join("");
+    expect(answerCompletenessCheck(complete, prompt, evidence)).toBe(true);
+    expect(contentCoverageCheck(complete, prompt, evidence)).toBe(true);
+    for (const point of required) {
+      const missingPoint = complete.replace(point, "");
+      expect(answerCompletenessCheck(missingPoint, prompt, evidence)).toBe(false);
+      expect(contentCoverageCheck(missingPoint, prompt, evidence)).toBe(false);
+    }
+  });
+
   it("accepts a draft reflecting all distinct admitted passages", () => {
     const evidence = Array.from({ length: 10 }, (_, index) => ({
       excerpt: `Documented step ${index + 1}: check the setting and continue.`,
@@ -296,7 +323,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it.each(["```\n", "```markdown\n"])("grounds a verbatim quote inside a %s fence", (opening) => {
-      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n```\n${velocityCitation}`;
+      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n\`\`\`\n${velocityCitation}`;
       expect(evaluateCitationGate(velocityDraft(fenced), [velocity], value => value)).toMatchObject({
         status: "passed", grounded: true, matched: [velocityCitation], failures: []
       });
