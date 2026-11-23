@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { inputFor, score, summarize, type GoldenItem } from '../lib/golden-eval.js';
+import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from '../lib/golden-eval.js';
 import { scoreSemantic, summarizeSemantic } from "../lib/semantic-judge.js";
 const item: GoldenItem = { id: 'test', category: 'test', customer_problem: 'question', conversation: [{ role: 'customer', text: 'question' }, { role: 'customer', text: 'context' }, { role: 'staff', text: 'SECRET SOLUTION' }, { role: 'customer', text: 'later' }], expected_points: ['ＡＢＣ。', '第二點'], staff_resolution: 'reference', outcome: 'resolved' };
 describe('golden measurement', () => {
+  it('selects requested IDs and rejects unknown IDs', () => {
+    const items = [{ ...item, id: 'GS-002' }, { ...item, id: 'GS-001' }];
+    expect(selectGoldenItems(items, { ids: ['GS-001'] }).map(row => row.id)).toEqual(['GS-001']);
+    expect(() => selectGoldenItems(items, { ids: ['GS-999'] })).toThrow('Unknown golden ID(s): GS-999');
+  });
   it('never feeds staff answers or post-staff turns', () => expect(inputFor(item)).toBe('question\ncontext'));
   it('requires every whole point and refuses to credit handoff/error as resolution', () => {
     expect(score(item, 'abc 第二點', false, false).resolvedCorrect).toBe(true);

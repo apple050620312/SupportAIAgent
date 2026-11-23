@@ -8,19 +8,25 @@ import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCor
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
-import { inputFor, score, summarize, type GoldenItem } from './lib/golden-eval.js';
+import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from './lib/golden-eval.js';
 import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, summarizeSemantic, type SemanticResult } from './lib/semantic-judge.js';
 import { classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
 // No environment files are loaded, and provider exceptions are never serialized.
 const args = process.argv.slice(2);
-const limit = args.length === 0 ? undefined : args.length === 2 && args[0] === '--limit' && /^[1-9]\d*$/.test(args[1] ?? '') ? Number(args[1]) : NaN;
-if (Number.isNaN(limit)) throw new Error('Usage: pnpm eval:golden [--limit N]');
+const options: { limit?: number; ids?: string[] } = {};
+for (let index = 0; index < args.length; index++) {
+  const flag = args[index];
+  const value = args[++index];
+  if (flag === '--limit' && value && /^[1-9]\d*$/.test(value)) options.limit = Number(value);
+  else if (flag === '--ids' && value && value.split(',').every(id => /^GS-\d+$/.test(id))) options.ids = value.split(',');
+  else throw new Error('Usage: pnpm eval:golden [--limit N] [--ids GS-001,GS-002]');
+}
 const source = await readFile(process.env.GOLDEN_SET_PATH ?? '/home/hatch/workspace/coffee-host-golden/golden_set.json', 'utf8');
 const parsed: unknown = JSON.parse(source);
 if (!Array.isArray(parsed) || !parsed.length || !parsed.every((item: GoldenItem) => item && typeof item.id === 'string' && typeof item.category === 'string' && typeof item.customer_problem === 'string' && Array.isArray(item.conversation) && item.conversation.every(m => m && typeof m.role === 'string' && typeof m.text === 'string') && typeof item.staff_resolution === 'string' && item.staff_resolution.trim() && Array.isArray(item.expected_points) && item.expected_points.length && item.expected_points.every(p => typeof p === 'string' && p.trim()) && ['resolved', 'handoff'].includes(item.outcome))) throw new Error('Invalid golden-set schema');
-const items = (parsed as GoldenItem[]).slice(0, limit);
+const items = selectGoldenItems(parsed as GoldenItem[], options);
 const datasetSha256 = createHash('sha256').update(source).digest('hex');
 const manifestSource = await readFile(process.env.GOLDEN_ANSWERABILITY_PATH ?? new URL('./lib/golden-answerability.json', import.meta.url), 'utf8');
 const answerability = classifyGolden(JSON.parse(manifestSource) as Parameters<typeof classifyGolden>[0], datasetSha256, parsed.length);
