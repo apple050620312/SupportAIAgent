@@ -45,6 +45,41 @@ export type SemanticResult =
   | { verdict: Verdict['verdict']; judgment?: Verdict; basis: 'judge' | 'lifecycle' }
   | { verdict: null; basis: 'agent-error' | 'judge-error' };
 
+export type HandoffContentVerdict = SemanticResult | { verdict: null; basis: 'empty-draft' };
+
+/** Scores draft content for diagnostics while preserving lifecycle scoring for handoffs. */
+export async function scoreHandoffContent(
+  reference: Reference,
+  draft: string,
+  judge: (reference: Reference, answer: string) => Promise<Verdict>,
+): Promise<HandoffContentVerdict> {
+  if (!draft.trim()) return { verdict: null, basis: 'empty-draft' };
+  for (let i = 0; i < 3; i++) {
+    try {
+      const judgment = await judge(reference, draft);
+      return { verdict: judgment.verdict, judgment, basis: 'judge' };
+    } catch { /* transient provider or malformed output */ }
+  }
+  return { verdict: null, basis: 'judge-error' };
+}
+
+export type ReferenceConflict = { status: 'conflict' | 'none' | 'uncertain'; passages?: { source: string; startLine: number; excerpt: string }[]; reason?: string };
+
+/** Conservative reconciliation against owner-confirmed passages. */
+export function reconcileReference(referenceText: string, judgeReason: string, passages: readonly { source: string; startLine: number; excerpt: string; policyProvenance?: string }[]): ReferenceConflict {
+  const current = passages.filter(p => p.policyProvenance === 'owner_confirmed');
+  if (!current.length) return { status: 'uncertain', reason: 'No owner-confirmed current-KB passage was available.' };
+  const claim = `${referenceText} ${judgeReason}`.toLowerCase();
+  const pairs: [RegExp, RegExp][] = [[/\bavailable\b|\boffered\b/, /\bunavailable\b|\bnot available\b|\bdiscontinued\b/], [/\brefund(?:ed|s)?\b/, /\bno refund\b|\bnon[- ]refundable\b/], [/\ballowed\b|\bcan\b/, /\bnot allowed\b|\bcannot\b|\bcan't\b/]];
+  for (const [positive, negative] of pairs) {
+    if (!positive.test(claim) && !negative.test(claim)) continue;
+    const opposite = positive.test(claim) ? negative : positive;
+    const matches = current.filter(p => opposite.test(p.excerpt.toLowerCase()));
+    if (matches.length) return { status: 'conflict', passages: matches.map(p => ({ source: p.source, startLine: p.startLine, excerpt: p.excerpt })), reason: 'Historical reference or judge reason conflicts with current owner-confirmed KB policy.' };
+  }
+  return { status: 'none' };
+}
+
 export async function scoreSemantic(
   reference: Reference & { outcome: 'resolved' | 'handoff' },
   attempt: { answer: string; handedOff: boolean; error: boolean },

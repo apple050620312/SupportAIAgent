@@ -10,11 +10,12 @@ import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapter
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from './lib/golden-eval.js';
-import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, summarizeSemantic, type SemanticResult } from './lib/semantic-judge.js';
+import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type SemanticResult, type HandoffContentVerdict, type ReferenceConflict } from './lib/semantic-judge.js';
 import { answerabilityForItem, classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
-type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; citationGateAttempts?: (CitationGate | null)[]; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
+type EventLog = { attempt: number; kind: 'tool' | 'gate' | 'judge'; name: string; status: string; detail?: string };
+type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; citationGateAttempts?: (CitationGate | null)[]; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
 type GoldenCheckpoint = Record<string, unknown> & {
   status: string;
   selected: number;
@@ -108,7 +109,8 @@ if (blockers.length) {
       const drafts: string[] = [];
       const citationGateAttempts: (CitationGate | null)[] = [];
       const semanticScores: { source: string; startLine: number; score: number }[] = [];
-      const evidence: { source: string; startLine: number; endLine: number; excerpt: string }[] = [];
+      const evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[] = [];
+      const eventLog: EventLog[] = [];
       const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
         steps++;
         let result;
@@ -139,6 +141,7 @@ if (blockers.length) {
           const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
           const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)), ...(typeof init?.body === 'string' ? { payload: init.body } : {}) });
           if (response.statusCode >= 400) toolErrors.push(`${path}:HTTP_${response.statusCode}`);
+          eventLog.push({ attempt: attempts, kind: 'tool', name: path, status: response.statusCode >= 400 ? 'error' : 'ok', ...(response.statusCode >= 400 ? { detail: `HTTP_${response.statusCode}` } : {}) });
           if (path.endsWith('/handoff') && response.statusCode < 400) handedOff = true;
           if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
           return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
@@ -168,18 +171,33 @@ if (blockers.length) {
           await harness.app.close();
         }
         citationGateAttempts.push(citationGate);
+        eventLog.push({ attempt: attempts, kind: 'gate', name: 'citationGate', status: citationGate?.status ?? 'none' });
         transientFailure ||= modelFailures.slice(failuresBeforeAttempt).some(f =>
           f.status === 502 || f.status === 503 || f.status === 504 ||
           ['StoreContinuationError', 'TimeoutError', 'AbortError'].includes(f.name));
         if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
       } while (transientFailure && attempts < 3);
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
+      const judge = async (reference: typeof item, delivered: string) => {
+        eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'started' });
+        try {
+          const judgment = parseJudgment(await requestJudgment(reference, delivered, judgeKey ?? ''), reference.expected_points.length);
+          eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'ok', detail: judgment.verdict });
+          return judgment;
+        } catch (e) {
+          eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'error', detail: e instanceof Error ? e.message : 'unknown' });
+          throw e;
+        }
+      };
       const semantic = await scoreSemantic(item, { answer: scrub(answer), handedOff, error }, async (reference, delivered) => {
-        const judgment = parseJudgment(await requestJudgment(reference, delivered, judgeKey ?? ''), reference.expected_points.length);
+        const judgment = await judge(reference as typeof item, delivered);
         return { ...judgment, reason: scrub(judgment.reason) };
       });
+      const handoffDraft = drafts.map(scrub).filter(Boolean).at(-1) ?? '';
+      const handoffContentVerdict = handedOff ? await scoreHandoffContent(item, handoffDraft, async (reference, delivered) => judge(reference as typeof item, delivered)) : undefined;
+      const referenceConflict = reconcileReference(`${item.staff_resolution} ${item.expected_points.join(' ')}`, handoffContentVerdict && 'judgment' in handoffContentVerdict ? handoffContentVerdict.judgment?.reason ?? '' : semantic && 'judgment' in semantic ? semantic.judgment?.reason ?? '' : '', evidence);
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", citationGateAttempts, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
+        citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", citationGateAttempts, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), semanticSupport: 'not assessed', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

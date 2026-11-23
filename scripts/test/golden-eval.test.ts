@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from '../lib/golden-eval.js';
-import { scoreSemantic, summarizeSemantic } from "../lib/semantic-judge.js";
+import { scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type Verdict } from "../lib/semantic-judge.js";
 import { answerabilityForItem, classifyGolden } from '../lib/golden-answerability.js';
 const item: GoldenItem = { id: 'test', category: 'test', customer_problem: 'question', conversation: [{ role: 'customer', text: 'question' }, { role: 'customer', text: 'context' }, { role: 'staff', text: 'SECRET SOLUTION' }, { role: 'customer', text: 'later' }], expected_points: ['ＡＢＣ。', '第二點'], staff_resolution: 'reference', outcome: 'resolved' };
 describe('golden measurement', () => {
@@ -56,5 +56,19 @@ describe('semantic measurement', () => {
     expect(summarizeSemantic([failed, missed, handedOff].map(semantic => ({ semantic })))).toEqual({
       n: 3, scored: 2, unscored: 1, correct: 1, wrong: 1, partial: 0, correctRate: 0.5,
     });
+  });
+  it('scores handoff draft content separately while lifecycle remains primary', async () => {
+    const neededHandoff = { ...item, outcome: 'handoff' } as const;
+    const judge = vi.fn(async (): Promise<Verdict> => ({ verdict: 'correct', points: ['covered', 'covered'], reason: 'Complete draft.' }));
+    const primary = await scoreSemantic(neededHandoff, { answer: 'draft', handedOff: true, error: false }, judge);
+    const content = await scoreHandoffContent(neededHandoff, 'draft', judge);
+    expect(primary).toMatchObject({ verdict: 'correct', basis: 'lifecycle' });
+    expect(content).toMatchObject({ verdict: 'correct', basis: 'judge' });
+    expect(judge).toHaveBeenCalledTimes(1);
+    await expect(scoreHandoffContent(neededHandoff, '', judge)).resolves.toMatchObject({ verdict: null, basis: 'empty-draft' });
+  });
+  it('flags historical claims that conflict with current owner-confirmed KB', () => {
+    expect(reconcileReference('The service is available', '', [{ source: 'policy.md', startLine: 4, excerpt: 'The service is not available.', policyProvenance: 'owner_confirmed' }])).toMatchObject({ status: 'conflict' });
+    expect(reconcileReference('The service is available', '', [])).toMatchObject({ status: 'uncertain' });
   });
 });
