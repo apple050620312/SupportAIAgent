@@ -54,3 +54,17 @@ The private golden set is read from
 the configured answer provider's credentials. The semantic judge uses
 `SUB2API_API_KEY` independently of the answer provider. `pnpm run eval:mock`
 runs the offline support checks.
+
+After an interruption, rerun with the same dataset, model, and retrieval
+settings and pass the path to the running checkpoint:
+
+```sh
+pnpm run eval:golden --resume eval-results/<result-file>.json
+```
+
+Replace `<result-file>` with the actual filename. The eval keeps the original
+item selection, skips scored rows, and retries saved rows with no semantic
+verdict before evaluating new items. It atomically updates the same file after
+each row and leaves it resumable if any verdict is still missing. A supplied
+`--limit` must match the checkpoint's selection. Use only one process per
+checkpoint.
