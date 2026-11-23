@@ -15,10 +15,16 @@ export interface ShadowThread {
   readonly id: string;
   publish(draftId: string, text: string, assertCurrent: () => Promise<void>): Promise<() => Promise<void>>;
 }
+export interface ShadowVerdictEntry {
+  timestamp: string;
+  channelId: string;
+  verdict: ShadowVerdict;
+  staffId: string;
+}
 export interface ShadowMode {
   readonly channelIds: ReadonlySet<string>;
   openThread(scope: TicketScope): Promise<ShadowThread>;
-  recordVerdict(entry: { timestamp: string; channelId: string; verdict: ShadowVerdict; staffId: string }): Promise<void>;
+  recordVerdict(entry: ShadowVerdictEntry): Promise<void>;
 }
 export interface DiscordTicketSupportOptions {
   readonly shadow?: ShadowMode;
@@ -83,10 +89,10 @@ export class DiscordTicketSupport {
       if (!draft) return "ignored" as const;
       try { await this.assertDraftCurrent(lease, draft.snapshot); }
       catch { return "silenced" as const; }
-      lease.drafts.delete(command[1]!);
       const verdict = command[2] === "accept" ? "accepted-as-is" : command[2] === "edit" ? "accepted-with-edits" : "rejected";
       await shadow.recordVerdict({ timestamp: new Date().toISOString(), channelId: lease.scope.channelId,
         verdict, staffId: message.author.id });
+      lease.drafts.delete(command[1]!);
       return "reviewed" as const;
     });
     lease.tail = next.catch(() => undefined);

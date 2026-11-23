@@ -7,6 +7,7 @@ import {
   DiscordTicketSupport, attachTicketSupportEvents, TicketBridgeError
 } from "@support-ai-agent/ticket-bridge";
 import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from "@support-ai-agent/agent-loop";
+import { createShadowVerdictRecorder } from "./lib/shadow-verdict-log.js";
 import { openDiscordShadowThread } from "./lib/discord-shadow.js";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
@@ -82,7 +83,7 @@ async function main() {
         channelIds: setup.channelIds,
         openThread: (scope) => openDiscordShadowThread(id => client.channels.fetch(id, { force: true }),
           scope, setup.staff, client.user?.id ?? ""),
-        recordVerdict: (entry) => append("verdicts.jsonl", entry)
+        recordVerdict: createShadowVerdictRecorder(shadowRoot)
       }
     });
     app = buildApp({ readOnly: {
