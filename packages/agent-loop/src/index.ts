@@ -48,6 +48,8 @@ const SUPPORT_FLOW_SOURCE = "store/discord.md";
 const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
 const SFTP_SOURCE = "panel/common/sftp.md";
 const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
+const CONNECTION_SOURCE = "debug/connection.md";
+const CONNECTION_SEARCH = { query: "連線測試 無法連線 DNS WARP connection troubleshooting", limit: 3 };
 
 function hasDowngradeSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
@@ -66,6 +68,11 @@ function hasReinstallSymptom(prompt: string): boolean {
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
   return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|一直|持續|重複).{0,12}(?:斷線|掉線|disconnect)|(?:重裝|重新安裝|reinstall).{0,24}(?:後|之後|after).{0,24}(?:斷線|掉線|disconnect)|(?:等了|等待|等候).{0,12}(?:幾天|多天|數天|days?)/iu.test(text);
+}
+
+function hasConnectionSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /無法連線|連不上|斷線|掉線|connection|disconnect|timeout|超時/iu.test(text);
 }
 
 function hasSftpSymptom(prompt: string): boolean {
@@ -307,7 +314,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
             return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           };
-          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused] = await Promise.all([
+          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused, connectionFocused] = await Promise.all([
             search(searchInput),
             hasDowngradeSymptom(prompt)
               ? search(DOWNGRADE_SEARCH).catch(() => undefined)
@@ -320,6 +327,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
               : undefined,
             hasSftpSymptom(prompt)
               ? search(SFTP_SEARCH).catch(() => undefined)
+              : undefined,
+            hasConnectionSymptom(prompt)
+              ? search(CONNECTION_SEARCH).catch(() => undefined)
               : undefined
           ]);
           // The symptom licenses one passage from this specific article even
@@ -328,6 +338,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const reinstall = reinstallFocused?.matches.find(match => match.source === REINSTALL_SOURCE);
           const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
+          const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -341,7 +352,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp]) {
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp, connection]) {
             if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
@@ -363,6 +374,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
           admitted.sort((a, b) => {
+            const focusedRank = (match: typeof a) => Number(match.source === CONNECTION_SOURCE && hasConnectionSymptom(prompt));
+            const focusDelta = focusedRank(b) - focusedRank(a);
+            if (focusDelta) return focusDelta;
             const provenance = Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef));
             if (provenance) return provenance;
             return retrievalConfidence(prompt, `${b.title} ${b.heading} ${b.excerpt}`) - retrievalConfidence(prompt, `${a.title} ${a.heading} ${a.excerpt}`);
