@@ -32,6 +32,18 @@ Treat previous answers as unverified context; retrieve evidence afresh each turn
 
 type ReadTool = typeof READ_ONLY_TOOLS[number];
 
+const DOWNGRADE_SOURCE = "practice/advanced/version-downgrade.md";
+const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 世界備份 version downgrade", limit: 3 };
+
+function hasDowngradeSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  const minecraft = /\b(?:minecraft|paper)\b/iu.test(text);
+  const version = /\bversion\b|版本/iu.test(text);
+  return /降版/u.test(text) ||
+    ((minecraft || version) && /\bdowngrad(?:e|ing)\b|降級/iu.test(text)) ||
+    (minecraft && version && /\b(?:mismatch|incompatible|encryption|can't connect|cannot connect)\b|不相容|不匹配|加密|無法連線/iu.test(text));
+}
+
 // Route clear incident and record lookups. The model routes less explicit follow-ups
 // using the same tools and ticket history; these patterns never select a resource.
 function requiredAccountReads(prompt: string): ReadTool[] {
@@ -177,7 +189,19 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             ? symptomCue && Value.Check(KnowledgeSearchRequestSchema, expandedSearch)
               ? expandedSearch : { query: originalQuery, limit: 8 }
             : input;
-          const result = await call("v1/me/knowledge/search", searchInput, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+          const search = async (request: unknown) => {
+            if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
+            return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+          };
+          const [result, focused] = await Promise.all([
+            search(searchInput),
+            options.semanticRelevance && hasDowngradeSymptom(prompt)
+              ? search(DOWNGRADE_SEARCH).catch(() => undefined)
+              : undefined
+          ]);
+          // The symptom licenses one passage from this specific article even
+          // when its similarity to the network-heavy original prompt is low.
+          const downgrade = focused?.matches.find(match => match.source === DOWNGRADE_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -191,13 +215,19 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
+          if (downgrade) {
+            admitted = [downgrade, ...admitted.filter(match => citation(match) !== citation(downgrade))].slice(0, 8);
+          }
           if (admitted.length) {
             const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
             admitted = [...admitted, ...companions];
           }
+          if (downgrade) {
+            admitted = [...new Map(admitted.map(match => [citation(match), match])).values()].slice(0, 8);
+          }
           // Recognize provenance only from the retrieved KB's source header, not
           // from the customer query or history. Apply it to sections of that article.
-          const confirmed = new Set(result.matches
+          const confirmed = new Set((downgrade ? [...result.matches, downgrade] : result.matches)
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
           admitted.sort((a, b) => {

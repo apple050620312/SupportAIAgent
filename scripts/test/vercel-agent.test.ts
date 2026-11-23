@@ -61,6 +61,39 @@ describe("Vercel read-only agent", () => {
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
   });
 
+  it.each([false, true])("admits one focused downgrade passage within eight results (already present: %s)", async (duplicate) => {
+    const source = "practice/advanced/version-downgrade.md";
+    const downgrade = {
+      articleRef: `kb:${"b".repeat(64)}`, source, title: "Downgrade", heading: "Downgrade",
+      startLine: 1, endLine: 12, excerpt: "Synthetic downgrade excerpt for checking evidence admission."
+    };
+    const network = Array.from({ length: 8 }, (_, i) => ({
+      articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/network.md", title: "Network", heading: "Connection",
+      startLine: i + 1, endLine: i + 1, excerpt: `Synthetic network passage ${i}.`
+    }));
+    const search = vi.fn(({ limit }: { limit?: number }) => Promise.resolve({
+      trust: "reference_only" as const,
+      matches: limit === 3 ? [network[0]!, downgrade] : duplicate ? [downgrade, ...network.slice(0, 7)] : network
+    }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const cite = `[${source}:1-12]`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "connection" }), mockText(`${downgrade.excerpt} ${cite} Check the support documentation.`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: (_: string, match: { source: string }) => Promise.resolve(match.source === source && !duplicate ? 0.2 : 0.7) };
+    const prompt = "Minecraft 的 Paper 版本相同，但連線卡在加密中。";
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls.map(([query]) => query.limit).sort()).toEqual([3, 8]);
+    const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
+    const content = message?.content[0];
+    if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
+    const { matches } = content.output.value as { matches: { requiredQuote: string }[] };
+    expect(matches).toHaveLength(8);
+    expect(matches.filter(match => match.requiredQuote.endsWith(cite))).toHaveLength(1);
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
+  });
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";
