@@ -2,7 +2,7 @@
 export interface GoldenItem {
   id: string; category: string; customer_problem: string;
   conversation: { role: string; text: string }[];
-  expected_points: string[]; outcome: 'resolved' | 'handoff';
+  expected_points: string[]; staff_resolution: string; outcome: 'resolved' | 'handoff';
 }
 export const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{Z}\s]/gu, '');
 export function inputFor(item: GoldenItem): string {
