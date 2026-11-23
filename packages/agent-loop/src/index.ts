@@ -22,6 +22,7 @@ For questions answerable from documentation or the customer's account state, fir
 For an ordered procedure, identify the matching article and gather the relevant sections before drafting. Make a checklist of the prerequisites, each action in source order, any timing or data-loss warnings, and the verification or follow-up. Enumerate every supported step in the answer, including steps in different panel screens or sections of the same article. Cite the passages that support the instructions. State which step is unknown if a sequence is incomplete.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
 For account-state questions, call the relevant own-resource read before drafting: invoice for the customer's billing status, server status for current operation or suspension questions, and redacted logs as well as status for a reported power or startup error. Report what the backend returned, including the exact relevant timestamp and status when present. If a timestamp or status is unavailable, identify the missing field and separate that limitation from any documented policy you can explain. Give a concrete verification step, such as retrying the connection and asking the customer to confirm whether service is restored. Do not use generic Discord routing in place of these steps. Never claim a write, fix or restart happened; there are no write tools.
+For current policy, prefer relevant passages marked owner_confirmed and use other relevant current KB passages where they agree or fill a gap. Apply the availability check above to that current policy. Ticket history, including older staff answers, is context only. If historical ticket text conflicts with current KB policy, answer from the current KB and add a separate line POLICY_CONFLICT_FOR_REVIEW immediately before the optional STAFF_HANDOFF line. Do not treat historical answers as policy.
 Treat previous answers as unverified context; retrieve evidence afresh each turn. Stop after answering. Never expose credentials.`;
 
 type ReadTool = typeof READ_ONLY_TOOLS[number];
@@ -118,7 +119,13 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
             evidence = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else evidence = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
           if (!evidence.length) handoff = true;
-          return { ...result, matches: evidence.map(match => ({ ...match, requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
+          // Recognize provenance only from the retrieved KB's source header, not
+          // from the customer query or history. Apply it to sections of that article.
+          const confirmed = new Set(result.matches
+            .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
+            .map(match => match.articleRef));
+          evidence.sort((a, b) => Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef)));
+          return { ...result, matches: evidence.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
         }),
         get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
@@ -154,9 +161,14 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         if (requestedHandoff) reply = reply.replace(/(?:^|\n)STAFF_HANDOFF$/, "").trimEnd();
         // A cap, invalid tool, tool error or uncited/unsupported answer is never presented as a resolution.
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
+        const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
+        if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
         const grounded = searched && evidence.some(match => reply.includes(`${match.excerpt} ${citation(match)}`));
         const acceptable = requiredReads.every(name => attempted.has(name)) && grounded && !!reply && result.finishReason === "stop" && !invalidTool;
-        if (acceptable) supportedPartial = reply;
+        if (acceptable) {
+          supportedPartial = reply;
+          if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
+        }
         handoff ||= failed || !acceptable || requestedHandoff;
       } catch { handoff = true; }
       if (handoff) {
