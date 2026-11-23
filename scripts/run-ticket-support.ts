@@ -10,7 +10,7 @@ import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCor
 import { createShadowVerdictRecorder } from "./lib/shadow-verdict-log.js";
 import { openDiscordShadowThread } from "./lib/discord-shadow.js";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
-import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
+import { prepareTicketSupport, shadowAutoAdmissionEnabled, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
 import { privateDiscordAudit } from "./lib/discord-support-audit.js";
 import { MarkdownKnowledgeProvider } from "../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
 import { SupportKnowledgeService } from "../apps/support-core/dist/src/services/support-knowledge-service.js";
@@ -19,8 +19,9 @@ import { SupportKnowledgeService } from "../apps/support-core/dist/src/services/
 async function main() {
   // Capture before baseline src/index.js replaces process.env with its own config.
   const environment = { ...process.env };
-  if (!environment.SHADOW_TICKET_CHANNEL_IDS?.trim()) {
-    console.log("Ticket shadow mode is disabled because the channel allowlist is empty");
+  const autoAdmit = shadowAutoAdmissionEnabled(environment);
+  if (!autoAdmit && !environment.SHADOW_TICKET_CHANNEL_IDS?.trim()) {
+    console.log("Ticket shadow mode is disabled: auto-admission is off and the channel allowlist is empty");
     return;
   }
   const setup = prepareTicketSupport(environment, fetch, true);
@@ -71,16 +72,19 @@ async function main() {
       authenticate({ sessionId, ticketToken }) {
         const scope = setup.tokens.verify(ticketToken);
         if (scope.guildId !== setup.guildId || scope.channelId !== sessionId ||
-            !setup.channelIds.has(scope.channelId)) throw new TicketBridgeError();
-        return Promise.resolve({ scope, selectedServiceRef: null, async assertCurrent() {
+            (setup.channelIds.size > 0 && !setup.channelIds.has(scope.channelId))) throw new TicketBridgeError();
+        const assertCurrent = async () => {
           setup.tokens.verify(ticketToken);
           if ((await bridge.read(scope))?.state !== "AI_ACTIVE") throw new TicketBridgeError();
-        } });
+        };
+        return assertCurrent().then(() => ({ scope, selectedServiceRef: null, assertCurrent }));
       }
     });
     const tickets = new DiscordTicketSupport(reader, adapter, bridge, runner, setup.staff, audit, {
       shadow: {
         channelIds: setup.channelIds,
+        ...(autoAdmit ? { autoAdmitGuildId: setup.guildId } : {}),
+        ...(setup.auditChannelId ? { excludedChannelId: setup.auditChannelId } : {}),
         openThread: (scope) => openDiscordShadowThread(id => client.channels.fetch(id, { force: true }),
           scope, setup.staff, client.user?.id ?? ""),
         recordVerdict: createShadowVerdictRecorder(shadowRoot)
@@ -93,8 +97,8 @@ async function main() {
         restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: false }) }
     } });
     await app.listen({ host: "127.0.0.1", port: setup.port });
-    for (const channelId of setup.channelIds) await tickets.enableChannel(setup.guildId, channelId);
     detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
+    for (const channelId of setup.channelIds) await tickets.enableChannel(setup.guildId, channelId);
     console.log("Ticket support ready in draft-only shadow mode");
     const stop = () => { detach(); restore(); void app?.close().finally(() => process.exit(0)); };
     process.once("SIGINT", stop); process.once("SIGTERM", stop);
