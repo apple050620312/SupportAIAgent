@@ -82,6 +82,24 @@ describe("Vercel read-only agent", () => {
     expect(answerCompletenessCheck(draft, "status", [{ excerpt: "Check the result.", source: "synthetic/a.md", startLine: 1, endLine: 1 }] as never)).toBe(false);
   });
 
+  it("rejects a GS-023-style draft that cites only one of many admitted passages", () => {
+    const evidence = Array.from({ length: 26 }, (_, index) => ({
+      excerpt: `Documented step ${index + 1}: check the setting and continue.`,
+      source: "debug/connection.md", startLine: index + 1, endLine: index + 1
+    }));
+    const draft = `${evidence[0]!.excerpt} [debug/connection.md:1-1] Check the result and retry.`;
+    expect(answerCompletenessCheck(draft, "DNS connection", evidence as never)).toBe(false);
+  });
+
+  it("accepts a draft reflecting most distinct admitted passages", () => {
+    const evidence = Array.from({ length: 10 }, (_, index) => ({
+      excerpt: `Documented step ${index + 1}: check the setting and continue.`,
+      source: "synthetic/procedure.md", startLine: index + 1, endLine: index + 1
+    }));
+    const draft = evidence.slice(0, 8).map((entry, index) => `${entry.excerpt} [synthetic/procedure.md:${index + 1}-${index + 1}]`).join(" ") + " Check the result and retry.";
+    expect(answerCompletenessCheck(draft, "procedure", evidence as never)).toBe(true);
+  });
+
   it("exposes only four matrix T0 reads and cites the exact retrieved KB passage", async () => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });

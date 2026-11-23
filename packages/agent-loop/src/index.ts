@@ -103,10 +103,16 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
   const answerText = normalizeCoverageText(text);
   const actionable = /(?:click|select|enter|set|open|check|query|confirm|retry|install|restart|use|connect|設定|選擇|輸入|開啟|檢查|重試|安裝|重啟|連線|請先|需要)/iu.test(text);
   const citedEvidence = evidence.some(match => answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)));
+  const distinctEvidence = [...new Map(evidence.map(match => [citation(match), match])).values()];
+  const reflectedEvidence = distinctEvidence.filter(match =>
+    answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)) ||
+    text.includes(citation(match))
+  ).length;
+  const reflectionRatio = distinctEvidence.length ? reflectedEvidence / distinctEvidence.length : 0;
   const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
   const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
-  return actionable && citedEvidence && downgradeCovered;
+  return actionable && citedEvidence && downgradeCovered && reflectionRatio >= 0.2;
 }
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
