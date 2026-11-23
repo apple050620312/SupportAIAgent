@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, inspectCitationGate, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
 export type CitationGateRepair = {
@@ -392,16 +392,20 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
-        citationGate = evaluateCitationGate(reply, evidence, clean);
+        const inspection = inspectCitationGate(reply, evidence, clean);
+        citationGate = inspection.gate;
         if (citationGate.status === "failed") {
           // Remove one wrapper level, preserving Markdown markers in the source excerpt.
           const unwrapped = reply.replace(/^[ \t]*>[ \t]?/gm, "");
-          if (unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation")) {
-            const after = evaluateCitationGate(unwrapped, evidence, clean);
+          const canUnwrap = unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation");
+          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : null);
+          if (candidate !== null) {
+            const repairedDraft = clean(candidate);
+            const after = evaluateCitationGate(repairedDraft, evidence, clean);
             const repaired = after.status === "passed";
             citationGateRepair = { attempted: true, repaired, before: citationGate, after };
             if (repaired) {
-              reply = unwrapped;
+              reply = repairedDraft;
               citationGate = after;
             }
           }

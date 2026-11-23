@@ -303,12 +303,12 @@ describe("Vercel read-only agent", () => {
       });
     });
 
-    async function runDraft(draft: string, statusExcerpt = other, prompt = "status") {
+    async function runDraft(draft: string, statusExcerpt = other, prompt = "status", additionalEvidence: (typeof velocity)[] = []) {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
           { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
           { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt },
-          velocity
+          velocity, ...additionalEvidence
         ] }),
         read: () => Promise.resolve(null)
       });
@@ -387,8 +387,69 @@ describe("Vercel read-only agent", () => {
       expect(result.reply).toContain(other);
     });
 
+    it("adds the admitted citation to a standalone exact quote", async () => {
+      const draft = long.replaceAll("\n", "\r\n");
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({
+        reply: `${draft} ${first}`,
+        citationGate: { status: "passed", matched: [first], failures: [] },
+        citationGateRepair: {
+          attempted: true, repaired: true,
+          before: { status: "failed", matched: [], failures: [{ citation: first, reason: "missing_citation" }] },
+          after: { status: "passed", matched: [first], failures: [] }
+        }
+      });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("leaves missing citations unrepaired when an unknown citation also blocks delivery", async () => {
+      const unknown = "[invented.md:3-5]";
+      const { result, state } = await runDraft(`${long} ${first}\n\n${other}\n\nCheck the dashboard. ${unknown}`);
+      expect(result).toMatchObject({
+        citationGate: {
+          status: "failed", matched: [first],
+          failures: [{ citation: unknown, reason: "unknown_citation" }, { citation: second, reason: "missing_citation" }]
+        },
+        citationGateRepair: { attempted: false, repaired: false, before: null, after: null }
+      });
+      expect(state).toBe("HUMAN_NEEDED");
+    });
+
+    it("repairs three GS-108 startup quotes alongside a grounded nojar quote and wrong lines", async () => {
+      const nojar = {
+        articleRef: `kb:${"1".repeat(64)}`, source: "debug/nojar.md",
+        title: "Missing JAR", heading: "Check the JAR", startLine: 31, endLine: 38,
+        excerpt: "Open the file manager and check the exact name of the server JAR."
+      };
+      const startup = ["Select the runtime.", "Enter the JAR filename.", "Restart the server and check the console."].map((action, index) => ({
+        articleRef: `kb:${"2".repeat(64)}`, source: "panel/config/startup.md", title: "Startup",
+        heading: `Step ${index + 1}`, startLine: 10 + index * 4, endLine: 13 + index * 4,
+        excerpt: `## Step ${index + 1}\n${action}`
+      }));
+      const labels = startup.map(match => `[${match.source}:${match.startLine}-${match.endLine}]`);
+      const grounded = "[debug/nojar.md:31-38]";
+      const wrong = { citation: "[panel/config/startup.md:10-25]", reason: "wrong_lines" };
+      const prefix = `${nojar.excerpt} ${grounded}\n\nCheck the startup settings. ${wrong.citation}`;
+      const draft = [prefix, ...startup.map(match => match.excerpt)].join("\n\n");
+      const { result, state } = await runDraft(draft, other, "How do I fix the JAR filename?", [nojar, ...startup]);
+      const passed = { status: "passed", matched: [grounded, ...labels], failures: [wrong] };
+      expect(result).toMatchObject({
+        reply: [prefix, ...startup.map((match, index) => `${match.excerpt} ${labels[index]}`)].join("\n\n"),
+        citationGate: passed,
+        citationGateRepair: {
+          attempted: true, repaired: true,
+          before: { status: "failed", matched: [grounded] },
+          after: passed
+        }
+      });
+      const failures = result.citationGateRepair.before?.failures ?? [];
+      expect(failures).toHaveLength(4);
+      expect(failures).toContainEqual(wrong);
+      for (const citation of labels) expect(failures).toContainEqual({ citation, reason: "missing_citation" });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
     it.each([
-      ["missing_citation", other, second],
       ["unknown_citation", `${wrapQuote(other)} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
@@ -509,7 +570,7 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls).toHaveLength(2);
   });
 
-  it.each([DEMO_ANSWER.slice(0, DEMO_ANSWER.indexOf(" [")), "Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
+  it.each(["Query status and verify the result with the customer.", "Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(answer)] });
     expect((await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal)).reply).toContain("I don't know");
