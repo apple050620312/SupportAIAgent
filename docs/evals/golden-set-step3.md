@@ -1,5 +1,11 @@
 # Golden set: Vercel loop, step 5
 
+For the current harness metric and answerability rules, see
+[Golden eval semantic scoring](golden-semantic-scoring.md). The results below
+are historical. Step 10 reviewed 38 delivered answers, so its counts use a
+different denominator from the current overall metric.
+
+
 ## Completed run
 
 Full live run, 175/175 executed: **0/154 (0.0%) resolved-correct; 20/21 (95.2%) handoff-correct; 0 partial; 155/175 wrong**. Offline resolution proxy: 0. Smoke (10): 0/9 (0.0%) resolved-correct; 1/1 (100.0%) handoff-correct; 0 partial; 9/10 wrong. Scores measure **loop + published-docs KB (unreviewed as agent answers)**. The static set cannot establish seven-day true resolution, no reopen, or semantic correctness. Scoring still requires every normalized expected point as a whole substring; the KB was never populated from expected points, staff answers, or resolution summaries.
