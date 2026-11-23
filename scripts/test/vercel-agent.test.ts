@@ -24,7 +24,7 @@ describe("Vercel read-only agent", () => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
     const result = await demoRunner(harness, root, model).run(request, signal);
-    expect(result.reply).toBe(DEMO_ANSWER);
+    expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(JSON.stringify(DEMO_ANSWER).slice(1, -1));
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
     expect(harness.providerCalls.some((path) => path.endsWith("/power"))).toBe(false);
@@ -40,11 +40,11 @@ describe("Vercel read-only agent", () => {
     const other = "Check the status in the panel.";
     const second = "[synthetic/status.md:3-5]";
 
-    async function runDraft(draft: string) {
+    async function runDraft(draft: string, statusExcerpt = other) {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
           { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
-          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: other }
+          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt }
         ] }),
         read: () => Promise.resolve(null)
       });
@@ -52,6 +52,16 @@ describe("Vercel read-only agent", () => {
       const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal);
       return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
     }
+
+    it("hands off a cited draft that gives no action", async () => {
+      const excerpt = "The panel displays the current status.";
+      const draft = `${excerpt} ${second} The status indicator reflects the current state of the server.`;
+      const { result, state } = await runDraft(draft, excerpt);
+      expect(result).toMatchObject({ answerComplete: false, citationGate: { status: "passed" } });
+      expect(result.reply).toContain("I've handed this to support staff.");
+      expect(result.reply).not.toContain(draft);
+      expect(state).toBe("HUMAN_NEEDED");
+    });
 
     it("passes a full 83-line quote with CRLF and a second exact citation", async () => {
       expect(long.split("\n")).toHaveLength(83);
@@ -62,7 +72,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it("records a truncated 83-line quote on handoff even when another citation is exact", async () => {
-      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second}\nSTAFF_HANDOFF`);
+      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`);
       expect(state).toBe("HUMAN_NEEDED");
       expect(result).toMatchObject({ citationGate: {
         status: "passed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
@@ -91,7 +101,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it("reports a gate pass when a grounded draft still asks for handoff", async () => {
-      const { result, state } = await runDraft(`${other} ${second}\nSTAFF_HANDOFF`);
+      const { result, state } = await runDraft(`${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`);
       expect(state).toBe("HUMAN_NEEDED");
       expect(result).toMatchObject({ citationGate: { status: "passed", grounded: true, matched: [second], failures: [] } });
       expect(result.reply).toContain(other);

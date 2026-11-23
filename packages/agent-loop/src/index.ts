@@ -101,7 +101,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -238,6 +238,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       });
       let reply = "";
       let supportedPartial = "";
+      let answerComplete: boolean | null = null;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       try {
         // sub2api may create Responses with store=false regardless of the requested
@@ -253,7 +254,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
         citationGate = evaluateCitationGate(reply, evidence, clean);
-        const acceptable = requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
+        answerComplete = answerCompletenessCheck(reply, prompt, evidence);
+        const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         if (acceptable && reply.length <= 5800) {
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
@@ -266,7 +268,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate };
+        return { reply: checkpoint, citationGate, answerComplete };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -285,7 +287,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate };
+      return { reply, citationGate, answerComplete };
     });
   } };
 }
