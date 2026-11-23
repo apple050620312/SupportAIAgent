@@ -1,7 +1,7 @@
 import { ToolLoopAgent, jsonSchema, stepCountIs, tool, type LanguageModel, type ToolSet } from "ai";
 import { Value } from "@sinclair/typebox/value";
 import {
-  EmptyToolInputSchema, HostingToolContracts, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema,
+  EmptyToolInputSchema, HostingToolContracts, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema, KnowledgeReadResponseSchema,
   OwnInvoiceSchema, RedactedServerLogsSchema, type KnowledgeSearchResponse, type OwnInvoice, type ServerStatus
 } from "@support-ai-agent/contracts";
 import type { TSchema } from "@sinclair/typebox";
@@ -55,6 +55,30 @@ export function retrievalConfidence(query: string, passage: string): number {
 }
 export function citation(match: KnowledgeSearchResponse["matches"][number]): string {
   return `[${match.source}:${match.startLine}-${match.endLine}]`;
+}
+
+/** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
+export async function coRetrieveCompanions(
+  admitted: KnowledgeSearchResponse["matches"],
+  read: (request: { articleRef: string; startLine: number; maxLines: number }) => Promise<unknown>
+): Promise<KnowledgeSearchResponse["matches"]> {
+  const companions: KnowledgeSearchResponse["matches"] = [];
+  for (const match of admitted) {
+    const raw = await read({ articleRef: match.articleRef, startLine: 1, maxLines: 120 }).catch(() => null);
+    if (!raw || !Value.Check(KnowledgeReadResponseSchema, raw)) continue;
+    const page = raw as { content: string; source: string; title: string; totalLines: number };
+    const lines = page.content.split("\n");
+    const headings = lines.map((line, index) => /^#{2,4}\s+\S/.test(line) ? index + 1 : 0).filter(Boolean);
+    const ranges = headings.map((start, index) => ({ start, end: (headings[index + 1] ?? page.totalLines + 1) - 1 }));
+    for (const range of ranges) {
+      if (range.start <= match.endLine && range.end >= match.startLine) continue;
+      if (range.start > match.endLine + 35 || range.end < match.startLine - 35) continue;
+      const excerpt = lines.slice(range.start - 1, range.end).join("\n").trim();
+      if (!excerpt || excerpt.length > 800) continue;
+      companions.push({ articleRef: match.articleRef, source: page.source, title: page.title, heading: lines[range.start - 1]!.replace(/^#{2,4}\s+/, ""), startLine: range.start, endLine: range.end, excerpt });
+    }
+  }
+  return companions;
 }
 export interface AgentRunnerOptions {
   model: LanguageModel;
@@ -148,6 +172,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
+          if (admitted.length) {
+            const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
+            admitted = [...admitted, ...companions];
+          }
           // Recognize provenance only from the retrieved KB's source header, not
           // from the customer query or history. Apply it to sections of that article.
           const confirmed = new Set(result.matches
