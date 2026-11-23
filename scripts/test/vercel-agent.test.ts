@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, hasAccountBlockerCue, retrievalConfidence, repairRequiredTaskDraft, createLiveModel } from "@support-ai-agent/agent-loop";
 import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
@@ -19,6 +19,36 @@ async function setup(knowledge?: Parameters<typeof createMockSupport>[1], reads?
   const request = { sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: "status" };
   return { root, harness, request, signal: new AbortController().signal };
 }
+
+describe("reinstall task coverage", () => {
+  const prompt = "我刪除全部資料會影響世界嗎？";
+  const excerpt = "請在設定頁面選擇重新安裝伺服器，完成後重新啟動伺服器。刪除全部伺服器資料會重置世界。";
+  const evidence = [{ excerpt, source: "panel/common/settings.md", startLine: 1, endLine: 1 }] as never;
+  const citation = "[panel/common/settings.md:1-1]";
+  const cleanEvidence = [{ excerpt: "請先檢查控制面板內的設定。", source: "panel/common/settings.md", startLine: 1, endLine: 1 }] as never;
+  const clean = `請先檢查控制面板內的設定。 ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。`;
+
+  it("rejects the preserve-only draft", () => {
+    expect(answerCompletenessCheck(`請先檢查控制面板內的設定。 ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。`, prompt, cleanEvidence)).toBe(false);
+  });
+
+  it("accepts a complete two-branch answer despite the negated preserve branch", () => {
+    const answer = `${excerpt} ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。若要重置，請在設定頁面選擇重新安裝伺服器，完成後重新啟動伺服器。刪除全部伺服器資料會重置世界。`;
+    expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
+  });
+
+  it("accepts the repaired reset sentence and still rejects clean evidence", () => {
+    const repaired = repairRequiredTaskDraft(`請在設定頁面選擇重新安裝伺服器，完成後重新啟動伺服器。 ${citation} 請依照設定頁面處理資料。`, prompt, evidence);
+    expect(repaired).toContain("世界已被重置");
+    expect(answerCompletenessCheck(repaired, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(clean, prompt, cleanEvidence)).toBe(false);
+  });
+
+  it("withholds the final answer when clean evidence cannot ground reset", () => {
+    const finalAnswer = `請在設定頁面選擇重新安裝伺服器，完成後重新啟動伺服器。 ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。`;
+    expect(answerCompletenessCheck(finalAnswer, prompt, cleanEvidence)).toBe(false);
+  });
+});
 
 describe("hasAccountBlockerCue", () => {
   it.each([

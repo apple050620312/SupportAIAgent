@@ -133,13 +133,22 @@ function normalizeCoverageText(value: string): string {
     .trim();
 }
 
+function hasUnnegatedMention(text: string, mention: RegExp, negation: RegExp): boolean {
+  return [...text.matchAll(mention)].some(match => {
+    const start = match.index ?? 0;
+    return !negation.test(text.slice(Math.max(0, start - 12), start));
+  });
+}
+
+const WORLD_RESET_PATTERN = /世界.{0,16}(?:重製|重置)|(?:重製|重置).{0,8}世界|reset.{0,16}world|world.{0,20}reset/iu;
+
 function requiredTaskCoverage(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
   const sources = new Set(evidence.map(match => match.source));
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) {
-    const positiveInstall = /(?:設定|设置|選擇|选择|select|click).{0,24}(?:重新安裝|重新安装|reinstall)/iu.test(text) && !/(?:先別|不要|勿|不必|do not|don.t).{0,12}(?:重新安裝|重新安装|reinstall)/iu.test(text);
-    const positiveRestart = !/(?:先別|不要|勿|不必|do not|don.t|先不).{0,12}(?:重啟|重新啟動|再開機|restart)/iu.test(text) && /重啟|重新啟動|再開機|restart/iu.test(text);
-    const worldCovered = /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(text);
+    const positiveInstall = hasUnnegatedMention(text, /(?:設定|设置|選擇|选择|select|click).{0,24}(?:重新安裝|重新安装|reinstall)/giu, /(?:先別|不要|勿|不必|do not|don.t)/iu);
+    const positiveRestart = hasUnnegatedMention(text, /重啟|重新啟動|再開機|restart/giu, /(?:先別|不要|勿|不必|do not|don.t|先不)/iu);
+    const worldCovered = WORLD_RESET_PATTERN.test(text);
     if (!positiveInstall || !positiveRestart || !worldCovered) return false;
   }
   if (sources.has(SUPPORT_FLOW_SOURCE) && hasSupportFlowSymptom(prompt) &&
@@ -165,7 +174,7 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
-function repairRequiredTaskDraft(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): string {
+export function repairRequiredTaskDraft(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): string {
   let repaired = answer;
   const normalized = normalizeCoverageText(repaired);
   const append = (text: string, match: KnowledgeSearchResponse["matches"][number]) => {
@@ -176,7 +185,7 @@ function repairRequiredTaskDraft(answer: string, prompt: string, evidence: Knowl
     const positiveReset = /(?:重新安裝|重新安装|reinstall).{0,40}(?:重啟|重新啟動|再開機|restart)/iu.test(normalized);
     const supportsReset = /重新安裝|重新安装|reinstall/iu.test(reinstall.excerpt) && /重啟|重新啟動|再開機|restart/iu.test(reinstall.excerpt);
     if (!positiveReset && supportsReset) append("請在設定頁面選擇「重新安裝伺服器」，完成後重新啟動伺服器。", reinstall);
-    if (!/世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world/iu.test(reinstall.excerpt)) append("刪除全部伺服器資料會重置世界。", reinstall);
+    if (!WORLD_RESET_PATTERN.test(normalized) && WORLD_RESET_PATTERN.test(reinstall.excerpt)) append("刪除全部伺服器資料會讓世界已被重置。", reinstall);
   }
   const start = evidence.find(match => match.source === "panel/start-server.md");
   if (start && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
