@@ -1,7 +1,7 @@
 # Step 12 diagnosis 2: delivered drafts remain wrong
 
-Date: 2026-11-23  
-Checkpoint: `eval-results/golden-2026-11-23T13-06-46-542Z-13.json`  
+Date: 2026-11-23
+Checkpoint: `eval-results/golden-2026-11-23T13-06-46-542Z-13.json`
 Scope: the 13 docs-answerable items in clean rerun 5
 
 ## Finding
@@ -57,6 +57,6 @@ The dominant problem is answer production and lifecycle control. The loop freque
 3. **Improve evidence selection and contradiction handling.** Prefer passages that directly answer the customer’s symptom and apply current restriction/availability passages before adjacent tutorials. Resolve GS-084 and GS-053 with a staff decision before changing the KB. Verify each item independently.
 4. **Separate content verdict from lifecycle handoff in evaluation output.** Score every handoff draft with the same semantic rubric and retain the lifecycle result. This makes useful handoffs visible and prevents a generic fallback from hiding the preceding draft’s quality.
 5. **Tighten citation validation around claim support.** Keep the relaxed exact-pair gate as an instrumentation signal, then add a claim-to-citation support check for the main procedural sentence. Verify that this changes only grounding diagnostics on GS-023, GS-030, GS-053, GS-084, GS-140, and GS-163.
-6. **Defer the gpt-5.4-mini comparison.** The checkpoint does not show that gpt-6.1-sol is the bottleneck. The dominant defects are handoff policy, answer completion, evidence selection, and unresolved KB/reference conflicts. A model comparison becomes informative after fixes 1–4 produce a stable delivered-draft baseline.
+6. **Defer the gpt-6-luna comparison.** The checkpoint does not show that gpt-6.1-sol is the bottleneck. The dominant defects are handoff policy, answer completion, evidence selection, and unresolved KB/reference conflicts. A model comparison becomes informative after fixes 1–4 produce a stable delivered-draft baseline.
 
 No live traces were needed. The checkpoint and golden-set references were sufficient to classify all 13 items. No agent, KB, or harness code was changed.
