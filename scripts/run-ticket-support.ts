@@ -97,8 +97,8 @@ async function main() {
         restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: false }) }
     } });
     await app.listen({ host: "127.0.0.1", port: setup.port });
-    detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
     for (const channelId of setup.channelIds) await tickets.enableChannel(setup.guildId, channelId);
+    detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
     console.log("Ticket support ready in draft-only shadow mode");
     const stop = () => { detach(); restore(); void app?.close().finally(() => process.exit(0)); };
     process.once("SIGINT", stop); process.once("SIGTERM", stop);
