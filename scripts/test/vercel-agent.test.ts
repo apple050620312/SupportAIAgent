@@ -203,6 +203,7 @@ describe("Vercel read-only agent", () => {
     expect(search).toHaveBeenCalled();
   });
 
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";

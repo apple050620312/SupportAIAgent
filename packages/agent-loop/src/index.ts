@@ -42,6 +42,12 @@ type ReadTool = typeof READ_ONLY_TOOLS[number];
 
 const DOWNGRADE_SOURCE = "practice/advanced/version-downgrade.md";
 const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 世界備份 version downgrade", limit: 3 };
+const REINSTALL_SOURCE = "panel/common/settings.md";
+const REINSTALL_SEARCH = { query: "重新安裝伺服器 設定 重裝 世界重製 reinstall server settings", limit: 3 };
+const SUPPORT_FLOW_SOURCE = "store/discord.md";
+const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
+const SFTP_SOURCE = "panel/common/sftp.md";
+const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
 
 function hasDowngradeSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
@@ -50,6 +56,23 @@ function hasDowngradeSymptom(prompt: string): boolean {
   return /降版/u.test(text) ||
     ((minecraft || version) && /\bdowngrad(?:e|ing)\b|降級/iu.test(text)) ||
     (minecraft && version && /\b(?:mismatch|incompatible|encryption|can't connect|cannot connect)\b|不相容|不匹配|加密|無法連線/iu.test(text));
+}
+
+function hasReinstallSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}(?:全部|全都)?刪除|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
+}
+
+function hasSupportFlowSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket/iu.test(text);
+}
+
+function hasSftpSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  const transfer = /上傳|傳不上去|upload|transfer/iu.test(text);
+  const qualifier = /資料夾|大檔案|壓縮|sftp|folder|large file|zip/iu.test(text);
+  return transfer && qualifier;
 }
 
 /** Detect account and panel blockers in the customer's current request. */
@@ -230,15 +253,27 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
             return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           };
-          const [result, focused] = await Promise.all([
+          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused] = await Promise.all([
             search(searchInput),
-            options.semanticRelevance && hasDowngradeSymptom(prompt)
+            hasDowngradeSymptom(prompt)
               ? search(DOWNGRADE_SEARCH).catch(() => undefined)
+              : undefined,
+            hasReinstallSymptom(prompt)
+              ? search(REINSTALL_SEARCH).catch(() => undefined)
+              : undefined,
+            hasSupportFlowSymptom(prompt)
+              ? search(SUPPORT_FLOW_SEARCH).catch(() => undefined)
+              : undefined,
+            hasSftpSymptom(prompt)
+              ? search(SFTP_SEARCH).catch(() => undefined)
               : undefined
           ]);
           // The symptom licenses one passage from this specific article even
           // when its similarity to the network-heavy original prompt is low.
           const downgrade = focused?.matches.find(match => match.source === DOWNGRADE_SOURCE);
+          const reinstall = reinstallFocused?.matches.find(match => match.source === REINSTALL_SOURCE);
+          const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
+          const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -252,8 +287,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          if (downgrade) {
-            admitted = [downgrade, ...admitted.filter(match => citation(match) !== citation(downgrade))].slice(0, 8);
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp]) {
+            if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
           // contains a downgrade symptom. Filter before companion retrieval so
@@ -261,6 +296,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (!hasDowngradeSymptom(prompt)) {
             admitted = admitted.filter(match => match.source !== DOWNGRADE_SOURCE);
           }
+          if (!hasReinstallSymptom(prompt)) admitted = admitted.filter(match => match.source !== REINSTALL_SOURCE);
+          if (!hasSupportFlowSymptom(prompt)) admitted = admitted.filter(match => match.source !== SUPPORT_FLOW_SOURCE);
+          if (!hasSftpSymptom(prompt)) admitted = admitted.filter(match => match.source !== SFTP_SOURCE);
           if (admitted.length) {
             const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
             admitted = [...admitted, ...companions];
