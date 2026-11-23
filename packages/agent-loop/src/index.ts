@@ -36,6 +36,7 @@ export function citation(match: KnowledgeSearchResponse["matches"][number]): str
 }
 export interface AgentRunnerOptions {
   model: LanguageModel;
+  draftOnly?: boolean;
   /** Host-supplied semantic relevance port; scores the original customer prompt, never model-selected text. */
   semanticRelevance?: { threshold: number; similarity(query: string, passage: KnowledgeSearchResponse["matches"][number]): Promise<number> };
 
@@ -45,7 +46,7 @@ export interface AgentRunnerOptions {
   authenticate(request: { sessionId: string; ticketToken: string }): Promise<TrustedAgentSession>;
 }
 
-/** Existing TicketAgentRunner interface; deliberately not installed into the live Discord launcher. */
+/** Shared read-only runner for evaluations and Discord shadow mode. */
 export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAgentRunner {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
@@ -130,10 +131,12 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
       } catch { handoff = true; }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
-        await call("v1/me/handoff", { summary: "Read-only assistant could not verify an answer.", reason: "Insufficient verified evidence or unavailable read tool", attemptedSteps: ["Attempted bounded read-only assistance"] }, HostingToolContracts.handoff_to_staff.output);
-        reply = /\p{Script=Han}/u.test(prompt)
-          ? "我不知道，現有資料不足以確認答案，已轉交人工客服。"
-          : "I don't know; I don't have enough verified information. I've handed this to support staff.";
+        if (!options.draftOnly) await call("v1/me/handoff", { summary: "Read-only assistant could not verify an answer.", reason: "Insufficient verified evidence or unavailable read tool", attemptedSteps: ["Attempted bounded read-only assistance"] }, HostingToolContracts.handoff_to_staff.output);
+        if (options.draftOnly) await session.assertCurrent();
+        const insufficientEvidence = /\p{Script=Han}/u.test(prompt)
+          ? ["我不知道，現有資料不足以確認答案，", "需要人工客服協助。", "已轉交人工客服。"]
+          : ["I don't know; I don't have enough verified information. ", "Support staff will need to review this.", "I've handed this to support staff."];
+        reply = insufficientEvidence[0]! + insufficientEvidence[options.draftOnly ? 1 : 2]!;
       } else {
         await session.assertCurrent();
       }

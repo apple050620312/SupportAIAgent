@@ -1,11 +1,13 @@
 import { createRequire } from "node:module";
 import { resolve, isAbsolute } from "node:path";
-import { readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { once } from "node:events";
 import {
   LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard, TicketBridge,
-  DiscordTicketSupport, attachTicketSupportEvents, type LegacyDiscordTransport
+  DiscordTicketSupport, attachTicketSupportEvents, TicketBridgeError
 } from "@support-ai-agent/ticket-bridge";
+import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from "@support-ai-agent/agent-loop";
+import { openDiscordShadowThread } from "./lib/discord-shadow.js";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
 import { privateDiscordAudit } from "./lib/discord-support-audit.js";
@@ -15,7 +17,17 @@ import { SupportKnowledgeService } from "../apps/support-core/dist/src/services/
 /** Manual launcher. Never imported by tests or default dev/start. */
 async function main() {
   // Capture before baseline src/index.js replaces process.env with its own config.
-  const setup = prepareTicketSupport({ ...process.env });
+  const environment = { ...process.env };
+  if (!environment.SHADOW_TICKET_CHANNEL_IDS?.trim()) {
+    console.log("Ticket shadow mode is disabled because the channel allowlist is empty");
+    return;
+  }
+  const setup = prepareTicketSupport(environment, fetch, true);
+  const shadowRoot = resolve(".ticket-shadow");
+  await mkdir(shadowRoot, { recursive: true, mode: 0o700 });
+  const append = (file: string, entry: unknown) =>
+    appendFile(resolve(shadowRoot, file), JSON.stringify(entry) + "\n", { mode: 0o600 });
+  const runnerModel = createLiveModel(environment);
   // Load only reviewed local documentation before importing the live baseline.
   const knowledgeProvider = new MarkdownKnowledgeProvider(setup.knowledgeRoot);
   try {
@@ -35,20 +47,12 @@ async function main() {
   type BaselineClient = {
     user: { id: string } | null;
     isReady(): boolean;
-    channels: { fetch(channelId: string): Promise<unknown> };
+    channels: { fetch(channelId: string, options?: { force: boolean }): Promise<unknown> };
     on(event: string, listener: (...args: never[]) => void): unknown;
     off(event: string, listener: (...args: never[]) => void): unknown;
     once(event: string, listener: (...args: never[]) => void): unknown;
   };
-  const discord: LegacyDiscordTransport = { async send(scope, text, options) {
-    const channel = await client.channels.fetch(scope.channelId);
-    if (!channel || typeof channel !== "object" || !("guildId" in channel) || channel.guildId !== scope.guildId ||
-        !("id" in channel) || channel.id !== scope.channelId || !("send" in channel) || typeof channel.send !== "function") {
-      throw new Error("Ticket channel unavailable");
-    }
-    await (Reflect.apply(channel.send, channel, [{ content: text, allowedMentions: options.allowedMentions }]) as Promise<unknown>);
-  } };
-  const adapter = new LegacyTicketAdapter(reader, discord);
+  const adapter = new LegacyTicketAdapter(reader, { send: () => Promise.reject(new TicketBridgeError()) });
   const restore = installLegacyMutationGuard(model, adapter);
   const bridge = new TicketBridge(adapter, adapter, setup.tokens);
   // Baseline uses relative paths for handlers/transcripts; leave its source files untouched.
@@ -60,14 +64,37 @@ async function main() {
     if (!client.isReady()) await once(client as never, "ready", { signal: AbortSignal.timeout(30_000) });
     const audit = setup.auditChannelId ? privateDiscordAudit(await client.channels.fetch(setup.auditChannelId),
       setup.guildId, setup.auditChannelId, setup.staff, client.user?.id ?? "", (code) => console.error(code)) : undefined;
-    const tickets = new DiscordTicketSupport(reader, adapter, bridge, setup.runner, setup.staff, audit, {
-      humanIdleMs: setup.humanIdleMs
+    const runner = createVercelTicketRunner({
+      model: runnerModel, draftOnly: true, history: new FileHistoryStore(resolve(shadowRoot, "history")),
+      core: new SupportCoreClient(`http://127.0.0.1:${setup.port}/`),
+      authenticate({ sessionId, ticketToken }) {
+        const scope = setup.tokens.verify(ticketToken);
+        if (scope.guildId !== setup.guildId || scope.channelId !== sessionId ||
+            !setup.channelIds.has(scope.channelId)) throw new TicketBridgeError();
+        return Promise.resolve({ scope, selectedServiceRef: null, async assertCurrent() {
+          setup.tokens.verify(ticketToken);
+          if ((await bridge.read(scope))?.state !== "AI_ACTIVE") throw new TicketBridgeError();
+        } });
+      }
     });
-    detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
-    app = buildApp({ readOnly: { support: setup.support, tokens: setup.tokens, tickets: bridge, knowledge, ...(audit ? { audit } : {}) } });
-    await tickets.enableChannel(setup.guildId, setup.channelId);
+    const tickets = new DiscordTicketSupport(reader, adapter, bridge, runner, setup.staff, audit, {
+      shadow: {
+        channelIds: setup.channelIds,
+        openThread: (scope) => openDiscordShadowThread(id => client.channels.fetch(id, { force: true }),
+          scope, setup.staff, client.user?.id ?? ""),
+        recordVerdict: (entry) => append("verdicts.jsonl", entry)
+      }
+    });
+    app = buildApp({ readOnly: {
+      support: setup.support, tokens: setup.tokens, tickets: bridge, knowledge, ...(audit ? { audit } : {}),
+      invocationAudit: { append: (entry) => append("core-invocations.jsonl", entry) },
+      permissions: { grants: () => Promise.resolve(["customer:read", "server:read", "invoice:read", "knowledge:read"]),
+        restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: false }) }
+    } });
     await app.listen({ host: "127.0.0.1", port: setup.port });
-    console.log("Ticket support ready for the explicitly configured test channel (OpenClaw 2026.9.8)");
+    for (const channelId of setup.channelIds) await tickets.enableChannel(setup.guildId, channelId);
+    detach = attachTicketSupportEvents(client, tickets, (code) => console.error(code));
+    console.log("Ticket support ready in draft-only shadow mode");
     const stop = () => { detach(); restore(); void app?.close().finally(() => process.exit(0)); };
     process.once("SIGINT", stop); process.once("SIGTERM", stop);
   } catch {

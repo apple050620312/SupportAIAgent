@@ -5,7 +5,7 @@ import type { TicketContextTokens } from "@support-ai-agent/trusted-context";
 export { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard } from "./legacy-ticket.js";
 export type { LegacyTicketReader, LegacyDiscordTransport } from "./legacy-ticket.js";
 export { DEFAULT_HUMAN_IDLE_MS, DiscordTicketSupport, attachTicketSupportEvents } from "./discord-ticket.js";
-export type { DiscordTicketSupportOptions, TicketAgentRunner, TicketCustomerMessage } from "./discord-ticket.js";
+export type { DiscordTicketSupportOptions, TicketAgentRunner, TicketCustomerMessage, ShadowMode, ShadowThread, ShadowVerdict } from "./discord-ticket.js";
 export { createOpenClawTicketRunner } from "./openclaw-runner.js";
 
 export interface TicketStore {

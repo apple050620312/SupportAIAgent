@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isCanonicalDiscordSnowflake, type TicketScope, type SupportAuditEvent } from "@support-ai-agent/contracts";
+import { isCanonicalDiscordSnowflake, type TicketScope, type TicketSnapshot, type SupportAuditEvent } from "@support-ai-agent/contracts";
 import type { AuditRecorder } from "./audit.js";
 import { TicketBridgeError, type LegacyTicketAdapter, type TicketBridge, type LegacyTicketReader } from "./index.js";
 
@@ -10,19 +10,33 @@ export interface TicketCustomerMessage {
 export interface TicketAgentRunner {
   run(request: { sessionId: string; ticketToken: string; prompt: string }, signal: AbortSignal): Promise<{ reply: string }>;
 }
+export type ShadowVerdict = "accepted-as-is" | "accepted-with-edits" | "rejected";
+export interface ShadowThread {
+  readonly id: string;
+  publish(draftId: string, text: string, assertCurrent: () => Promise<void>): Promise<() => Promise<void>>;
+}
+export interface ShadowMode {
+  readonly channelIds: ReadonlySet<string>;
+  openThread(scope: TicketScope): Promise<ShadowThread>;
+  recordVerdict(entry: { timestamp: string; channelId: string; verdict: ShadowVerdict; staffId: string }): Promise<void>;
+}
 export interface DiscordTicketSupportOptions {
+  readonly shadow?: ShadowMode;
   /** How long a customer follow-up waits after the latest staff activity. */
   readonly humanIdleMs?: number;
 }
 export const DEFAULT_HUMAN_IDLE_MS = 120_000;
 type Lease = { scope: TicketScope; sessionId: string; abort: AbortController; queued: number; tail: Promise<unknown>;
-  retired: boolean; lastStaffActivity: number };
+  retired: boolean; lastStaffActivity: number;
+  thread?: ShadowThread; drafts: Map<string, { snapshot: TicketSnapshot; discard: () => Promise<void> }> };
+type ReceiveResult = "ignored" | "sent" | "silenced" | "staff-takeover" | "drafted" | "reviewed";
 
 /** Bind to the unchanged bot's authenticated messageCreate stream. No fake actor headers. */
 export class DiscordTicketSupport {
   #leases = new Map<string, Lease>();
   #unsubscribe: () => void;
   #humanIdleMs: number;
+  #shadow: ShadowMode | undefined;
   constructor(private readonly tickets: LegacyTicketReader, private readonly adapter: LegacyTicketAdapter,
     private readonly bridge: TicketBridge, private readonly agent: TicketAgentRunner,
     private readonly staffUserIds: ReadonlySet<string>, private readonly audit?: AuditRecorder,
@@ -32,11 +46,51 @@ export class DiscordTicketSupport {
       throw new TicketBridgeError();
     }
     this.#humanIdleMs = humanIdleMs;
+    this.#shadow = options.shadow;
     this.#unsubscribe = adapter.onRetirement((channelId) => {
       const lease = this.#leases.get(channelId);
-      if (lease) { lease.retired = true; lease.abort.abort(); }
+      if (lease) { lease.retired = true; this.invalidate(lease); }
       this.record("ticket_retired", "success");
     });
+  }
+
+  private invalidate(lease: Lease): void {
+    lease.abort.abort();
+    for (const draft of lease.drafts.values()) {
+      void draft.discard().catch(() => this.record("agent_turn", "failed"));
+    }
+    lease.drafts.clear();
+  }
+
+  private async assertDraftCurrent(lease: Lease, snapshot: TicketSnapshot): Promise<void> {
+    const current = await this.bridge.read(lease.scope);
+    if (lease.abort.signal.aborted || this.#leases.get(lease.scope.channelId) !== lease ||
+        current?.state !== "AI_ACTIVE" || current.revision !== snapshot.revision) throw new TicketBridgeError();
+  }
+
+  private review(message: TicketCustomerMessage): Promise<ReceiveResult> {
+    const shadow = this.#shadow;
+    if (!shadow || !this.staffUserIds.has(message.author.id)) return Promise.resolve("ignored");
+    const lease = [...this.#leases.values()].find(candidate => candidate.thread?.id === message.channelId &&
+      candidate.scope.guildId === message.guildId && candidate.scope.discordUserId !== message.author.id);
+    const command = /^!draft ([0-9a-f-]{36}) (accept|edit|reject)(?:\s+([\s\S]+))?$/.exec(message.content.trim());
+    if (!lease || !command || (command[2] === "edit" ? !command[3]?.trim() : command[3] !== undefined)) {
+      return Promise.resolve("ignored");
+    }
+    // Resolve the exact draft once, even when two staff submit a verdict concurrently.
+    const next = lease.tail.then(async () => {
+      const draft = lease.drafts.get(command[1]!);
+      if (!draft) return "ignored" as const;
+      try { await this.assertDraftCurrent(lease, draft.snapshot); }
+      catch { return "silenced" as const; }
+      lease.drafts.delete(command[1]!);
+      const verdict = command[2] === "accept" ? "accepted-as-is" : command[2] === "edit" ? "accepted-with-edits" : "rejected";
+      await shadow.recordVerdict({ timestamp: new Date().toISOString(), channelId: lease.scope.channelId,
+        verdict, staffId: message.author.id });
+      return "reviewed" as const;
+    });
+    lease.tail = next.catch(() => undefined);
+    return next;
   }
 
   private record(operation: SupportAuditEvent["operation"], outcome: SupportAuditEvent["outcome"]): void {
@@ -46,6 +100,9 @@ export class DiscordTicketSupport {
 
   /** Explicit test-ticket admission. Owner comes from the legacy row, not caller input. */
   async enableChannel(guildId: string, channelId: string): Promise<void> {
+    if (this.#shadow && (!this.#shadow.channelIds.has(channelId) || this.#leases.has(channelId))) {
+      throw new TicketBridgeError();
+    }
     if (![guildId, channelId].every(isCanonicalDiscordSnowflake) ||
         (!this.#leases.has(channelId) && this.#leases.size >= 1000)) throw new TicketBridgeError();
     const row = await this.tickets.readByChannel(channelId);
@@ -56,31 +113,33 @@ export class DiscordTicketSupport {
     this.#leases.get(channelId)?.abort.abort();
     const scope = { guildId, channelId, discordUserId: data.userId };
     await this.adapter.enable(scope);
-    this.#leases.set(channelId, { scope, sessionId: randomUUID(), abort: new AbortController(), queued: 0,
-      tail: Promise.resolve(), retired: false, lastStaffActivity: 0 });
+    this.#leases.set(channelId, { scope, sessionId: this.#shadow ? channelId : randomUUID(), abort: new AbortController(), queued: 0,
+      tail: Promise.resolve(), retired: false, lastStaffActivity: 0, drafts: new Map() });
     this.record("ticket_admitted", "success");
   }
 
-  async receive(message: TicketCustomerMessage): Promise<"ignored" | "sent" | "silenced" | "staff-takeover"> {
+  async receive(message: TicketCustomerMessage): Promise<ReceiveResult> {
     const lease = this.#leases.get(message.channelId);
-    if (!lease || message.guildId !== lease.scope.guildId || message.author.bot ||
-        !isCanonicalDiscordSnowflake(message.author.id)) return "ignored";
-    if (message.author.id !== lease.scope.discordUserId) {
-      if (!this.staffUserIds.has(message.author.id)) return "ignored";
+    if (message.author.bot || !isCanonicalDiscordSnowflake(message.author.id)) return "ignored";
+    if (!lease) return this.review(message);
+    if (message.guildId !== lease.scope.guildId || lease.retired) return "ignored";
+    if (this.staffUserIds.has(message.author.id) && (this.#shadow || message.author.id !== lease.scope.discordUserId)) {
       // Abort before awaiting any state read. Customer generation does not hold the send gate.
-      lease.abort.abort();
+      this.invalidate(lease);
       lease.lastStaffActivity = Date.now();
       await this.bridge.humanTakeover(lease.scope);
       this.record("human_takeover", "success");
       return "staff-takeover";
     }
-    if (lease.retired || !message.content.trim() || message.content.length > 4000 || lease.queued >= 16) return "ignored";
+    if (message.author.id !== lease.scope.discordUserId || !message.content.trim() || message.content.length > 4000 || lease.queued >= 16) return "ignored";
     lease.queued++;
     const next = lease.tail.then(async () => {
       if (lease.retired || this.#leases.get(message.channelId) !== lease) return "silenced" as const;
+      if (this.#shadow && lease.abort.signal.aborted) return "silenced" as const;
       await this.bridge.customerMessage(lease.scope);
       let snapshot = await this.bridge.read(lease.scope);
       if (snapshot?.state === "HUMAN_ACTIVE") {
+        if (this.#shadow) return "silenced" as const;
         // A customer follow-up waits for a human response. Staff activity refreshes this deadline.
         while (!lease.retired) {
           const waitFor = Math.max(1, lease.lastStaffActivity + this.#humanIdleMs - Date.now());
@@ -95,12 +154,14 @@ export class DiscordTicketSupport {
       }
       if (!snapshot || snapshot.state !== "AI_ACTIVE") return "silenced" as const;
       const ticketToken = await this.bridge.contextForCustomer(lease.scope);
+      if (lease.abort.signal.aborted) return "silenced" as const;
       let response: { reply: string };
       try {
         response = await this.agent.run({ sessionId: lease.sessionId, ticketToken, prompt: message.content }, lease.abort.signal);
       } catch {
         this.record("agent_turn", lease.abort.signal.aborted ? "denied" : "failed");
         if (lease.abort.signal.aborted || this.#leases.get(message.channelId) !== lease) return "silenced" as const;
+        if (this.#shadow) return "silenced" as const;
         // No retries after an uncertain model/tool run. Stop proactive access and notify staff.
         await this.bridge.handoff(lease.scope, { summary: "AI 客服流程暫時無法完成", reason: "需要人工核對工具或 Harness 結果", attemptedSteps: [] });
         return "silenced" as const;
@@ -108,6 +169,23 @@ export class DiscordTicketSupport {
       if (typeof response.reply !== "string" || !response.reply.trim() || response.reply.length > 6000 ||
           response.reply.includes(ticketToken)) throw new TicketBridgeError();
       this.record("agent_turn", lease.abort.signal.aborted ? "denied" : "success");
+      if (this.#shadow) {
+        const draftSnapshot = snapshot;
+        const assertCurrent = () => this.assertDraftCurrent(lease, draftSnapshot);
+        const id = randomUUID();
+        try {
+          await assertCurrent();
+          lease.thread ??= await this.#shadow.openThread(lease.scope);
+          const discard = await lease.thread.publish(id, response.reply, assertCurrent);
+          try { await assertCurrent(); }
+          catch { await discard(); return "silenced" as const; }
+          lease.drafts.set(id, { snapshot, discard });
+          return "drafted" as const;
+        } catch (error) {
+          if (lease.abort.signal.aborted) return "silenced" as const;
+          throw error;
+        }
+      }
       let rest = response.reply;
       while (rest) {
         if (lease.abort.signal.aborted || this.#leases.get(message.channelId) !== lease) return "silenced" as const;
@@ -131,11 +209,11 @@ export class DiscordTicketSupport {
     const lease = this.#leases.get(channelId);
     if (!lease) return;
     lease.retired = true;
-    lease.abort.abort();
+    this.invalidate(lease);
     await this.bridge.close(lease.scope);
   }
 
-  dispose(): void { this.#unsubscribe(); for (const lease of this.#leases.values()) { lease.retired = true; lease.abort.abort(); } }
+  dispose(): void { this.#unsubscribe(); for (const lease of this.#leases.values()) { lease.retired = true; this.invalidate(lease); } }
 }
 
 /** Existing Discord client, no second login or bot token. Errors are static, never raw causes. */

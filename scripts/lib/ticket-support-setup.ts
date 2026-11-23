@@ -16,7 +16,7 @@ function value(environment: Readonly<Record<string, string | undefined>>, name: 
 }
 
 /** Validate every configuration before loading the baseline (which starts a live bot). */
-export function prepareTicketSupport(environment: Readonly<Record<string, string | undefined>>, fetchImpl: typeof fetch = fetch) {
+export function prepareTicketSupport(environment: Readonly<Record<string, string | undefined>>, fetchImpl: typeof fetch = fetch, shadow = false) {
   if (environment.TICKET_SUPPORT_ACK !== "I_HAVE_AUTHORIZATION" ||
       environment.TICKET_BASELINE_REVIEW_ACK !== "I_HAVE_REVIEWED_BASELINE_CONFIGURATION" ||
       environment.GETCLIENTID_REVIEW_ACK !== "I_HAVE_REVIEWED_IDENTITY_CONTRACT" ||
@@ -28,14 +28,17 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
   try { knowledgeRoot = supportKnowledgeRoot(environment); }
   catch { throw new TicketSupportSetupError("SUPPORT_KNOWLEDGE_ROOT must be an absolute folder path"); }
   const guildId = value(environment, "TEST_TICKET_GUILD_ID");
-  const channelId = value(environment, "TEST_TICKET_CHANNEL_ID");
+  // Leave empty by default. Add the owner's first 3–5 ticket channel IDs, comma separated.
+  const allowlist = environment.SHADOW_TICKET_CHANNEL_IDS?.trim();
+  const channelIds = shadow ? (allowlist ? allowlist.split(",").map(id => id.trim()) : [])
+    : [value(environment, "TEST_TICKET_CHANNEL_ID")];
   const staff = value(environment, "TICKET_STAFF_USER_IDS").split(",");
   const auditChannelId = environment.TICKET_AUDIT_CHANNEL_ID;
-  if (auditChannelId !== undefined && (!isCanonicalDiscordSnowflake(auditChannelId) ||
-      auditChannelId === channelId || environment.TICKET_AUDIT_REVIEW_ACK !== "I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL")) {
+  if (auditChannelId && (!isCanonicalDiscordSnowflake(auditChannelId) ||
+      channelIds.includes(auditChannelId) || environment.TICKET_AUDIT_REVIEW_ACK !== "I_HAVE_REVIEWED_STAFF_ONLY_CHANNEL")) {
     throw new TicketSupportSetupError("Audit requires a separate canonical channel ID and staff-only review acknowledgement");
   }
-  if (![guildId, channelId, ...staff].every(isCanonicalDiscordSnowflake)) {
+  if (![guildId, ...channelIds, ...staff].every(isCanonicalDiscordSnowflake)) {
     throw new TicketSupportSetupError("Ticket and staff IDs must be canonical snowflake strings");
   }
   const port = environment.SUPPORT_CORE_PORT ?? "3001";
@@ -56,10 +59,10 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
         clientApiKey: value(environment, "PTERODACTYL_CLIENT_API_KEY"), externalIdStrategy: "whmcs-service-id" }, fetchImpl);
     const support = new HostingSupportService({ identityResolver: identities,
       hostingServices: new WhmcsHostingServiceProvider(whmcsConfig, identities, fetchImpl),
-      gameServers: pterodactyl, gameServerFiles: pterodactyl, gameServerMutations: pterodactyl });
+      gameServers: pterodactyl, ...(!shadow ? { gameServerFiles: pterodactyl, gameServerMutations: pterodactyl } : {}) });
     const tokens = new TicketContextTokens(value(environment, "TICKET_CONTEXT_KEY"));
-    const runner = createOpenClawTicketRunner(value(environment, "OPENCLAW_BASE_URL"), value(environment, "OPENCLAW_GATEWAY_TOKEN"), fetchImpl);
-    return { root, knowledgeRoot, guildId, channelId, auditChannelId, staff: new Set(staff), port: Number(port), humanIdleMs: Number(humanIdleMs), support, tokens, runner };
+    const runner = shadow ? undefined : createOpenClawTicketRunner(value(environment, "OPENCLAW_BASE_URL"), value(environment, "OPENCLAW_GATEWAY_TOKEN"), fetchImpl);
+    return { root, knowledgeRoot, guildId, channelIds: new Set(channelIds), auditChannelId, staff: new Set(staff), port: Number(port), humanIdleMs: Number(humanIdleMs), support, tokens, runner };
   } catch (error: unknown) {
     if (error instanceof TicketSupportSetupError) throw error;
     throw new TicketSupportSetupError("Invalid provider, context key or OpenClaw configuration");
