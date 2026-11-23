@@ -11,7 +11,7 @@ import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-cor
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from './lib/golden-eval.js';
 import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, summarizeSemantic, type SemanticResult } from './lib/semantic-judge.js';
-import { classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
+import { answerabilityForItem, classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
 type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
@@ -38,9 +38,11 @@ if (args.resume !== undefined && (
 const source = await readFile(process.env.GOLDEN_SET_PATH ?? '/home/hatch/workspace/coffee-host-golden/golden_set.json', 'utf8');
 const parsed: unknown = JSON.parse(source);
 if (!Array.isArray(parsed) || !parsed.length || !parsed.every((item: GoldenItem) => item && typeof item.id === 'string' && typeof item.category === 'string' && typeof item.customer_problem === 'string' && Array.isArray(item.conversation) && item.conversation.every(m => m && typeof m.role === 'string' && typeof m.text === 'string') && typeof item.staff_resolution === 'string' && item.staff_resolution.trim() && Array.isArray(item.expected_points) && item.expected_points.length && item.expected_points.every(p => typeof p === 'string' && p.trim()) && ['resolved', 'handoff'].includes(item.outcome))) throw new Error('Invalid golden-set schema');
+const selectedIds = args.ids?.split(',') ?? checkpoint?.selectedIds;
+const selectedLimit = args.limit === undefined ? checkpoint?.selected : Number(args.limit);
 const items = selectGoldenItems(parsed as GoldenItem[], {
-  ids: args.ids?.split(',') ?? checkpoint?.selectedIds,
-  limit: args.limit === undefined ? checkpoint?.selected : Number(args.limit),
+  ...(selectedIds === undefined ? {} : { ids: selectedIds }),
+  ...(selectedLimit === undefined ? {} : { limit: selectedLimit }),
 });
 const datasetSha256 = createHash('sha256').update(source).digest('hex');
 const manifestSource = await readFile(process.env.GOLDEN_ANSWERABILITY_PATH ?? new URL('./lib/golden-answerability.json', import.meta.url), 'utf8');
@@ -174,7 +176,7 @@ if (blockers.length) {
         return { ...judgment, reason: scrub(judgment.reason) };
       });
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerability[index] ?? 'unclassified', lexical: score(item, answer, handedOff, error) };
+        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

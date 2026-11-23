@@ -18,8 +18,8 @@ The 13-item subset was run on 2026-11-23 with the Step 12 fixes, `gpt-6.1-sol` t
 | GS-163 | wrong | unscored |
 | GS-166 | wrong | wrong |
 
-The baseline subset totals were 0 correct, 2 partial, 10 wrong, and 1 unscored. The rerun totals were 0 correct, 0 partial, 11 wrong, and 2 unscored. Baseline handoff count was 7 of 13 and rerun handoff count was 11 of 13.
+The baseline subset totals were 0 correct, 2 partial, 10 wrong, and 1 unscored. The rerun totals were 0 correct, 0 partial, 11 wrong, and 2 unscored. Baseline handoff count was 8 of 13 and rerun handoff count was 10 of 13.
 
-None of the fixes visibly improved a scored item. GS-049 changed from partial to an unscored model-error result, and GS-094 changed from partial to wrong. GS-018 and GS-163 were unscored in the rerun, while the other items remained wrong. The rerun therefore shows no measurable docs-subset gain from these fixes.
+None of the fixes visibly improved a scored item. GS-049 changed from partial to an unscored model-error result, and GS-094 changed from partial to wrong. GS-049 and GS-163 were unscored in the rerun. GS-018 went from unscored to wrong. The rerun therefore shows no measurable docs-subset gain from these fixes.
 
-The run artifact is `eval-results/golden-2026-11-23T10-31-36-243Z-13.json`. Its answerability manifest currently classifies these selected IDs across needs-account-state and KB-gap groups, despite this subset being the predefined docs-answerable evaluation set.
+The run artifact is `eval-results/golden-2026-11-23T10-31-36-243Z-13.json`. Its row labels use positions within the subset instead of positions in the full dataset. All 13 items belong to the docs-answerable group.

@@ -1,12 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from '../lib/golden-eval.js';
 import { scoreSemantic, summarizeSemantic } from "../lib/semantic-judge.js";
+import { answerabilityForItem, classifyGolden } from '../lib/golden-answerability.js';
 const item: GoldenItem = { id: 'test', category: 'test', customer_problem: 'question', conversation: [{ role: 'customer', text: 'question' }, { role: 'customer', text: 'context' }, { role: 'staff', text: 'SECRET SOLUTION' }, { role: 'customer', text: 'later' }], expected_points: ['ＡＢＣ。', '第二點'], staff_resolution: 'reference', outcome: 'resolved' };
 describe('golden measurement', () => {
   it('selects requested IDs and rejects unknown IDs', () => {
     const items = [{ ...item, id: 'GS-002' }, { ...item, id: 'GS-001' }];
     expect(selectGoldenItems(items, { ids: ['GS-001'] }).map(row => row.id)).toEqual(['GS-001']);
     expect(() => selectGoldenItems(items, { ids: ['GS-999'] })).toThrow('Unknown golden ID(s): GS-999');
+  });
+  it('uses dataset positions for answerability in a reordered ID subset', () => {
+    const dataset = ['GS-001', 'GS-002', 'GS-003'].map(id => ({ ...item, id }));
+    const labels = classifyGolden({
+      datasetSha256: 'test-dataset',
+      groups: { 'docs-answerable': [2], 'needs-account-state': [1], 'kb-gap': [3] },
+    }, 'test-dataset', dataset.length);
+    const selected = selectGoldenItems(dataset, { ids: ['GS-003', 'GS-002'] });
+    expect(selected.map(item => [item.id, answerabilityForItem(item, dataset, labels)])).toEqual([
+      ['GS-003', 'kb-gap'],
+      ['GS-002', 'docs-answerable'],
+    ]);
   });
   it('never feeds staff answers or post-staff turns', () => expect(inputFor(item)).toBe('question\ncontext'));
   it('requires every whole point and refuses to credit handoff/error as resolution', () => {

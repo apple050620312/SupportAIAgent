@@ -22,6 +22,10 @@ export function classifyGolden(
   return labels;
 }
 
+export function answerabilityForItem<T>(item: T, dataset: readonly T[], labels: readonly Answerability[]): Answerability {
+  return labels[dataset.indexOf(item)] ?? 'unclassified';
+}
+
 export function summarizeAnswerability(rows: readonly { answerability: Answerability; semantic: SemanticResult }[]) {
   return Object.fromEntries(
     [...groups, 'unclassified'].map(group => [group, summarizeSemantic(rows.filter(row => row.answerability === group))]),
