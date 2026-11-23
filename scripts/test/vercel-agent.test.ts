@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
@@ -34,11 +35,109 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls[0]?.temperature).toBe(0.2);
   });
 
+  it("admits test-server evidence when symptom expansion exceeds Core's query limit", async () => {
+    const prompt = `連線到測試伺服器失敗\n${"測試訊息".repeat(61)}`;
+    const source = "practice/advanced/test-server.md";
+    const excerpt = "Synthetic test-server passage for checking citation admission.";
+    const search = vi.fn(() => Promise.resolve({ trust: "reference_only" as const, matches: [
+      { articleRef: `kb:${"a".repeat(64)}`, source, title: "Test server", heading: "Connection", startLine: 1, endLine: 7, excerpt }
+    ] }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const rejected = await harness.app.inject({
+      method: "POST", url: "/v1/me/knowledge/search",
+      headers: { authorization: `Bearer ${request.ticketToken}` },
+      payload: { query: `${prompt} Paper downgrade version backup compatible world restart connection troubleshooting`, limit: 8 }
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(search).not.toHaveBeenCalled();
+
+    const cite = `[${source}:1-7]`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "test server" }), mockText(`${excerpt} ${cite} Check the support documentation.`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 });
+    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }));
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
+  });
+
+  it.each([false, true])("admits one focused downgrade passage within eight results (already present: %s)", async (duplicate) => {
+    const source = "practice/advanced/version-downgrade.md";
+    const downgrade = {
+      articleRef: `kb:${"b".repeat(64)}`, source, title: "Downgrade", heading: "Downgrade",
+      startLine: 1, endLine: 12, excerpt: "Synthetic downgrade excerpt for checking evidence admission."
+    };
+    const network = Array.from({ length: 8 }, (_, i) => ({
+      articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/network.md", title: "Network", heading: "Connection",
+      startLine: i + 1, endLine: i + 1, excerpt: `Synthetic network passage ${i}.`
+    }));
+    const search = vi.fn(({ limit }: { limit?: number }) => Promise.resolve({
+      trust: "reference_only" as const,
+      matches: limit === 3 ? [network[0]!, downgrade] : duplicate ? [downgrade, ...network.slice(0, 7)] : network
+    }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const cite = `[${source}:1-12]`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "connection" }), mockText(`${downgrade.excerpt} ${cite} Check the support documentation.`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: (_: string, match: { source: string }) => Promise.resolve(match.source === source && !duplicate ? 0.2 : 0.7) };
+    const prompt = "Minecraft 的 Paper 版本相同，但連線卡在加密中。";
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls.map(([query]) => query.limit).sort()).toEqual([3, 8]);
+    const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
+    const content = message?.content[0];
+    if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
+    const { matches } = content.output.value as { matches: { requiredQuote: string }[] };
+    expect(matches).toHaveLength(8);
+    expect(matches.filter(match => match.requiredQuote.endsWith(cite))).toHaveLength(1);
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
+  });
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";
     const other = "Check the status in the panel.";
     const second = "[synthetic/status.md:3-5]";
+
+    const velocity = {
+      articleRef: `kb:${"a".repeat(64)}`,
+      source: "practice/advanced/velocity.md", title: "在主機上執行 Velocity",
+      heading: "在主機上執行 Velocity", startLine: 1, endLine: 9,
+      excerpt: [
+        "# 在主機上執行 Velocity",
+        "",
+        "> Source: Coffee-Host owner answers, 2026-11-23 (KB gap questions from golden-set evals)",
+        "> Owner-provided; not sourced from published docs or past tickets.",
+        "",
+        "客戶可以在主機上執行 Velocity，沒有特別限制，但不能違反服務條款。",
+        "",
+        "後端 Paper 放在自己的伺服器也可以，但到後端的連線品質不保證。",
+        ""
+      ].join("\n")
+    };
+    const velocityCitation = "[practice/advanced/velocity.md:1-9]";
+    const velocityQuote = velocity.excerpt.trimEnd().replace("\n\n> Source:", "\n> Source:").replace("後端 Paper", "後端  Paper");
+    const velocityDraft = (quote: string) =>
+      `您可以在 Coffee Host 主機上執行 Velocity，並將後端 Paper 放在自有伺服器上。\n\n${quote}\n${velocityCitation}`;
+
+    it.each([
+      ["checkpoint layout", velocity.excerpt.trimEnd()],
+      ["changed blank lines and spacing", velocityQuote]
+    ])("grounds the GS-138 Velocity quote with %s", (_layout, quote) => {
+      expect(evaluateCitationGate(velocityDraft(quote), [velocity], value => value)).toMatchObject({
+        status: "passed", grounded: true, matched: [velocityCitation], failures: []
+      });
+    });
+
+    it("rejects changed words in the GS-138 Velocity quote", () => {
+      const altered = velocityQuote.replace("連線品質不保證", "連線品質有保證");
+      expect(evaluateCitationGate(velocityDraft(altered), [velocity], value => value)).toMatchObject({
+        status: "failed", grounded: false, matched: [],
+        failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }]
+      });
+    });
 
     async function runDraft(draft: string, statusExcerpt = other) {
       const { root, harness, request, signal } = await setup({
@@ -83,7 +182,6 @@ describe("Vercel read-only agent", () => {
     it.each([
       ["wrong_lines", `${other} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
       ["missing_citation", other, second],
-      ["whitespace_mismatch", `${other.replace("the status", "the  status")} ${second}`, second],
       ["unknown_citation", `${other} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {

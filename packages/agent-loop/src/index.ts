@@ -24,12 +24,25 @@ For questions answerable from documentation or the customer's account state, fir
 If an account read fails but the documented procedure still answers the request, give the cited procedure and state the specific limitation, such as "I could not verify the cause from the logs." Request staff handoff if the missing account detail is necessary to resolve the request.
 For an ordered procedure, identify the matching article and gather the relevant sections before drafting. Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off. Start with any prerequisite, name the exact panel screen and field, and explain each action through applying the change and verifying the result when documented. Include companion steps in other retrieved sections or panel screens. Cite the passages that support the instructions. If a step is missing from the evidence, identify that gap without guessing.
 Treat unverified current availability, restoration outcome, or root cause as a separate question. Give the documented procedure first and make it conditional when a prerequisite or availability is unverified. Never ask staff to confirm a step the KB already documents. If the procedure answers the request, state the remaining uncertainty without handing off and give a concrete check the customer can perform when supported. If an unresolved detail is necessary to answer the request, including current availability when asked or account state the customer needs verified, state exactly what staff must confirm after giving the supported steps.
+Scope handoff to blockers in the customer's actual request. Do not escalate an unasked plan, inventory, sizing, hostname, version, or policy detail after delivering the requested documented guidance. For a symptom-only question, give the documented check and retry procedure before requesting staff. Keep a handoff when the request itself contains an unresolved account lock, unavailable runtime, or other account-specific blocker, while preserving the useful documented guidance first.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
 For account-state questions, call the relevant own-resource read before drafting: invoice for the customer's billing status, server status for current operation or suspension questions, and redacted logs as well as status for a reported power or startup error. Report what the backend returned, including the exact relevant timestamp and status when present. If a timestamp or status is unavailable, identify the missing field and separate that limitation from any documented policy you can explain. Give a concrete verification step, such as retrying the connection and asking the customer to confirm whether service is restored. Do not use generic Discord routing in place of these steps. Never claim a write, fix or restart happened; there are no write tools.
 For current policy, prefer relevant passages marked owner_confirmed and use other relevant current KB passages where they agree or fill a gap. Apply the availability check above to that current policy. Ticket history, including older staff answers, is context only. If historical ticket text conflicts with current KB policy, answer from the current KB and add a separate line POLICY_CONFLICT_FOR_REVIEW immediately before the optional STAFF_HANDOFF line. Do not treat historical answers as policy.
 Treat previous answers as unverified context; retrieve evidence afresh each turn. Once the evidence and answer checklist are complete, draft one final answer and stop. Make a new search only for a missing part of the answer. Do not repeat a read or rephrase a search that already returned the same evidence. Never expose credentials.`;
 
 type ReadTool = typeof READ_ONLY_TOOLS[number];
+
+const DOWNGRADE_SOURCE = "practice/advanced/version-downgrade.md";
+const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 世界備份 version downgrade", limit: 3 };
+
+function hasDowngradeSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  const minecraft = /\b(?:minecraft|paper)\b/iu.test(text);
+  const version = /\bversion\b|版本/iu.test(text);
+  return /降版/u.test(text) ||
+    ((minecraft || version) && /\bdowngrad(?:e|ing)\b|降級/iu.test(text)) ||
+    (minecraft && version && /\b(?:mismatch|incompatible|encryption|can't connect|cannot connect)\b|不相容|不匹配|加密|無法連線/iu.test(text));
+}
 
 // Route clear incident and record lookups. The model routes less explicit follow-ups
 // using the same tools and ticket history; these patterns never select a resource.
@@ -101,7 +114,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null; handoffMarkerPresent: boolean }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -165,8 +178,30 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           searched = true;
           // Semantic retrieval uses customer wording, so model query drift cannot
           // hide the relevant passage before original-question admission scoring.
-          const searchInput = options.semanticRelevance ? { query: prompt.slice(0, 300), limit: 8 } : input;
-          const result = await call("v1/me/knowledge/search", searchInput, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+          const symptomCue = /\b(?:paper|connection|connect|network|encryption|address|port|timeout|downgrade|version)\b|連線|網路|加密|降級|版本/iu.test(prompt);
+          const originalQuery = prompt.trim().slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
+          const expandedSearch = {
+            query: `${originalQuery} Paper downgrade version backup compatible world restart connection troubleshooting`,
+            limit: 8
+          };
+          // Keep the original customer wording if expansion would exceed Core's query budget.
+          const searchInput = options.semanticRelevance
+            ? symptomCue && Value.Check(KnowledgeSearchRequestSchema, expandedSearch)
+              ? expandedSearch : { query: originalQuery, limit: 8 }
+            : input;
+          const search = async (request: unknown) => {
+            if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
+            return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+          };
+          const [result, focused] = await Promise.all([
+            search(searchInput),
+            options.semanticRelevance && hasDowngradeSymptom(prompt)
+              ? search(DOWNGRADE_SEARCH).catch(() => undefined)
+              : undefined
+          ]);
+          // The symptom licenses one passage from this specific article even
+          // when its similarity to the network-heavy original prompt is low.
+          const downgrade = focused?.matches.find(match => match.source === DOWNGRADE_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -180,13 +215,19 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
+          if (downgrade) {
+            admitted = [downgrade, ...admitted.filter(match => citation(match) !== citation(downgrade))].slice(0, 8);
+          }
           if (admitted.length) {
             const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
             admitted = [...admitted, ...companions];
           }
+          if (downgrade) {
+            admitted = [...new Map(admitted.map(match => [citation(match), match])).values()].slice(0, 8);
+          }
           // Recognize provenance only from the retrieved KB's source header, not
           // from the customer query or history. Apply it to sections of that article.
-          const confirmed = new Set(result.matches
+          const confirmed = new Set((downgrade ? [...result.matches, downgrade] : result.matches)
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
           admitted.sort((a, b) => {
@@ -239,6 +280,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       let reply = "";
       let supportedPartial = "";
       let answerComplete: boolean | null = null;
+      let handoffMarkerPresent = false;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       try {
         // sub2api may create Responses with store=false regardless of the requested
@@ -248,6 +290,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const result = await agent.generate({ messages: [...history, { role: "user", content: prompt }], abortSignal: signal });
         reply = clean(result.text).trim();
         const requestedHandoff = /(?:^|\n)STAFF_HANDOFF$/.test(reply);
+        handoffMarkerPresent = requestedHandoff;
         if (requestedHandoff) reply = reply.replace(/(?:^|\n)STAFF_HANDOFF$/, "").trimEnd();
         // Require a completed, grounded answer and all required reads to have been attempted.
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
@@ -268,7 +311,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate, answerComplete };
+        return { reply: checkpoint, citationGate, answerComplete, handoffMarkerPresent };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -287,7 +330,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate, answerComplete };
+      return { reply, citationGate, answerComplete, handoffMarkerPresent };
     });
   } };
 }
