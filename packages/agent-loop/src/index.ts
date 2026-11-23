@@ -125,6 +125,16 @@ function normalizeCoverageText(value: string): string {
     .trim();
 }
 
+function requiredTaskCoverage(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+  const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
+  const sources = new Set(evidence.map(match => match.source));
+  if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt) &&
+      !(/重新安裝|reinstall/iu.test(text) && /重啟|restart/iu.test(text) && /重製|重置|reset/iu.test(text))) return false;
+  if (sources.has(SUPPORT_FLOW_SOURCE) && hasSupportFlowSymptom(prompt) &&
+      !(/售後|after[- ]sales/iu.test(text) && /客服單|ticket/iu.test(text) && /重複|duplicate/iu.test(text))) return false;
+  return !(sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) || /重新安裝|reinstall/iu.test(text);
+}
+
 /** Checks the content required for delivery independently from citation formatting. */
 export function answerCompletenessCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
@@ -135,7 +145,7 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
   const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
   const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
-  return actionable && citedEvidence && downgradeCovered;
+  return actionable && citedEvidence && downgradeCovered && requiredTaskCoverage(text, prompt, evidence);
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
