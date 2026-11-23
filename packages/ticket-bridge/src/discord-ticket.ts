@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isCanonicalDiscordSnowflake, type TicketScope, type SupportAuditEvent } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake, type TicketScope, type SupportAuditEvent } from "@support-ai-agent/contracts";
 import type { AuditRecorder } from "./audit.js";
 import { TicketBridgeError, type LegacyTicketAdapter, type TicketBridge, type LegacyTicketReader } from "./index.js";
 

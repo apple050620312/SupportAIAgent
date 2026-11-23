@@ -4,7 +4,7 @@ import { lstat, open, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   KnowledgeReadRequest, KnowledgeReadResponse, KnowledgeSearchRequest, KnowledgeSearchResponse
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import type { SupportKnowledgeProvider } from "../ports/index.js";
 
 export class KnowledgeIndexError extends Error {

@@ -1,5 +1,5 @@
 import { Value } from "@sinclair/typebox/value";
-import { SupportAuditEventSchema, type SupportAuditEvent } from "@openclaw-hosting/contracts";
+import { SupportAuditEventSchema, type SupportAuditEvent } from "@support-ai-agent/contracts";
 
 export interface AuditRecorder { record(event: SupportAuditEvent): Promise<void>; }
 

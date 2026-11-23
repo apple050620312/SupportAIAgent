@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
-import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
-import type { ActorContext, HostingService } from "@openclaw-hosting/contracts";
+import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@support-ai-agent/whmcs";
+import { PterodactylGameServerProvider } from "@support-ai-agent/pterodactyl";
+import type { ActorContext, HostingService } from "@support-ai-agent/contracts";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 
 const actor: ActorContext = { actor: { discordUserId: "18446744073709551615" }, correlationId: "synthetic" };

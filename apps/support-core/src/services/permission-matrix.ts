@@ -1,4 +1,4 @@
-import type { ActorContext, TicketScope } from "@openclaw-hosting/contracts";
+import type { ActorContext, TicketScope } from "@support-ai-agent/contracts";
 
 export const permissionMatrix = {
   get_invoice: { tier: "T0", scope: "invoice:read" },

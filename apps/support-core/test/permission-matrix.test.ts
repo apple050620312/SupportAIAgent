@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
-import type { MutationOperation, TicketScope } from "@openclaw-hosting/contracts";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
+import type { MutationOperation, TicketScope } from "@support-ai-agent/contracts";
 import { buildApp } from "../src/app.js";
 import { HostingSupportService } from "../src/services/hosting-support-service.js";
 import { MutationApprovalStore } from "../src/services/mutation-approval-store.js";

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
-import { isCanonicalDiscordSnowflake, TicketScopeSchema, type TicketScope, type TicketSnapshot, type TicketState } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake, TicketScopeSchema, type TicketScope, type TicketSnapshot, type TicketState } from "@support-ai-agent/contracts";
 import { sameTicket, TicketBridgeError, type TicketMessenger, type TicketStore } from "./index.js";
 
 export interface LegacyTicketReader {

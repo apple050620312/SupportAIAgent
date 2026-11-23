@@ -1,6 +1,6 @@
-import { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
-import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
-import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
+import { isCanonicalDiscordSnowflake } from "@support-ai-agent/contracts";
+import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@support-ai-agent/whmcs";
+import { PterodactylGameServerProvider } from "@support-ai-agent/pterodactyl";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 import { SupportDomainError } from "../../apps/support-core/dist/src/domain/errors.js";
 

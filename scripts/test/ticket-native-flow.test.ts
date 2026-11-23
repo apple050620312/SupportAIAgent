@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner } from "@openclaw-hosting/ticket-bridge";
-import { registerHostingPlugin, type OpenClawHostingApi } from "@openclaw-hosting/openclaw-plugin/native";
-import { createHostingTurnHandler, type OpenClawHostingRuntime } from "@openclaw-hosting/openclaw-plugin/turn";
+import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner } from "@support-ai-agent/ticket-bridge";
+import { registerHostingPlugin, type OpenClawHostingApi } from "@support-ai-agent/openclaw-plugin/native";
+import { createHostingTurnHandler, type OpenClawHostingRuntime } from "@support-ai-agent/openclaw-plugin/turn";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 describe("baseline bot to native OpenClaw to Core offline composition", () => {

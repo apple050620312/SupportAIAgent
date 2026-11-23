@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw-hosting/agent-loop",
+  "name": "@support-ai-agent/agent-loop",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
   "dependencies": {
     "ai": "7.0.164",
     "@ai-sdk/openai": "4.0.110",
-    "@openclaw-hosting/contracts": "workspace:*",
-    "@openclaw-hosting/ticket-bridge": "workspace:*",
+    "@support-ai-agent/contracts": "workspace:*",
+    "@support-ai-agent/ticket-bridge": "workspace:*",
     "@sinclair/typebox": "^0.34.41"
   },
   "scripts": {

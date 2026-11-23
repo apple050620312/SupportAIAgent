@@ -8,9 +8,9 @@ import {
   FileContentsResponseSchema, FileListResponseSchema, StartupConfigResponseSchema, MutationProposalResponseSchema, ExecuteMutationRequestSchema, ExecuteMutationResponseSchema,
   MutationOperationSchema, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema,
   KnowledgeReadRequestSchema, KnowledgeReadResponseSchema
-} from "@openclaw-hosting/contracts";
-import type { ActorContext, HandoffRequest, TicketScope, MutationOperation, ExecuteMutationRequest, SupportAuditEvent, KnowledgeSearchRequest, KnowledgeReadRequest } from "@openclaw-hosting/contracts";
-import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
+} from "@support-ai-agent/contracts";
+import type { ActorContext, HandoffRequest, TicketScope, MutationOperation, ExecuteMutationRequest, SupportAuditEvent, KnowledgeSearchRequest, KnowledgeReadRequest } from "@support-ai-agent/contracts";
+import type { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import type { TicketAccessProvider, SupportAuditRecorder } from "../ports/index.js";
 import type { HostingSupportService } from "../services/hosting-support-service.js";
 import { ServiceNotFoundError, MutationNotAllowedError, SupportDomainError, UpstreamUnavailableError } from "../domain/errors.js";

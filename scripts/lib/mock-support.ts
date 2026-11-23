@@ -1,10 +1,10 @@
 /** Synthetic offline harness. Never import this module from production packages. */
-import type { TicketScope, TicketSnapshot, SupportAuditEvent } from "@openclaw-hosting/contracts";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
-import { TicketBridge, sameTicket, type TicketMessenger, type TicketStore } from "@openclaw-hosting/ticket-bridge";
-import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
-import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
-import { createHostingTools } from "@openclaw-hosting/openclaw-plugin";
+import type { TicketScope, TicketSnapshot, SupportAuditEvent } from "@support-ai-agent/contracts";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
+import { TicketBridge, sameTicket, type TicketMessenger, type TicketStore } from "@support-ai-agent/ticket-bridge";
+import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@support-ai-agent/whmcs";
+import { PterodactylGameServerProvider } from "@support-ai-agent/pterodactyl";
+import { createHostingTools } from "@support-ai-agent/openclaw-plugin";
 import { buildApp } from "../../apps/support-core/dist/src/app.js";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 import { MutationApprovalStore } from "../../apps/support-core/dist/src/services/mutation-approval-store.js";

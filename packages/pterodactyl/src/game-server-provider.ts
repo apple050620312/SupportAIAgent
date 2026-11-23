@@ -3,8 +3,8 @@ import {
   isCanonicalDiscordSnowflake, MutationOperationSchema,
   type ActorContext, type FileContentsResponse, type FileListResponse, type GameServer,
   type HostingService, type MutationOperation, type ServerResources, type ServerStatus, type StartupConfigResponse
-} from "@openclaw-hosting/contracts";
-import { count, httpsInstallationBase, positiveId, ProviderReadError, readJson, record, safeLabel } from "@openclaw-hosting/provider-http";
+} from "@support-ai-agent/contracts";
+import { count, httpsInstallationBase, positiveId, ProviderReadError, readJson, record, safeLabel } from "@support-ai-agent/provider-http";
 
 export interface ReadOnlyPterodactylConfig {
   readonly baseUrl: string;

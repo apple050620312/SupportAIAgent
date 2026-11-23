@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw-hosting/whmcs",
+  "name": "@support-ai-agent/whmcs",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
   },
   "files": ["dist"],
   "dependencies": {
-    "@openclaw-hosting/provider-http": "workspace:*",
-    "@openclaw-hosting/contracts": "workspace:*"
+    "@support-ai-agent/provider-http": "workspace:*",
+    "@support-ai-agent/contracts": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,4 +1,4 @@
-import { createSupportAuditRecorder } from "@openclaw-hosting/ticket-bridge";
+import { createSupportAuditRecorder } from "@support-ai-agent/ticket-bridge";
 
 interface Overwrite { id: string; type: number; allow: { has(flag: bigint): boolean }; deny: { has(flag: bigint): boolean }; }
 export interface PrivateAuditChannel {

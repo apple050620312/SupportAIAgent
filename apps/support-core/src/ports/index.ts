@@ -12,8 +12,8 @@ import type {
   TicketScope,
   TicketSnapshot,
   SupportAuditEvent
-} from "@openclaw-hosting/contracts";
-import type { KnowledgeSearchRequest, KnowledgeSearchResponse, KnowledgeReadRequest, KnowledgeReadResponse } from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
+import type { KnowledgeSearchRequest, KnowledgeSearchResponse, KnowledgeReadRequest, KnowledgeReadResponse } from "@support-ai-agent/contracts";
 
 /** Operator-reviewed shared documentation only; never customer records or authority. */
 export interface SupportKnowledgeProvider {

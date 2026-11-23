@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
-import { TicketBridge } from "@openclaw-hosting/ticket-bridge";
-import { createHostingTools, hostingToolFactory } from "@openclaw-hosting/openclaw-plugin";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
+import { TicketBridge } from "@support-ai-agent/ticket-bridge";
+import { createHostingTools, hostingToolFactory } from "@support-ai-agent/openclaw-plugin";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 const key = "synthetic-context-signing-key-for-unit-tests";

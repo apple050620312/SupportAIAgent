@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { isCanonicalDiscordSnowflake, TicketScopeSchema, type TicketScope } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake, TicketScopeSchema, type TicketScope } from "@support-ai-agent/contracts";
 
 const ClaimSchema = Type.Object({
   audience: Type.Literal("hosting-support-core"), scope: TicketScopeSchema,

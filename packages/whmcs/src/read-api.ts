@@ -1,4 +1,4 @@
-import { httpsInstallationBase, ProviderReadError, readJson, record } from "@openclaw-hosting/provider-http";
+import { httpsInstallationBase, ProviderReadError, readJson, record } from "@support-ai-agent/provider-http";
 import type { WhmcsAdapterConfig } from "./types.js";
 
 /** Internal fixed read actions, not an agent-facing generic WHMCS client. */

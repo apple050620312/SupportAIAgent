@@ -1,4 +1,4 @@
-import { HostingToolContracts, type HostingToolName } from "@openclaw-hosting/contracts";
+import { HostingToolContracts, type HostingToolName } from "@support-ai-agent/contracts";
 import { createHostingTools, type HostingTool } from "./index.js";
 import { registerHostingTurnRoute, type HostingHttpApi } from "./native-http.js";
 

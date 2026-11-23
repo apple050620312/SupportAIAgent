@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createSupportAuditRecorder, DiscordTicketSupport, installLegacyMutationGuard, LegacyTicketAdapter, TicketBridge } from "@openclaw-hosting/ticket-bridge";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
+import { createSupportAuditRecorder, DiscordTicketSupport, installLegacyMutationGuard, LegacyTicketAdapter, TicketBridge } from "@support-ai-agent/ticket-bridge";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { privateDiscordAudit, type PrivateAuditChannel } from "../lib/discord-support-audit.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
-import type { SupportAuditEvent } from "@openclaw-hosting/contracts";
+import type { SupportAuditEvent } from "@support-ai-agent/contracts";
 
 const event = (): SupportAuditEvent => ({ operation: "identify_customer", outcome: "success", correlationId: randomUUID() });
 function privateChannel() {

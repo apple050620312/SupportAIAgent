@@ -19,7 +19,7 @@
 先在主 repo 執行 `corepack pnpm install` 與 `corepack pnpm build`。使用測試 Gateway，從 repo 根目錄安裝 local link
 
 ```powershell
-openclaw plugins install --link ./packages/openclaw-hosting-plugin
+openclaw plugins install --link ./packages/openclaw-plugin
 ```
 
 不要發布此私人 workspace 套件。Link 保留已建置的 workspace dependencies；將插件目錄單獨複製到另一台機器不等於完整部署。

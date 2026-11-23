@@ -1,10 +1,10 @@
 {
-  "name": "@openclaw-hosting/learning-loop",
+  "name": "@support-ai-agent/learning-loop",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "files": ["dist"],
-  "dependencies": { "@openclaw-hosting/contracts": "workspace:*", "@sinclair/typebox": "^0.34.41" },
+  "dependencies": { "@support-ai-agent/contracts": "workspace:*", "@sinclair/typebox": "^0.34.41" },
   "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit" }
 }

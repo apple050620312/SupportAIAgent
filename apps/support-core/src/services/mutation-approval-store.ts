@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { MutationOperation, TicketScope } from "@openclaw-hosting/contracts";
+import type { MutationOperation, TicketScope } from "@support-ai-agent/contracts";
 
 export type ApprovalState = "pending" | "approved" | "consumed" | "invalidated";
 export interface MutationApproval {

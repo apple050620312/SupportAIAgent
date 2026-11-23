@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import plugin, { registerHostingPlugin, type OpenClawHostingApi, type OpenClawHostingContext } from "@openclaw-hosting/openclaw-plugin/native";
+import plugin, { registerHostingPlugin, type OpenClawHostingApi, type OpenClawHostingContext } from "@support-ai-agent/openclaw-plugin/native";
 import { createMockSupport, MOCK_SCOPE } from "../lib/mock-support.js";
 
 function registrations(fetchMock: typeof fetch) {

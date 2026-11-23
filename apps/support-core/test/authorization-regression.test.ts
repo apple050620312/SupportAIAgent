@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { HostingService } from "@openclaw-hosting/contracts";
+import type { HostingService } from "@support-ai-agent/contracts";
 import { HostingSupportService } from "../src/services/hosting-support-service.js";
 
 const actor = { actor: { discordUserId: "18446744073709551615" }, correlationId: "synthetic" };

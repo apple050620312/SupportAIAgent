@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { ReviewedLearningLoop } from "@openclaw-hosting/learning-loop";
-import type { LearningFeedback } from "@openclaw-hosting/contracts";
+import { ReviewedLearningLoop } from "@support-ai-agent/learning-loop";
+import type { LearningFeedback } from "@support-ai-agent/contracts";
 
 const feedback = (): LearningFeedback => ({ caseId: "E01", outcome: "resolved", safety: "pass", rating: 5,
   harnessVersion: "openclaw-2026.9.8", policyVersion: "support-1", correlationId: randomUUID() });

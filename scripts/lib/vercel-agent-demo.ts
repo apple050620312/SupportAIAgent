@@ -1,6 +1,6 @@
 /** Offline-only bridge around the existing synthetic harness. Not a production host adapter. */
 import { MockLanguageModelV4 } from "ai/test";
-import { createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type TrustedAgentSession } from "@openclaw-hosting/agent-loop";
+import { createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type TrustedAgentSession } from "@support-ai-agent/agent-loop";
 import type { LanguageModel } from "ai";
 import type { createMockSupport } from "./mock-support.js";
 

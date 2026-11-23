@@ -12,7 +12,7 @@ import {
   type HostingService,
   type MutationOperation,
   type StartupConfigResponse
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import { Value } from "@sinclair/typebox/value";
 import {
   IdentityNotLinkedError,

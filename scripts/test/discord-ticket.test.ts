@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner, type TicketAgentRunner } from "@openclaw-hosting/ticket-bridge";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
+import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner, type TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 function fixture() {

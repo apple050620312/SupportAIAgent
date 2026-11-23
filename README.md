@@ -19,7 +19,7 @@ Support Core is the trusted authorization boundary. It resolves a Discord actor 
 - `packages/provider-http`: private bounded provider transport, never an agent tool.
 - `packages/trusted-context`: bot-issued short-lived signed ticket capsules.
 - `packages/ticket-bridge`: ticket lifecycle, handoff and serialized-send ports for the existing bot.
-- `packages/openclaw-hosting-plugin`: bounded tool factory, native OpenClaw 2026.9.8 entry/turn route and support Skill.
+- `packages/openclaw-plugin`: bounded tool factory, native OpenClaw 2026.9.8 entry/turn route and support Skill.
 - `docs`: architecture, security, integration questions, and decisions.
 
 The frozen [Support Core permission matrix](docs/decisions/0008-support-core-permission-matrix.md) declares each tool tier and scope. Opt-in customer delivery requires an append-only invocation audit sink and trusted ticket resource selection; writes additionally require trusted grants, restart confirmation/recovery policy, or a durable human approval adapter. The offline in-memory approval prototype alone cannot authorize T2 execution.

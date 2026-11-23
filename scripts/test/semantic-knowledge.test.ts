@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MarkdownKnowledgeProvider } from '../../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { SemanticKnowledgeProvider, corpusDigest, cosine, OpenAIEmbeddings } from '../../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
-import type { KnowledgeSearchResponse } from '@openclaw-hosting/contracts';
+import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
 afterEach(() => vi.unstubAllGlobals());
 const passages: KnowledgeSearchResponse['matches'] = [
   { articleRef: `kb:${'a'.repeat(64)}`, source: 'backup.md', title: '備份', heading: '還原世界', excerpt: '選擇備份並還原世界檔案。', startLine: 1, endLine: 2 },

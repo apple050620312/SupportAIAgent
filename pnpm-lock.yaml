@@ -11,28 +11,28 @@ importers:
       '@eslint/js':
         specifier: ^9.36.0
         version: 9.39.5
-      '@openclaw-hosting/agent-loop':
+      '@support-ai-agent/agent-loop':
         specifier: workspace:*
         version: link:packages/agent-loop
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:packages/contracts
-      '@openclaw-hosting/learning-loop':
+      '@support-ai-agent/learning-loop':
         specifier: workspace:*
         version: link:packages/learning
-      '@openclaw-hosting/openclaw-plugin':
+      '@support-ai-agent/openclaw-plugin':
         specifier: workspace:*
-        version: link:packages/openclaw-hosting-plugin
-      '@openclaw-hosting/pterodactyl':
+        version: link:packages/openclaw-plugin
+      '@support-ai-agent/pterodactyl':
         specifier: workspace:*
         version: link:packages/pterodactyl
-      '@openclaw-hosting/ticket-bridge':
+      '@support-ai-agent/ticket-bridge':
         specifier: workspace:*
         version: link:packages/ticket-bridge
-      '@openclaw-hosting/trusted-context':
+      '@support-ai-agent/trusted-context':
         specifier: workspace:*
         version: link:packages/trusted-context
-      '@openclaw-hosting/whmcs':
+      '@support-ai-agent/whmcs':
         specifier: workspace:*
         version: link:packages/whmcs
       '@types/node':
@@ -59,10 +59,10 @@ importers:
 
   apps/support-core:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@openclaw-hosting/trusted-context':
+      '@support-ai-agent/trusted-context':
         specifier: workspace:*
         version: link:../../packages/trusted-context
       '@sinclair/typebox':
@@ -87,10 +87,10 @@ importers:
       '@ai-sdk/openai':
         specifier: 4.0.110
         version: 4.0.110(zod@4.1.12)
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@openclaw-hosting/ticket-bridge':
+      '@support-ai-agent/ticket-bridge':
         specifier: workspace:*
         version: link:../ticket-bridge
       '@sinclair/typebox':
@@ -108,16 +108,16 @@ importers:
 
   packages/learning:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.52
 
-  packages/openclaw-hosting-plugin:
+  packages/openclaw-plugin:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@sinclair/typebox':
@@ -128,10 +128,10 @@ importers:
 
   packages/pterodactyl:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@openclaw-hosting/provider-http':
+      '@support-ai-agent/provider-http':
         specifier: workspace:*
         version: link:../provider-http
       '@sinclair/typebox':
@@ -140,10 +140,10 @@ importers:
 
   packages/ticket-bridge:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@openclaw-hosting/trusted-context':
+      '@support-ai-agent/trusted-context':
         specifier: workspace:*
         version: link:../trusted-context
       '@sinclair/typebox':
@@ -152,7 +152,7 @@ importers:
 
   packages/trusted-context:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@sinclair/typebox':
@@ -161,10 +161,10 @@ importers:
 
   packages/whmcs:
     dependencies:
-      '@openclaw-hosting/contracts':
+      '@support-ai-agent/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@openclaw-hosting/provider-http':
+      '@support-ai-agent/provider-http':
         specifier: workspace:*
         version: link:../provider-http
 

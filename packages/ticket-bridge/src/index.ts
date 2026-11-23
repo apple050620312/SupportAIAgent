@@ -1,6 +1,6 @@
-import { HandoffRequestSchema, type HandoffRequest, type TicketScope, type TicketSnapshot, type TicketState } from "@openclaw-hosting/contracts";
+import { HandoffRequestSchema, type HandoffRequest, type TicketScope, type TicketSnapshot, type TicketState } from "@support-ai-agent/contracts";
 import { Value } from "@sinclair/typebox/value";
-import type { TicketContextTokens } from "@openclaw-hosting/trusted-context";
+import type { TicketContextTokens } from "@support-ai-agent/trusted-context";
 
 export { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard } from "./legacy-ticket.js";
 export type { LegacyTicketReader, LegacyDiscordTransport } from "./legacy-ticket.js";

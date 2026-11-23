@@ -1,5 +1,5 @@
-import type { ActorContext, CustomerIdentity } from "@openclaw-hosting/contracts";
-import { positiveId, ProviderReadError, record } from "@openclaw-hosting/provider-http";
+import type { ActorContext, CustomerIdentity } from "@support-ai-agent/contracts";
+import { positiveId, ProviderReadError, record } from "@support-ai-agent/provider-http";
 import type { WhmcsAdapterConfig } from "./types.js";
 import { WhmcsReadApi } from "./read-api.js";
 

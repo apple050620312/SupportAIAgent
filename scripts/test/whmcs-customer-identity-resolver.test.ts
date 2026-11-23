@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { isCanonicalDiscordSnowflake, type ActorContext } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake, type ActorContext } from "@support-ai-agent/contracts";
 import {
   WhmcsCustomerIdentityResolver,
   WhmcsIdentityResolutionError,
   type WhmcsIdentityFetch
-} from "@openclaw-hosting/whmcs";
+} from "@support-ai-agent/whmcs";
 import type { CustomerIdentityResolver } from "../../apps/support-core/dist/src/ports/index.js";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 

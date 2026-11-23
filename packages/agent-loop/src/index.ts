@@ -3,9 +3,9 @@ import { Value } from "@sinclair/typebox/value";
 import {
   EmptyToolInputSchema, HostingToolContracts, KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema,
   OwnInvoiceSchema, RedactedServerLogsSchema, type KnowledgeSearchResponse
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import type { TSchema } from "@sinclair/typebox";
-import type { TicketAgentRunner } from "@openclaw-hosting/ticket-bridge";
+import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
 export { FileHistoryStore, SupportCoreClient };

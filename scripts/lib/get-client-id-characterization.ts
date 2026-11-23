@@ -1,5 +1,5 @@
-import { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
-export { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
+import { isCanonicalDiscordSnowflake } from "@support-ai-agent/contracts";
+export { isCanonicalDiscordSnowflake } from "@support-ai-agent/contracts";
 
 export const CHARACTERIZATION_ACKNOWLEDGEMENT = "I_HAVE_AUTHORIZATION";
 

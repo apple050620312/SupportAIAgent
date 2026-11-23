@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, retrievalConfidence, createLiveModel } from "@openclaw-hosting/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";

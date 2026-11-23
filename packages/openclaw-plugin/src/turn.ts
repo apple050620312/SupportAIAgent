@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { HostingToolContracts } from "@openclaw-hosting/contracts";
+import { HostingToolContracts } from "@support-ai-agent/contracts";
 import { createHostingTools, HostingToolError } from "./index.js";
 import { SUPPORT_KNOWLEDGE_WORKFLOW } from "./knowledge-workflow.js";
 

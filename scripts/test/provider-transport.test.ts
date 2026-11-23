@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
+import { WhmcsHostingServiceProvider } from "@support-ai-agent/whmcs";
 const config = { baseUrl: "https://whmcs.example.invalid", apiIdentifier: "synthetic-identifier", apiSecret: "synthetic-secret" };
 const actor = { actor: { discordUserId: "18446744073709551615" }, correlationId: "synthetic" };
 const customer = { customerRef: "whmcs:1" };

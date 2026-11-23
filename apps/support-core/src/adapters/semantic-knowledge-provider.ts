@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { KnowledgeSearchResponse, KnowledgeSearchRequest, KnowledgeReadRequest } from "@openclaw-hosting/contracts";
+import type { KnowledgeSearchResponse, KnowledgeSearchRequest, KnowledgeReadRequest } from "@support-ai-agent/contracts";
 import type { SupportKnowledgeProvider } from "../ports/index.js";
 import type { MarkdownKnowledgeProvider } from "./markdown-knowledge-provider.js";
 

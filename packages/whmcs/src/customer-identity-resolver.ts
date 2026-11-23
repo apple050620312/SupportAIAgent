@@ -2,7 +2,7 @@ import {
   isCanonicalDiscordSnowflake,
   type ActorContext,
   type CustomerIdentity
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import type { WhmcsAdapterConfig } from "./types.js";
 
 const MAX_BODY_BYTES = 65_536;

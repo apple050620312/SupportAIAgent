@@ -1,4 +1,4 @@
-import { HostingToolContracts, type HostingToolName } from "@openclaw-hosting/contracts";
+import { HostingToolContracts, type HostingToolName } from "@support-ai-agent/contracts";
 import { Value } from "@sinclair/typebox/value";
 import type { TSchema } from "@sinclair/typebox";
 

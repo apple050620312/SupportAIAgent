@@ -3,7 +3,7 @@ import type {
   CustomerIdentity,
   GameServer,
   HostingService
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import { describe, expect, it } from "vitest";
 import {
   IdentityNotLinkedError,

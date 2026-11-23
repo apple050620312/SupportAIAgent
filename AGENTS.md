@@ -10,7 +10,7 @@ This repository is the foundation for an AI-assisted hosting support platform. I
 - `packages/contracts`: pure TypeBox schemas and domain types; no I/O.
 - `packages/whmcs`: future WHMCS adapter boundary; no endpoint guesses.
 - `packages/pterodactyl`: future Pterodactyl adapter boundary; no endpoint guesses.
-- `packages/openclaw-hosting-plugin`: future agent adapter; it must call Support Core.
+- `packages/openclaw-plugin`: future agent adapter; it must call Support Core.
 - `docs`: architecture, security invariants, integration questions, and decisions.
 
 Business logic must depend on domain ports, never directly on provider HTTP clients. Do not bypass ports. OpenClaw is not an authorization boundary and must never receive raw WHMCS/Pterodactyl administrative API access. Never trust model-provided customer IDs, service ownership, or server UUID ownership. Do not introduce a database, Redis, or a queue without a documented architecture decision.
@@ -34,7 +34,7 @@ Read this first if you are picking this project up. It records where the work st
 
 - Branch: `feat/vercel-ai-sdk-step1` (pushed; main is still the pre-agent-loop state).
 - Repo: `github.com/apple050620312/SupportAIAgent` (public since 2026-11-23; formerly `Coffee-Host/OpenClawHostingSupport`, private).
-- Agent layer swapped from the OpenClaw plugin to Vercel AI SDK (`packages/agent-loop`, ToolLoopAgent): only 4 T0 read-only tools through Support Core (KB search, own-server status, redacted logs, own-invoice read), temp 0.2, 10-step cap, file-based JSON session history keyed by Discord thread ID. The `openclaw-hosting-plugin` package still exists but is no longer the agent loop. Support Core is untouched and remains the final authorization boundary.
+- Agent layer swapped from the OpenClaw plugin to Vercel AI SDK (`packages/agent-loop`, ToolLoopAgent): only 4 T0 read-only tools through Support Core (KB search, own-server status, redacted logs, own-invoice read), temp 0.2, 10-step cap, file-based JSON session history keyed by Discord thread ID. The `openclaw-plugin` package still exists but is no longer the agent loop. Support Core is untouched and remains the final authorization boundary.
 - Risk tiers: T0 read auto / T1 restart gated + confirmation + rate limit / T2 reinstall & refund need single-use exact-transaction human approval / T3 cross-customer and credential rotation never exposed.
 
 ### Honest numbers

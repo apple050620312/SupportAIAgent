@@ -1,5 +1,5 @@
-import { isCanonicalDiscordSnowflake, type ActorContext, type CustomerIdentity, type HostingService, type HostingServiceStatus } from "@openclaw-hosting/contracts";
-import { count, positiveId, ProviderReadError, record, safeLabel } from "@openclaw-hosting/provider-http";
+import { isCanonicalDiscordSnowflake, type ActorContext, type CustomerIdentity, type HostingService, type HostingServiceStatus } from "@support-ai-agent/contracts";
+import { count, positiveId, ProviderReadError, record, safeLabel } from "@support-ai-agent/provider-http";
 import { whmcsCustomerId } from "./verified-customer-resolver.js";
 import { WhmcsReadApi } from "./read-api.js";
 import type { WhmcsAdapterConfig } from "./types.js";

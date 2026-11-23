@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { createLiveModel } from "@openclaw-hosting/agent-loop";
+import { createLiveModel } from "@support-ai-agent/agent-loop";
 import { createMockSupport, MOCK_SCOPE } from "./lib/mock-support.js";
 import { createDemoModel, demoRunner } from "./lib/vercel-agent-demo.js";
 

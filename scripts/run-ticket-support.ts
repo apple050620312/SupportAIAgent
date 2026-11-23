@@ -5,7 +5,7 @@ import { once } from "node:events";
 import {
   LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard, TicketBridge,
   DiscordTicketSupport, attachTicketSupportEvents, type LegacyDiscordTransport
-} from "@openclaw-hosting/ticket-bridge";
+} from "@support-ai-agent/ticket-bridge";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
 import { privateDiscordAudit } from "./lib/discord-support-audit.js";

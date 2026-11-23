@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Value } from "@sinclair/typebox/value";
-import { MutationOperationSchema, HandoffRequestSchema, KnowledgeSearchRequestSchema, KnowledgeReadRequestSchema } from "@openclaw-hosting/contracts";
+import { MutationOperationSchema, HandoffRequestSchema, KnowledgeSearchRequestSchema, KnowledgeReadRequestSchema } from "@support-ai-agent/contracts";
 import type { ToolName } from "./permission-matrix.js";
 
 const empty = z.strictObject({});

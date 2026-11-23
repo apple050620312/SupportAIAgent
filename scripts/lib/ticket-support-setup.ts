@@ -1,8 +1,8 @@
-import { isCanonicalDiscordSnowflake } from "@openclaw-hosting/contracts";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
-import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@openclaw-hosting/whmcs";
-import { PterodactylGameServerProvider } from "@openclaw-hosting/pterodactyl";
-import { createOpenClawTicketRunner, DEFAULT_HUMAN_IDLE_MS } from "@openclaw-hosting/ticket-bridge";
+import { isCanonicalDiscordSnowflake } from "@support-ai-agent/contracts";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
+import { WhmcsCustomerIdentityResolver, VerifiedWhmcsCustomerResolver, WhmcsHostingServiceProvider } from "@support-ai-agent/whmcs";
+import { PterodactylGameServerProvider } from "@support-ai-agent/pterodactyl";
+import { createOpenClawTicketRunner, DEFAULT_HUMAN_IDLE_MS } from "@support-ai-agent/ticket-bridge";
 import { HostingSupportService } from "../../apps/support-core/dist/src/services/hosting-support-service.js";
 import { supportKnowledgeRoot } from "./knowledge-setup.js";
 

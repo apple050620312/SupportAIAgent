@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import type { TSchema } from "@sinclair/typebox";
-import type { TicketScope } from "@openclaw-hosting/contracts";
+import type { TicketScope } from "@support-ai-agent/contracts";
 
 /** Supplied only by the authenticated host. Never derive selection or scope from model/chat input. */
 export interface TrustedAgentSession {

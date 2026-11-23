@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard, TicketBridge } from "@openclaw-hosting/ticket-bridge";
-import { TicketContextTokens } from "@openclaw-hosting/trusted-context";
+import { LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard, TicketBridge } from "@support-ai-agent/ticket-bridge";
+import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 function setup() {

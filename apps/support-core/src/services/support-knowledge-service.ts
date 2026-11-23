@@ -2,7 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import {
   KnowledgeSearchRequestSchema, KnowledgeSearchResponseSchema, KnowledgeReadRequestSchema, KnowledgeReadResponseSchema,
   type KnowledgeSearchRequest, type KnowledgeSearchResponse, type KnowledgeReadRequest, type KnowledgeReadResponse
-} from "@openclaw-hosting/contracts";
+} from "@support-ai-agent/contracts";
 import type { SupportKnowledgeProvider } from "../ports/index.js";
 import { KnowledgeNotFoundError, UpstreamUnavailableError } from "../domain/errors.js";
 

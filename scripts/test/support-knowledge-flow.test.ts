@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { KnowledgeReadResponse, KnowledgeSearchResponse } from "@openclaw-hosting/contracts";
+import type { KnowledgeReadResponse, KnowledgeSearchResponse } from "@support-ai-agent/contracts";
 import { MarkdownKnowledgeProvider } from "../../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_ARTICLE_REF } from "../lib/mock-support.js";
 

@@ -3,8 +3,8 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { createHostingTurnHandler, type OpenClawHostingRuntime } from "@openclaw-hosting/openclaw-plugin/turn";
-import { registerHostingTurnRoute, type HostingHttpApi } from "@openclaw-hosting/openclaw-plugin/native-http";
+import { createHostingTurnHandler, type OpenClawHostingRuntime } from "@support-ai-agent/openclaw-plugin/turn";
+import { registerHostingTurnRoute, type HostingHttpApi } from "@support-ai-agent/openclaw-plugin/native-http";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
 async function fixture() {

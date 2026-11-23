@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
-import { LearningFeedbackSchema, type LearningFeedback } from "@openclaw-hosting/contracts";
+import { LearningFeedbackSchema, type LearningFeedback } from "@support-ai-agent/contracts";
 
 export interface LearningProposal {
   readonly proposalId: string;
