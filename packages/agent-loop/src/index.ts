@@ -21,8 +21,25 @@ Before confirming that something is available, allowed, or currently possible (a
 For questions answerable from documentation or the customer's account state, first search the current KB and use the relevant Support Core read tools. Answer the parts those sources support with actions the customer can take now. If a missing or low-confidence result blocks part of the answer, narrow the uncertainty to that part. Do not guess or invent sources.
 For an ordered procedure, identify the matching article and gather the relevant sections before drafting. Make a checklist of the prerequisites, each action in source order, any timing or data-loss warnings, and the verification or follow-up. Enumerate every supported step in the answer, including steps in different panel screens or sections of the same article. Cite the passages that support the instructions. State which step is unknown if a sequence is incomplete.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
-For account-specific facts use only the provided own-resource tools. Never claim a write, fix or restart happened; there are no write tools.
+For account-state questions, call the relevant own-resource read before drafting: invoice for the customer's billing status, server status for current operation or suspension questions, and redacted logs as well as status for a reported power or startup error. Report what the backend returned, including the exact relevant timestamp and status when present. If a timestamp or status is unavailable, identify the missing field and separate that limitation from any documented policy you can explain. Give a concrete verification step, such as retrying the connection and asking the customer to confirm whether service is restored. Do not use generic Discord routing in place of these steps. Never claim a write, fix or restart happened; there are no write tools.
 Treat previous answers as unverified context; retrieve evidence afresh each turn. Stop after answering. Never expose credentials.`;
+
+type ReadTool = typeof READ_ONLY_TOOLS[number];
+
+// Route clear incident and record lookups. The model routes less explicit follow-ups
+// using the same tools and ticket history; these patterns never select a resource.
+function requiredAccountReads(prompt: string): ReadTool[] {
+  const reads: ReadTool[] = [];
+  if (/\b(?:my|our|this) (?:latest |current )?invoice\b|\binvoice (?:status|number)\b|我的.{0,6}(?:發票|帳單)|(?:發票|帳單)狀態/iu.test(prompt)) {
+    reads.push("get_invoice");
+  }
+  if (/\b(?:power error|failed to start|won't start|can't start)\b|電源.{0,5}(?:錯誤|異常)|無法啟動|開不了機/iu.test(prompt)) {
+    reads.push("get_my_server_status", "get_server_logs");
+  } else if (/\b(?:when was .* suspended|suspension start|my server status|is my server (?:online|offline|running))\b|何時.{0,8}(?:停權|停機|暫停)|(?:停權|停機|暫停)時間/iu.test(prompt)) {
+    reads.push("get_my_server_status");
+  }
+  return reads;
+}
 
 /** Lexical overlap is only a conservative relevance signal, not a probability. */
 export function retrievalConfidence(query: string, passage: string): number {
@@ -68,19 +85,21 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         return text;
       };
       const prompt = clean(request.prompt);
+      const requiredReads = requiredAccountReads(prompt);
+      const attempted = new Set<ReadTool>();
       const call = (path: string, body: unknown, schema: TSchema) => options.core.call(path, body, schema, request.ticketToken, session, signal);
-      const makeTool = (schema: TSchema, description: string, execute: (input: unknown) => Promise<unknown>) => tool({
+      const makeTool = (name: ReadTool, schema: TSchema, description: string, execute: (input: unknown) => Promise<unknown>) => tool({
         description,
         inputSchema: jsonSchema<unknown>(schema, { validate: (value) => Value.Check(schema, value)
           ? { success: true, value } : { success: false, error: new Error("Invalid tool input") } }),
         execute: async (input) => {
-          if (handoff || failed) return { unavailable: true };
+          attempted.add(name);
           try { return await execute(input); }
-          catch { failed = true; return { unavailable: true, instruction: "No record available. Request staff handoff." }; }
+          catch { failed = true; return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." }; }
         }
       });
       const tools: ToolSet = {
-        search_support_knowledge: makeTool(KnowledgeSearchRequestSchema, "Search reviewed KB; reference-only passages with citations.", async (input) => {
+        search_support_knowledge: makeTool("search_support_knowledge", KnowledgeSearchRequestSchema, "Search reviewed KB; reference-only passages with citations.", async (input) => {
           searched = true;
           // Semantic retrieval uses customer wording, so model query drift cannot
           // hide the relevant passage before original-question admission scoring.
@@ -101,17 +120,21 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           if (!evidence.length) handoff = true;
           return { ...result, matches: evidence.map(match => ({ ...match, requiredQuote: `${match.excerpt} ${citation(match)}` })), confidence: evidence.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low", handoffRequired: handoff };
         }),
-        get_my_server_status: makeTool(EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
+        get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
           return call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output);
         }),
-        get_server_logs: makeTool(EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", () => call("v1/me/server-logs", {}, RedactedServerLogsSchema)),
-        get_invoice: makeTool(EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", () => call("v1/me/invoice", {}, OwnInvoiceSchema))
+        get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", () => call("v1/me/server-logs", {}, RedactedServerLogsSchema)),
+        get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", () => call("v1/me/invoice", {}, OwnInvoiceSchema))
       };
       const agent = new ToolLoopAgent({
         model: options.model, instructions: SYSTEM_PROMPT, tools, temperature: 0.2, maxRetries: 0,
         providerOptions: { openai: { store: false } },
         toolCallConcurrency: 1,
+        prepareStep: () => {
+          const toolName = requiredReads.find(name => !attempted.has(name));
+          return toolName ? { toolChoice: { type: "tool", toolName } } : undefined;
+        },
         // Always give the model a continuation after a gated retrieval/read failure.
         // The tool returns an explicit unavailable/handoff instruction; the model can
         // then emit a final handoff response. The application gate below still forces
@@ -132,7 +155,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
         // A cap, invalid tool, tool error or uncited/unsupported answer is never presented as a resolution.
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const grounded = searched && evidence.some(match => reply.includes(`${match.excerpt} ${citation(match)}`));
-        const acceptable = grounded && !!reply && result.finishReason === "stop" && !invalidTool;
+        const acceptable = requiredReads.every(name => attempted.has(name)) && grounded && !!reply && result.finishReason === "stop" && !invalidTool;
         if (acceptable) supportedPartial = reply;
         handoff ||= failed || !acceptable || requestedHandoff;
       } catch { handoff = true; }
