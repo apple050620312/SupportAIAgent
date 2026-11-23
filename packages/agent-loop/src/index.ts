@@ -55,6 +55,16 @@ export function retrievalConfidence(query: string, passage: string): number {
   const text = passage.normalize("NFKC").toLowerCase();
   return tokens.size ? [...tokens].filter((token) => text.includes(token)).length / tokens.size : 0;
 }
+
+/** Rejects drafts that cite evidence but never state an actionable answer. */
+export function answerCompletenessCheck(answer: string, _prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+  const text = answer.trim();
+  if (text.length < 80 || !evidence.length) return false;
+  const answerText = text.normalize("NFKC").toLowerCase();
+  const actionable = /(?:click|select|enter|set|open|check|query|confirm|retry|install|restart|use|connect|設定|選擇|輸入|開啟|檢查|重試|安裝|重啟|連線|請先|需要)/iu.test(text);
+  const citedEvidence = evidence.some(match => answerText.includes(match.excerpt.normalize("NFKC").toLowerCase().slice(0, 24)));
+  return actionable && citedEvidence;
+}
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
   admitted: KnowledgeSearchResponse["matches"],
