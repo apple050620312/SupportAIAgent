@@ -1,4 +1,15 @@
-# Step 12 docs-answerable diagnosis
+# Step 12 diagnosis — final live-trace report
+
+The phase-2 live run used `gpt-6.1-sol` through sub2api with official OpenAI
+`text-embedding-3-small` retrieval and the 0.40 admission threshold. It ran
+GS-049, GS-094, GS-163, GS-018, GS-023 and GS-030 on 2026-11-23. The run
+checkpoint is `eval-results/golden-2026-11-23T11-15-28-585Z-6.json` and the
+console trace is `/tmp/step12-live-trace.log`. It completed 6/6 items with 1
+correct, 5 wrong, and no unscored results. The index reported 557 passages and
+64 articles. None of the six traces retrieved one of the three newly landed
+articles (`jvm-startup-parameters.md`, `neoforge-manual-upload.md`, or
+`java-modpack-recovery.md`), which is expected because these questions do not
+match those topics.
 
 The baseline produced 0 correct, 2 partial, 10 wrong and 1 unscored across the 13 docs-answerable items, with 8 handoffs. The clean rerun produced 1 correct and 12 wrong, with 12 handoffs. This diagnosis follows six items across baseline checkpoint `golden-2026-11-23T07-13-56-915Z-175.json` and clean checkpoint `golden-2026-11-23T10-53-02-770Z-13.json`. The full report is at `e90bcfa:docs/evals/golden-set-step12.md`. The subset report is [here](golden-set-step12-docs-rerun-2.md).
 
@@ -19,3 +30,22 @@ The checkpoint records raw retrieval hits and cosine scores for the final attemp
 2. **Retrieval and KB precision.** Retrieve companion procedure sections for GS-094 and the actual DNS instructions for GS-023. Verify end-of-term file retention for GS-049 and route switching for GS-030 before treating those historical points as current guidance. GS-163 and the SFTP workaround for GS-018 already had the evidence needed for their core advice.
 3. **Agent instructions.** Separate a documented procedure from unknown current availability, root cause or account state. Cover the documented steps before deciding whether any remaining question requires staff. GS-049 requested staff despite a passing quote check and no recorded tool error. GS-163 demonstrates the gain from stating a documented prerequisite.
 4. **Harness and rubric.** Keep lifecycle outcomes as the resolution metric and record a separate content verdict for surviving handoff drafts. The current scorer skips the semantic judge on handoff. Capture per-attempt tool and gate events and distinguish a deadline checkpoint reply from a completed answer. Reconcile dated references against the current KB before interpreting contradictions, as the full report illustrates with GS-005, GS-153 and GS-166. No stored verdict among the six demonstrates a judge rejecting a complete, current answer.
+
+## Phase-2 live evidence and hypothesis verdicts
+
+- **GS-049 — agent and handoff gate.** Live retrieval admitted `store/services/cancel.md:1-18` and `19-61` at cosine 0.562 and 0.554, plus `store/services/suspension-retention.md:14-17` at 0.494. The draft gave backup, end-of-term cancellation and no-next-invoice guidance with valid citations. `/v1/me/server-logs` returned HTTP 404. The run handed off and the lifecycle judge marked it wrong. `citationGateViolation` was false. The core retrieval hypothesis is refuted, while the retention wording gap remains confirmed.
+- **GS-094 — retrieval and agent.** Live retrieval admitted the version field at `panel/config/startup.md:10-13` at 0.640 and backup guidance at `store/description/minecraft.md:8-18` at 0.563, but missed reinstall at `panel/config/startup.md:26-33`. There were no tool errors. The draft located the field, asked staff to confirm availability and reinstall behavior, then emitted `STAFF_HANDOFF`. The lifecycle judge marked it wrong. The companion-section retrieval miss and escalation hypothesis are confirmed.
+- **GS-163 — resolved.** Live retrieval admitted both start-server excerpts at 0.707 and 0.665 and the activation excerpt at 0.603. There were no tool errors, no handoff and no citation-gate violation. The answer stated activation first and then gave panel startup steps. The semantic judge marked it correct. This refutes an evidence or gate deficiency for this item.
+- **GS-018 — agent and handoff gate.** Live retrieval returned `practice/install/mod.md:101-183` at 0.535, containing the SFTP workaround. Logs and invoice reads returned HTTP 404 and HTTP 403. The draft included the workaround but showed long-excerpt truncation in the draft trail, then handed off. The lifecycle judge marked it wrong. Retrieval of the core workaround was sufficient, confirming optional-read failure and agent uncertainty as the primary breakpoint.
+- **GS-023 — retrieval and agent.** Live retrieval returned tangential DiscordSRV and incident passages, while the DNS procedure at `debug/connection.md:33-47` was absent. The logs read returned HTTP 404. The draft reported status and handed off. The lifecycle judge marked it wrong. Both the retrieval miss and escalation pressure are confirmed.
+- **GS-030 — agent and handoff gate.** Live retrieval admitted route guidance at `debug/connection.md:23-32` at 0.608 and the DNS procedure at `33-47` at 0.539. The draft contained route, Google DNS and flush steps, but a logs HTTP 404 preceded handoff. The lifecycle judge marked it wrong. Core retrieval was adequate, refuting retrieval as the primary cause.
+
+The live traces rule out the three newly landed KB articles as a cause for these six failures. They also rule out a general embedding outage or admission failure. No trace shows a judge rejecting a delivered, non-handoff answer. Five failures were lifecycle verdicts caused by handoff.
+
+## Final ranked fix targets
+
+1. **Gate and handoff policy.** Preserve supported KB guidance when optional logs or invoice reads fail. Four traces had account-read failures, and GS-049 and GS-030 had grounded procedural drafts before handoff.
+2. **Agent instructions.** Finish documented steps before escalating unknown availability, restoration or root cause. Five items had useful evidence but ended in handoff. GS-163 is the successful sequencing control.
+3. **Retrieval and KB precision.** Co-retrieve companion sections for GS-094 reinstall and GS-023 DNS. Review retention wording for GS-049 and route-switching wording for GS-030.
+4. **Citation gate instrumentation.** Test long excerpts and multi-citation drafts. GS-018 showed truncation, but the six-run metadata could not flag a gate violation because failures ended in handoff.
+5. **Harness and rubric.** Keep lifecycle as primary, while recording content verdicts for handoff drafts and every tool, gate and judge event. Current semantic output hides whether a handed-off draft was substantively useful.
