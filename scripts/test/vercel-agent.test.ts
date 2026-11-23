@@ -175,6 +175,48 @@ describe("Vercel read-only agent", () => {
     expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
+  it("delivers grounded KB guidance when an optional log read fails", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_server_logs"), mockCall("search_support_knowledge", { query: "status" }),
+      mockText(`${DEMO_ANSWER}\n\nI could not verify the account logs.\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(result.reply).toContain(DEMO_ANSWER);
+    expect(result.reply).toContain("I've handed this to support staff.");
+    expect(result.reply).not.toContain("I don't know");
+  });
+
+  it("hands off when an optional read fails and no grounded draft exists", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_server_logs"), mockText("I cannot determine the result.")
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(result.reply).toContain("I don't know");
+  });
+
+  it("keeps account-state reads as blockers even when KB guidance is grounded", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }),
+      mockText(`${DEMO_ANSWER}\n\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+    expect(result.reply).toContain(DEMO_ANSWER);
+    expect(result.reply).toContain("I've handed this to support staff.");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
   it("forces status and log reads on a reported power error", async () => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },

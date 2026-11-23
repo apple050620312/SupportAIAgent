@@ -78,7 +78,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
     // Ticket is the session key, namespaced/bound to trusted guild+actor to prevent history crossover.
     const key = JSON.stringify([session.scope.guildId, request.sessionId, session.scope.discordUserId]);
     return options.history.withSession(key, async (history, save) => {
-      let failed = false; let searched = false; let handoff = false;
+      let failedRequiredRead = false; let failedOptionalRead = false; let searched = false; let handoff = false;
       let checkpoint = "";
       let verifiedStatus = "";
       let evidence: KnowledgeSearchResponse["matches"] = [];
@@ -119,7 +119,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           const cached = results.get(key);
           if (cached) return cached;
           const pending = execute(input).catch(() => {
-            failed = true;
+            if (requiredReads.includes(name)) failedRequiredRead = true;
+            else failedOptionalRead = true;
             return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." };
           });
           results.set(key, pending);
@@ -215,7 +216,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): TicketAge
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
         }
-        handoff ||= failed || !acceptable || requestedHandoff;
+        // An optional logs or invoice read can fail independently of a documented
+        // procedure. Keep a grounded draft and hand off only the account-state
+        // detail that the failed read could not verify.
+        handoff ||= failedRequiredRead || failedOptionalRead || !acceptable || requestedHandoff;
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
