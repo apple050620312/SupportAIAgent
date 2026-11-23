@@ -354,19 +354,47 @@ describe("Vercel read-only agent", () => {
     });
 
     it.each([
-      ["wrong_lines", `${wrapQuote(other)} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
       ["missing_citation", other, second],
       ["unknown_citation", `${wrapQuote(other)} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
       const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
-      const expectedStatus = reason === "unknown_citation" || reason === "wrong_lines" || reason === "missing_citation" ? "failed" : "passed";
+      const expectedStatus = reason === "excerpt_mismatch" ? "passed" : "failed";
       expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
       expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
       if (expectedStatus === "failed") {
         expect(result.reply).not.toContain(first);
         expect(result.reply).toContain("I've handed this to support staff.");
       }
+    });
+
+    const wrongLines = "[synthetic/status.md:3-6]";
+    const wrongLinesTail = `The panel shows the current server state. ${wrongLines}`;
+
+    it.each([
+      ["GS-084 direct delivery", "status", "", "AI_ACTIVE", ""],
+      ["handoff with an account blocker", "My panel is locked", "\nSTAFF_HANDOFF", "HUMAN_NEEDED", "\n\nI've handed this to support staff."]
+    ])("retains a grounded draft with wrong lines for %s", async (_scenario, prompt, marker, expectedState, suffix) => {
+      const draft = `${long} ${first}\n\n${wrongLinesTail}`;
+      const { result, state } = await runDraft(draft + marker, other, prompt);
+      expect(result).toMatchObject({
+        reply: draft + suffix, answerComplete: true,
+        citationGate: { status: "passed", grounded: true, matched: [first], failures: [{ citation: wrongLines, reason: "wrong_lines" }] }
+      });
+      expect(state).toBe(expectedState);
+    });
+
+    it.each([
+      ["wrong_lines", wrongLinesTail, wrongLines],
+      ["truncated", `${long.split("\n").slice(0, 60).join("\n")} … ${first}`, first],
+      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
+    ])("hands off a draft whose only citation has %s", async (reason, draft, citation) => {
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({
+        reply: "I don't know; I don't have enough verified information. I've handed this to support staff.",
+        citationGate: { status: "failed", grounded: false, matched: [], failures: [{ citation, reason }] }
+      });
+      expect(state).toBe("HUMAN_NEEDED");
     });
 
     it("passes a repeated citation when one occurrence has an exact excerpt", async () => {

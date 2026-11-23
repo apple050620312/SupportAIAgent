@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, hasBlockingCitationFailure, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
 export type CitationGateRepair = {
@@ -395,7 +395,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         answerComplete = contentCoverage;
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         const fitsHandoff = reply.length <= 5800;
-        if (!invalidTool && fitsHandoff && citationGate.matched.length && !hasBlockingCitationFailure(citationGate)) {
+        if (!invalidTool && fitsHandoff && citationGate.status === "passed") {
           supportedPartial = reply;
         }
         if (acceptable && fitsHandoff) {

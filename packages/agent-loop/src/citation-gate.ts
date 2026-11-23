@@ -21,9 +21,9 @@ export type CitationGate = {
   claimSupport?: boolean;
 };
 
-export function hasBlockingCitationFailure(gate: Pick<CitationGate, "failures">): boolean {
+export function hasBlockingCitationFailure(gate: Pick<CitationGate, "matched" | "failures">): boolean {
   return gate.failures.some(failure =>
-    failure.reason === "unknown_citation" || failure.reason === "wrong_lines"
+    failure.reason === "unknown_citation" || (failure.reason === "wrong_lines" && gate.matched.length === 0)
     || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
   );
 }
@@ -104,10 +104,11 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
   if (!matched.size && !failures.length) {
     failures.push({ citation: null, reason: passages.size ? "missing_citation" : "no_admitted_evidence" });
   }
-  // Pass when at least one matched pair grounds the draft and every citation is admitted.
-  // Repeat quote mismatches remain diagnostics, while unknown and wrong-line citations block.
-  const status = matched.size > 0 && !hasBlockingCitationFailure({ failures }) ? "passed" : "failed";
+  const gate = { matched: [...matched], failures };
+  const grounded = matched.size > 0;
+  // Wrong lines and quote mismatches remain diagnostics when a matched pair grounds the draft.
+  const status = grounded && !hasBlockingCitationFailure(gate) ? "passed" : "failed";
   const firstSentence = draft.split(/[.!?。！？]/u)[0] ?? "";
-  const claimSupport = matched.size > 0 && firstSentence.length >= 12;
-  return { status, grounded: matched.size > 0, matched: [...matched], failures, claimSupport };
+  const claimSupport = grounded && firstSentence.length >= 12;
+  return { ...gate, status, grounded, claimSupport };
 }
