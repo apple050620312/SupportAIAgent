@@ -153,8 +153,8 @@ describe("Discord shadow drafts", () => {
     const client = new EventEmitter();
     const failure = vi.fn();
     const events = {
-      on: (event: string, listener: (...args: never[]) => void) => Reflect.apply(client.on, client, [event, listener]),
-      off: (event: string, listener: (...args: never[]) => void) => Reflect.apply(client.off, client, [event, listener])
+      on: (event: string, listener: (...args: never[]) => void) => client.on(event, listener as (...args: unknown[]) => void),
+      off: (event: string, listener: (...args: never[]) => void) => client.off(event, listener as (...args: unknown[]) => void)
     };
     const detach = attachTicketSupportEvents(events, f.controller, failure);
     try {
