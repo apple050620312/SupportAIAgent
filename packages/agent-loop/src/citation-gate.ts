@@ -18,6 +18,7 @@ export type CitationGate = {
   grounded: boolean;
   matched: string[];
   failures: CitationFailure[];
+  claimSupport?: boolean;
 };
 
 const citationPattern = /\[([^[\]\r\n]+):\d+-\d+\]/g;
@@ -95,5 +96,7 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
       || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
   );
   const status = matched.size > 0 && !blockingFailure ? "passed" : "failed";
-  return { status, grounded: matched.size > 0, matched: [...matched], failures };
+  const firstSentence = draft.split(/[.!?。！？]/u)[0] ?? "";
+  const claimSupport = matched.size > 0 && firstSentence.length >= 12;
+  return { status, grounded: matched.size > 0, matched: [...matched], failures, claimSupport };
 }
