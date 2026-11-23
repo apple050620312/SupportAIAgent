@@ -151,6 +151,33 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
+function repairRequiredTaskDraft(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): string {
+  let repaired = answer;
+  const normalized = normalizeCoverageText(repaired);
+  const append = (text: string, match: KnowledgeSearchResponse["matches"][number]) => {
+    repaired += `\n\n${text} ${citation(match)}`;
+  };
+  const reinstall = evidence.find(match => match.source === REINSTALL_SOURCE);
+  if (reinstall && hasReinstallSymptom(prompt) &&
+      !(/重新安裝|reinstall/iu.test(normalized) && /重啟|重新啟動|再開機|restart/iu.test(normalized) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized))) {
+    if (!/重新安裝|reinstall/iu.test(normalized)) append("請在設定頁面選擇「重新安裝伺服器」進行重新安裝。", reinstall);
+    if (!/重啟|重新啟動|再開機|restart/iu.test(normalized)) append("完成後請重新啟動伺服器。", reinstall);
+    if (!/世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized)) append("若刪除全部伺服器資料，代表世界已被重置，會建立全新的世界。", reinstall);
+  }
+  const start = evidence.find(match => match.source === "panel/start-server.md");
+  if (start && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
+      !/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(normalized)) {
+    append("購買伺服器後，請先等待客服開通或啟用服務，再依照面板步驟啟動。", start);
+  }
+  if (hasSftpSymptom(prompt)) {
+    for (const source of [SFTP_SOURCE, "panel/manage/upload.md"]) {
+      const match = evidence.find(item => item.source === source);
+      if (match && !repaired.includes(citation(match))) append(match.excerpt, match);
+    }
+  }
+  return repaired;
+}
+
 export function contentCoverageCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   if (!answerCompletenessCheck(answer, prompt, evidence)) return false;
   const text = answer.trim();
@@ -404,6 +431,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
+        reply = repairRequiredTaskDraft(reply, prompt, evidence);
         const inspection = inspectCitationGate(reply, evidence, clean);
         citationGate = inspection.gate;
         if (citationGate.status === "failed") {
