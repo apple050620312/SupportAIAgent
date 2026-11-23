@@ -1,0 +1,28 @@
+# Step 12 triage
+
+This triage uses the step-12 report, its checkpoint answers, the golden-set staff resolutions, and `scripts/lib/golden-answerability.json`. Past-ticket text is used only to identify the failure topic. It is not proposed as KB content.
+
+## Pattern → concrete fix
+
+- **Premature handoff on should-resolve tickets** — **Fixable without owner input.** Add a resolution gate to the system prompt and agent loop. For a ticket in a docs-answerable or account-state group, the agent must first use the available Support Core read tools and retrieved current KB passages, then give the actionable answer it can support. It may hand off only after stating the observed limitation and the next customer action. Add a final checklist requiring every staff-resolution step before handoff or completion. This targets the 99 should-resolve handoffs, including docs-answerable GS-018, GS-023, GS-030, GS-049, GS-053, GS-056, GS-062, GS-084, GS-094, GS-108, GS-140, GS-163, and GS-166, and account-state examples GS-061 and GS-122.
+
+- **Docs answers omit a required operational step** — **Fixable without owner input.** Add a retrieval-to-answer checklist that preserves ordered procedures and requires the model to enumerate every step supported by the cited article. For GS-094, the answer must include both changing the Minecraft version in Startup Settings and selecting reinstall in Settings. For GS-049, the answer must tell the customer that files are not retained after cancellation, require downloading them before expiry, and explain that waiting for the billing cycle prevents a new invoice.
+
+- **Account-state answers omit backend facts or a useful recovery action** — **Fixable without owner input for behavior, with owner input for missing facts.** Change the loop so an account-state question triggers the relevant read tool before drafting, and require the answer to include the returned timestamp/status plus a concrete verification step. GS-061 needs the exact suspension start, 9/3 00:00 in the evaluated case, alongside the retention explanation. GS-122 needs the backend power-error investigation and a request to retry connecting or playing, followed by confirmation that service is restored. The model must not replace those actions with a generic Discord handoff.
+
+- **Stale or over-broad capability claim about JVM changes** — **Needs owner answer for the factual policy, then fixable in prompt/KB.** GS-158 says support cannot apply JVM flags, while the staff resolution says support changed the supplied flags. Once the owner confirms the supported operation and limits, add that rule to a reviewed KB article and a prompt rule that forbids claiming an operation is unavailable when Support Core or staff policy permits it. The agent should then report the change or request the exact supported inputs.
+
+- **KB-gap workarounds are missed** — **Needs owner answer for the factual workaround, then fixable in KB retrieval.** GS-149 requires the documented fallback for a NeoForge 1.21.1 installer ERROR 504, namely manually downloading the server folder and uploading it, followed by the required support-channel routing. GS-142 requires identifying Java 21 versus the Java 25 requirement, changing Java in Startup Settings, and retrying after the documented reset/reinstall path. Add owner-confirmed articles with explicit trigger, steps, and escalation conditions, then add a prompt rule to prefer a matching workaround article over a generic handoff.
+
+- **Current-policy precedence is not explicit enough when historical references conflict** — **Fixable without owner input for the decision rule.** Add a prompt and retrieval rule to treat current, owner-confirmed KB passages as authoritative and to flag conflicting historical ticket text for review. Do not encode the historical answers as policy. GS-005 should follow the current all-plans upgrade availability article, GS-166 should follow the current restriction that the web panel cannot upload folders and should point to SFTP, and GS-153 should follow the current cancellation procedure. These cases require KB staff review if the current articles themselves are inaccurate, but the eval references alone do not justify changing them.
+
+- **Deadline failures** — **Fixable without owner input.** Keep the 60-second deadline unchanged. Improve loop efficiency by stopping redundant retrieval and drafting passes once the required evidence and answer checklist are satisfied, and persist a concise partial answer before timeout. The affected checkpoint rows are GS-011, GS-018, GS-020, GS-043, GS-054, GS-055, GS-057, GS-058, GS-111, and GS-125.
+
+## KB gaps needing owner answers
+
+These are questions for the owner. No answer is inferred from the past tickets.
+
+1. **GS-158 — JVM parameters.** May support staff directly change a customer server's JVM startup parameters after a host change? If yes, what memory limit, Java-version constraints, and parameter validation rules apply, and should the KB say that staff can perform the change?
+2. **GS-149 — NeoForge ERROR 504.** When NeoForge 1.21.1 installation returns ERROR 504, is manually downloading the generated `server` folder and uploading it to the server an approved workaround? What exact follow-up is required, including Discord binding and the correct after-sales support ticket route?
+3. **GS-142 — Java and failed installation recovery.** For Forge 26.3 errors stating that Java 21 is installed but Java 25 is required, is Java 25 selectable in Startup Settings for affected services? When installation returns HTTP 500, is resetting and reinstalling the approved recovery procedure, and are there any service-specific limits?
+

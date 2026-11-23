@@ -1,9 +1,9 @@
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
@@ -32,6 +32,70 @@ describe("Vercel read-only agent", () => {
     expect(tools.map((item) => item.type === "function" ? item.name : "unexpected").sort()).toEqual([...READ_ONLY_TOOLS].sort());
     for (const name of READ_ONLY_TOOLS) expect(permissionMatrix[name].tier).toBe("T0");
     expect(model.doGenerateCalls[0]?.temperature).toBe(0.2);
+  });
+
+  describe("citation gate", () => {
+    const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
+    const first = "[synthetic/mod.md:101-183]";
+    const other = "Check the status in the panel.";
+    const second = "[synthetic/status.md:3-5]";
+
+    async function runDraft(draft: string) {
+      const { root, harness, request, signal } = await setup({
+        search: () => Promise.resolve({ trust: "reference_only", matches: [
+          { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
+          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: other }
+        ] }),
+        read: () => Promise.resolve(null)
+      });
+      const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(draft)] });
+      const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal);
+      return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
+    }
+
+    it("passes a full 83-line quote with CRLF and a second exact citation", async () => {
+      expect(long.split("\n")).toHaveLength(83);
+      const draft = `${long.replaceAll("\n", "\r\n")}\r\n${first}\n\n${other} ${second}`;
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({ reply: draft, citationGate: { status: "passed", grounded: true, matched: [first, second], failures: [] } });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("records a truncated 83-line quote on handoff even when another citation is exact", async () => {
+      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second}\nSTAFF_HANDOFF`);
+      expect(state).toBe("HUMAN_NEEDED");
+      expect(result).toMatchObject({ citationGate: {
+        status: "passed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
+      } });
+      expect(result.reply).toContain(other);
+    });
+
+    it.each([
+      ["wrong_lines", `${other} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
+      ["missing_citation", other, second],
+      ["whitespace_mismatch", `${other.replace("the status", "the  status")} ${second}`, second],
+      ["unknown_citation", `${other} [invented.md:3-5]`, "[invented.md:3-5]"],
+      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
+    ])("identifies a second citation with %s", async (reason, tail, citation) => {
+      const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
+      const expectedStatus = reason === "unknown_citation" || reason === "wrong_lines" || reason === "missing_citation" ? "failed" : "passed";
+      expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
+      expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
+    });
+
+    it("passes a repeated citation when one occurrence has an exact excerpt", async () => {
+      const draft = `${other} ${second}\nThe panel status is unavailable. ${second}`;
+      const { result } = await runDraft(draft);
+      expect(result.citationGate).toMatchObject({ status: "passed", grounded: true, matched: [second] });
+      expect(result.citationGate.failures).toEqual([{ citation: second, reason: "excerpt_mismatch" }]);
+    });
+
+    it("reports a gate pass when a grounded draft still asks for handoff", async () => {
+      const { result, state } = await runDraft(`${other} ${second}\nSTAFF_HANDOFF`);
+      expect(state).toBe("HUMAN_NEEDED");
+      expect(result).toMatchObject({ citationGate: { status: "passed", grounded: true, matched: [second], failures: [] } });
+      expect(result.reply).toContain(other);
+    });
   });
 
   it("keeps Responses tool-loop continuations self-contained when storage is unavailable", async () => {
@@ -162,6 +226,137 @@ describe("Vercel read-only agent", () => {
     const model = new MockLanguageModelV4({ doGenerate: () => Promise.resolve(mockCall("search_support_knowledge", { query: "status" })) });
     expect((await demoRunner(harness, root, model).run(request, signal)).reply).toContain("I don't know");
     expect(model.doGenerateCalls).toHaveLength(10);
+  });
+
+  it("requires every documented step before deciding whether the unknown needs staff", () => {
+    expect(SYSTEM_PROMPT).toMatch(/Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off/);
+    expect(SYSTEM_PROMPT).toContain("Never ask staff to confirm a step the KB already documents");
+    expect(SYSTEM_PROMPT).toContain("If the procedure answers the request, state the remaining uncertainty without handing off");
+  });
+
+  it("delivers a complete cited procedure with a narrow restoration unknown without handing off", async () => {
+    const source = "panel/example-profile.md";
+    const excerpts = [
+      "Open Startup Settings and select the desired profile.",
+      "Back up your files before applying the profile. Then open Settings and choose Reinstall. Reinstall may erase files."
+    ];
+    const { root, harness, request, signal } = await setup({
+      search: () => Promise.resolve({
+        trust: "reference_only",
+        matches: excerpts.map((excerpt, i) => ({
+          articleRef: `kb:${"a".repeat(64)}`, source, title: "Apply a profile", heading: "Profile setup",
+          excerpt, startLine: i + 1, endLine: i + 1
+        }))
+      }),
+      read: () => Promise.resolve(null)
+    });
+    const draft = [
+      ...excerpts.map((excerpt, i) => `${i + 1}. ${excerpt} [${source}:${i + 1}-${i + 1}]`),
+      "I can't verify whether this will restore service. After reinstalling, check whether you can connect."
+    ].join("\n");
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "apply profile" }), mockText(draft)
+    ] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt: "How do I apply a profile?" }, signal);
+    expect(result.reply).toBe(draft);
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    expect(harness.sent).toHaveLength(0);
+  });
+
+  it("keeps a cited procedure when staff still need to verify a separate detail", async () => {
+    const { root, harness, request, signal } = await setup();
+    const partial = `${DEMO_ANSWER}\n\nI could not verify when it stopped. Check the panel and share the time shown.`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "status" }), mockText(`${partial}\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(result.reply).toBe(`${partial}\n\nI've handed this to support staff.`);
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
+  it("resolves with grounded KB guidance when an optional log read fails", async () => {
+    const { root, harness, request, signal } = await setup();
+    const draft = `${DEMO_ANSWER}\n\nI could not verify the account logs.`;
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_server_logs"), mockCall("search_support_knowledge", { query: "status" }),
+      mockText(draft)
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
+    expect(result.reply).toBe(draft);
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    expect(harness.sent).toHaveLength(0);
+  });
+
+  it("hands off when an optional read fails and no grounded draft exists", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_server_logs"), mockText("I cannot determine the result.")
+    ] });
+    const result = await demoRunner(harness, root, model).run(request, signal);
+    expect(result.reply).toContain("I don't know");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
+  it("hands off after a required status read fails even when KB guidance is grounded", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.resolve({ trust: "untrusted_data", lines: ["synthetic power error"] }) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_my_server_status"), mockCall("get_server_logs"),
+      mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)
+    ] });
+    const result = await demoRunner(harness, root, model, "whmcs-service:2")
+      .run({ ...request, prompt: "My server status after a power error" }, signal);
+    expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
+    expect(result.reply).toContain(DEMO_ANSWER);
+    expect(result.reply).toContain("I've handed this to support staff.");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
+  it("forces status and log reads on a reported power error", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
+      logs: { read: () => Promise.resolve({ trust: "untrusted_data", lines: ["synthetic power error"] }) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_my_server_status"), mockCall("get_server_logs"),
+      mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)
+    ] });
+    await demoRunner(harness, root, model).run({ ...request, prompt: "My server status after a power error" }, signal);
+    expect(model.doGenerateCalls.slice(0, 3).map(call => call.toolChoice)).toEqual([
+      { type: "tool", toolName: "get_my_server_status" }, { type: "tool", toolName: "get_server_logs" },
+      { type: "tool", toolName: "search_support_knowledge" }
+    ]);
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("synthetic power error");
+  });
+
+  it("returns the persisted backend status if drafting reaches the internal deadline", async () => {
+    const { root, harness, request, signal } = await setup();
+    const deadline = new AbortController();
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const clock = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => ms === 60_000 ? deadline.signal : realTimeout(ms));
+    const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
+    const model = new MockLanguageModelV4({ doGenerate: () => {
+      const next = reads.shift();
+      if (next) return Promise.resolve(next);
+      deadline.abort();
+      return Promise.reject(new Error("draft interrupted"));
+    } });
+    try {
+      const result = await demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      expect(result.reply).toContain("Backend server status: running.");
+      expect(result.reply).toContain("I could not verify a complete answer.");
+      const [file] = await readdir(root);
+      expect(JSON.parse(await readFile(join(root, file!), "utf8"))).toEqual([
+        { role: "user", content: "My server status" }, { role: "assistant", content: result.reply }
+      ]);
+      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    } finally { clock.mockRestore(); }
   });
 
   it("uses Chinese for a Chinese customer when refusing", async () => {

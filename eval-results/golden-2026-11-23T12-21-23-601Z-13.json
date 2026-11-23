@@ -1,0 +1,3807 @@
+{
+  "model": "gpt-6.1-sol",
+  "provider": "sub2api",
+  "endpoint": "https://sub2api.coffeehost.net/v1",
+  "datasetSha256": "5d774be134d5287bb93200f8f0c74d0abd6cf234481f560147ed4536487bdc3c",
+  "answerabilityManifestSha256": "0ad31d9702ee3a790e5eca8c37c8ea88db8f0950d2189f16edc6ed15c9cf7dd8",
+  "selected": 13,
+  "selectedIds": [
+    "GS-018",
+    "GS-023",
+    "GS-030",
+    "GS-049",
+    "GS-053",
+    "GS-056",
+    "GS-062",
+    "GS-084",
+    "GS-094",
+    "GS-108",
+    "GS-140",
+    "GS-163",
+    "GS-166"
+  ],
+  "total": 175,
+  "temperature": 0.2,
+  "stepCap": 10,
+  "hosting": "synthetic; not live customer state",
+  "scoring": {
+    "primary": "semantic",
+    "judgeModel": "gpt-6.1-sol",
+    "judgeEndpoint": "https://sub2api.coffeehost.net/v1/responses",
+    "rubricVersion": "step10-v1",
+    "lexical": "NFKC lowercase punctuation/whitespace-stripped whole-point substring"
+  },
+  "trueResolution7d": null,
+  "retrieval": {
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "threshold": 0.4,
+    "hybrid": "cosine + 0.02/(lexical rank + 1)",
+    "digest": "c37481a60dfe20a780d9add2e11f5170a37aed4952f650597a040f89eb3e2211"
+  },
+  "kbStats": {
+    "articles": 64,
+    "chunks": 557,
+    "bytes": 182657
+  },
+  "status": "completed",
+  "elapsedMs": 556655,
+  "semanticSummary": {
+    "n": 13,
+    "scored": 13,
+    "correct": 0,
+    "partial": 0,
+    "wrong": 13,
+    "unscored": 0,
+    "correctRate": 0
+  },
+  "byAnswerability": {
+    "docs-answerable": {
+      "n": 13,
+      "scored": 13,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 13,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "needs-account-state": {
+      "n": 0,
+      "scored": 0,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 0,
+      "unscored": 0,
+      "correctRate": null
+    },
+    "kb-gap": {
+      "n": 0,
+      "scored": 0,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 0,
+      "unscored": 0,
+      "correctRate": null
+    },
+    "unclassified": {
+      "n": 0,
+      "scored": 0,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 0,
+      "unscored": 0,
+      "correctRate": null
+    }
+  },
+  "perCategory": {
+    "account_access": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "billing_payment": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "cannot_connect": {
+      "n": 2,
+      "scored": 2,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 2,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "general_other": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "plan_cancel": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "plugin_mod": {
+      "n": 2,
+      "scored": 2,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 2,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "pre_sales": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "purchase_help": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "server_other": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "server_start_crash": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    },
+    "version_core": {
+      "n": 1,
+      "scored": 1,
+      "correct": 0,
+      "partial": 0,
+      "wrong": 1,
+      "unscored": 0,
+      "correctRate": 0
+    }
+  },
+  "lexicalDiagnostic": {
+    "overall": {
+      "n": 13,
+      "resolved": 13,
+      "handoff": 0,
+      "resolvedCorrect": 0,
+      "handoffCorrect": 0,
+      "partial": 0,
+      "wrong": 13,
+      "resolvedCorrectRate": 0,
+      "handoffCorrectRate": null,
+      "partialRate": 0,
+      "offlineResolutionProxy": 0,
+      "trueResolution7d": null
+    },
+    "perCategory": {
+      "account_access": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "billing_payment": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "cannot_connect": {
+        "n": 2,
+        "resolved": 2,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 2,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "general_other": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "plan_cancel": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "plugin_mod": {
+        "n": 2,
+        "resolved": 2,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 2,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "pre_sales": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "purchase_help": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "server_other": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "server_start_crash": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      },
+      "version_core": {
+        "n": 1,
+        "resolved": 1,
+        "handoff": 0,
+        "resolvedCorrect": 0,
+        "handoffCorrect": 0,
+        "partial": 0,
+        "wrong": 1,
+        "resolvedCorrectRate": 0,
+        "handoffCorrectRate": null,
+        "partialRate": 0,
+        "offlineResolutionProxy": 0,
+        "trueResolution7d": null
+      }
+    }
+  },
+  "averageSteps": 2.769230769230769,
+  "cost": null,
+  "results": [
+    {
+      "id": "GS-018",
+      "category": "plugin_mod",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我會查面板的檔名與上傳限制，並給你一個可以直接複製的檔名。",
+        "",
+        "",
+        "",
+        "從目前資料無法確認這個面板是否有單一檔案大小上限，也無法判定 `Error Network Error` 的確切原因。你提供的伺服器日誌內容是正常停止與儲存世界的訊息，沒有顯示 MOD 上傳錯誤。後端目前回報伺服器狀態為 `running`，但詳細日誌讀取沒有回傳資料，因此無法進一步核對上傳失敗原因。\n\n官方安裝步驟是先進入面板的「檔案管理」，再進入 `mods` 資料夾並使用「上傳」功能。原文如下：\n\n> ### 步驟四：上傳模組到伺服器\n>\n> 1. 前往面板的「**檔案管理**」頁面\n> 2. 進入 `mods` 資料夾\n> 3. 點擊「**上傳**」按鈕\n> 4. 選擇所有下載的 `.jar` 檔案並上傳\n>\n> ![上傳模組](/images/practice/install-mod/upload.png)\n>\n> 如需上傳大檔案，或遇到無法上傳的問題，請參考 [SFTP 上傳教學](/docs/panel/common/sftp)。\n\n[practice/install/mod.md:125-140]\n\n你可以先將檔名改成以下名稱再上傳：\n\n```text\nCobblemonFabric173MC1211.jar\n```\n\n這個檔名的主體只包含英文與數字，最後的 `.jar` 是必要的副檔名。檔名中的 `+` 已移除，檔案內容不會因為重新命名而改變。\n\n另外請確認伺服器確實是 Fabric，並且模組版本符合 Minecraft `1.21.1`。官方文件也要求模組載入器和版本必須相符：\n\n> ### 版本選擇範例\n>\n>     如果您的伺服器是 **Forge 1.20.1**：\n>     - ✅ 下載標示 `Forge` + `1.20.1` 的版本\n>     - ❌ 不要下載 `Fabric` 或 `1.19` 的版本\n\n[practice/install/mod.md:101-107]\n\n如果重新命名後仍然出現 `Error Network Error`，請改用 SFTP 上傳，或請客服確認該服務目前的上傳大小限制與後端上傳紀錄。知識庫沒有提供確切的大小上限，現有詳細日誌讀取也沒有回傳資料。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404",
+        "/v1/me/invoice:HTTP_403"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "tool-calls",
+        "tool-calls",
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 5,
+      "attempts": 1,
+      "latencyMs": 56167,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[practice/install/mod.md:125-140]",
+              "reason": "wrong_lines"
+            },
+            {
+              "citation": "[practice/install/mod.md:101-107]",
+              "reason": "wrong_lines"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 101,
+          "endLine": 183,
+          "excerpt": "### 版本選擇範例\n\n    如果您的伺服器是 **Forge 1.20.1**：\n    - ✅ 下載標示 `Forge` + `1.20.1` 的版本\n    - ❌ 不要下載 `Fabric` 或 `1.19` 的版本\n    \n\n    \n\n    \n\n    ### 步驟三：檢查依賴模組\n\n    許多模組需要其他模組才能運作，這些稱為「依賴模組」：\n\n    **Fabric 伺服器必裝：**\n    - **Fabric API** - 幾乎所有 Fabric 模組都需要\n\n    **常見依賴模組：**\n    - Architectury API\n    - Cloth Config\n    - GeckoLib\n\n    ![依賴模組](/images/practice/install-mod/dependencies.png)\n\n    \n    模組頁面通常會列出需要的依賴，請一併下載安裝。\n    \n\n    \n\n    \n\n    ### 步驟四：上傳模組到伺服器\n\n    1. 前往面板的「**檔案管理**」頁面\n    2. 進入 `mods` 資料夾\n    3. 點擊「**上傳**」按鈕\n    4. 選擇所有下載的 `.jar` 檔案並上傳\n\n    ![上傳模組](/images/practice/install-mod/upload.png)\n\n    \n    如需上傳大檔案，或遇到無法上傳的問題，請參考 [SFTP 上傳教學](/docs/panel/common/sftp)。\n    \n\n    \n\n    \n\n    ### 步驟五：重新啟動伺服器\n\n    上傳完成後，重新啟動伺服器以載入模組。\n\n    \n    模組伺服器啟動較慢是正常的，請耐心等待。\n    \n\n    \n\n    \n\n    ### 步驟六：客戶"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 66,
+          "endLine": 100,
+          "excerpt": "# 安裝模組教學\n\n\n    \n\n    ### 步驟一：確認伺服器類型\n\n    在安裝模組前，請先確認您的伺服器使用哪種模組載入器：\n\n    1. 前往面板的「**啟動設定**」頁面\n    2. 查看伺服器核心類型\n    3. 記住載入器類型和版本\n\n    | 核心名稱包含 | 模組載入器 |\n    |--------------|------------|\n    | `forge` | Forge |\n    | `neoforge` | NeoForge |\n    | `fabric` | Fabric |\n\n    \n\n    \n\n    ### 步驟二：下載模組檔案\n\n    1. 前往 CurseForge 或 Modrinth\n    2. 搜尋您想要的模組\n    3. **選擇正確的版本**：\n       - 選擇正確的模組載入器（Forge/Fabric）\n       - 選擇正確的 Minecraft 版本\n    4. 點擊下載 `.jar` 檔案\n\n    ![下載模組](/images/practice/install-mod/download.png)\n\n    "
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 45,
+          "endLine": 50,
+          "excerpt": "### 情況一：您是自行上傳伺服器核心檔案\n如果您是從外部下載核心檔案並手動上傳至檔案管理中，檔名可能不一定是 `server.jar`（例如可能是 `paper-1.20.4.jar`）。\n請前往控制面板的「啟動設定」頁面，找到「伺服器啟動 Jar 檔案」欄位。請將該欄位的值修改為您實際上傳的核心檔案名稱（需包含 `.jar` 副檔名）。\n![圖片](/images/debug/nojar/custom.png)\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 44,
+          "endLine": 48,
+          "excerpt": "### 不能混用！\n\n⚠️ **Forge 模組不能用在 Fabric 伺服器**，反之亦然！下載模組時請確認載入器類型。\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 186,
+          "endLine": 199,
+          "excerpt": "## 常見錯誤及解決方式\n\n| 錯誤訊息 | 原因 | 解決方式 |\n|----------|------|----------|\n| `Missing dependencies` | 缺少依賴模組 | 下載並安裝缺少的依賴 |\n| `Incompatible mod` | 版本不相容 | 確認模組版本正確 |\n| `Duplicate mod` | 模組重複安裝 | 刪除重複的模組檔案 |\n| `Mixin error` | 模組衝突 | 移除最近安裝的模組 |\n| `Mod requires Fabric API` | 缺少 Fabric API | 安裝 Fabric API |\n\n\n如果無法自行解決，可以使用 [ChatGPT 分析錯誤](/docs/debug/gpt) 來找出問題原因。\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 6,
+          "endLine": 10,
+          "excerpt": "### 適用範圍\n\n本教學適用於 Forge、NeoForge、Fabric 等模組伺服器。如果您使用 Paper/Spigot 伺服器，請參考 [安裝插件](/docs/practice/install/plugin)。\n\n"
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 39,
+          "endLine": 44,
+          "excerpt": "### 解決方案\n\n根據您建置伺服器的方式，請參考以下對應的修復步驟：\n\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 27,
+          "endLine": 31,
+          "excerpt": "### 重要提醒\n\n模組伺服器的玩家**必須安裝相同的模組**才能連線。這是模組伺服器與插件伺服器最大的差異。\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 101,
+          "score": 0.535173374486817
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 66,
+          "score": 0.511782390753942
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 45,
+          "score": 0.4888182267471436
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 44,
+          "score": 0.4872671277747178
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 186,
+          "score": 0.5257066885881261
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 6,
+          "score": 0.43738970945936834
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 39,
+          "score": 0.46087445846224423
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 27,
+          "score": 0.483092738375434
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "partial",
+        "judgment": {
+          "points": [
+            "covered",
+            "partial"
+          ],
+          "verdict": "partial",
+          "reason": "The answer recommends SFTP if the panel upload still returns a Network Error, which aligns with the staff resolution. It acknowledges that the cause is unknown, but suggests renaming the file first rather than prioritizing a check of the panel’s upload connection."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/invoice",
+          "status": "error",
+          "detail": "HTTP_403"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "partial"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-023",
+      "category": "cannot_connect",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我會查一下伺服器目前的狀態和近期日誌，並核對 `global.lb.cfh.tw` 的連線說明。",
+        "收到，你回報現在已經能進遊戲。後台顯示伺服器狀態為 `running`，但沒有提供狀態時間戳，也沒有讀到可用的伺服器日誌，所以目前無法確認剛才全員斷線的原因。\n\n請從面板的「控制台」複製連線位址，到 Minecraft 實際進服一次，確認原本的位址是否也已恢復。若仍只有 `global.lb.cfh.tw` 能連，請在這張客服單回覆測試時間、失敗的位址與連接埠，以及遊戲顯示的錯誤訊息。[panel/common/console.md:1-22] [debug/connection.md:55-66]\n\n## Discord 通知\n\n使用 [DiscordSRV](https://www.spigotmc.org/resources/discordsrv.18494/) 將伺服器事件發送到 Discord：\n\n- 玩家加入/離開通知\n- 伺服器啟動/關閉通知\n- 聊天訊息同步\n [practice/advanced/automation.md:228-235]"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 22392,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[practice/advanced/automation.md:228-235]"
+          ],
+          "failures": [
+            {
+              "citation": "[panel/common/console.md:1-22]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/connection.md:55-66]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 228,
+          "endLine": 235,
+          "excerpt": "## Discord 通知\n\n使用 [DiscordSRV](https://www.spigotmc.org/resources/discordsrv.18494/) 將伺服器事件發送到 Discord：\n\n- 玩家加入/離開通知\n- 伺服器啟動/關閉通知\n- 聊天訊息同步\n"
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "endLine": 38,
+          "excerpt": "### 除了可以使用帳號密碼登入外，還可以透過 Google 或 Discord 等社群帳號登入。\n只要社群帳號 Email 地址與控制面板帳號 Email 相同，即可快速登入！\n\n登入後即可看到伺服器列表，左下角可管理您的帳號。\n![圖片](/images/panel/start-server/panel.png)\n\n切換至「控制台」分頁。\n![圖片](/images/panel/start-server/dashboard.png)\n\n點擊「啟動」按鈕。\n![圖片](/images/panel/start-server/console.png)\n\n按「I Accept」以同意 Eula。\n![圖片](/images/panel/start-server/eula.png)\n\n看到「Done! For help, type \"help\"」即啟動成功。\n![圖片](/images/panel/start-server/done.png)\n\n點擊上方紅框複製連線位址。\n![圖片](/images/panel/start-server/copy.png)\n\n至遊戲貼上並連線。\n![圖片](/images/panel/start-server/connect.png)\n"
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 11,
+          "endLine": 32,
+          "excerpt": "# 群組伺服器架構\n\n```\n                    玩家連線\n                       │\n                       ▼\n              ┌─────────────────┐\n              │   Proxy 伺服器   │\n              │ (Velocity/Bungee)│\n              │    Port: 25565   │\n              └────────┬────────┘\n                       │\n       ┌───────────────┼───────────────┐\n       │               │               │\n       ▼               ▼               ▼\n┌────────────┐  ┌────────────┐  ┌────────────┐\n│   大廳      │  │  生存服     │  │  小遊戲服  │\n│   Lobby    │  │  Survival  │  │   Games   │\n│ Port:25566 │  │ Port:25567 │  │ Port:25568│\n└────────────┘  └────────────┘  └────────────┘\n```\n"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "endLine": 44,
+          "excerpt": "### 警告\n\n\t如果要更改啟動指令請至 [Discord 伺服器](https://dc.coffeehost.net)\n\t開啟客服單。\n"
+        },
+        {
+          "source": "store/discord.md",
+          "startLine": 6,
+          "endLine": 43,
+          "excerpt": "### 警告\n\n\n如果要接收到 Discord 通知，請先開啟伺服器私人訊息功能。\n\n\n\n如果您是我們的客戶，可以透過綁定 Discord 帳號，取得客戶、贊助專屬身份組。\n\n取得客戶、贊助身份組後，您將可以：\n- 接收最新伺服器通知\n- 開啟「售後服務」類別客服單\n- 存取客戶、贊助專屬聊天頻道\n- 獲得客戶、贊助專屬顏色、圖示\n\n\n\n\t\n\t    ### 進入「客戶中心」\n        從「[商店](https://store.coffeehost.net)」首頁點擊「客戶中心」進入。\n        ![圖片](/images/store/discord/home.png)\n    \n    \n        ### 登入商店\n        使用您先前註冊的帳號登入官方商店。\n        ![圖片](/images/store/discord/login.png)\n    \n    \n        ### 綁定 Discord 帳號\n        點擊 Discord 旁的「綁定」按鈕。\n        ![圖片](/images/store/discord/clientarea.png)\n    \n    \n        ### 授權存取\n        點擊「授權」按鈕以繼續。\n        ![圖片](/images/store/discord/oauth.png)\n\n        "
+        },
+        {
+          "source": "panel/common/console.md",
+          "startLine": 1,
+          "endLine": 22,
+          "excerpt": "# 控制台\n\n> Source: Coffee-Host/docs content/docs/panel/common/console.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n您可以在右上角看到三個分別是開機、重啟、關機按鈕，首次使用請先點擊 「開機」 按鈕。\n![](/images/panel/common/console/buttons.png)\n\n如果是首次開啟 Minecraft 伺服器，您將看到同意 Minecraft EULA 視窗。\n點擊「I Accept」，即可繼續啟動伺服器。\n![](/images/panel/common/console/eula.png)\n\n接著伺服器就成功啟動了，您可以在控制台看到伺服器的啟動訊息。\n\n紅色區域是此伺服器的連線位置，點擊文字區域即可複製。\n您可以在黃色區域看到此伺服器目前的狀態，包含 CPU 使用率、記憶體、儲存空間、網路使用狀態等。\n藍色區域為控制台的終端，您可以在此輸入要控制的指令。\n\n若為 Minecraft 伺服器，指令前則不需要加上 `/`。（例如 `/help` 應輸入 `help`）\n\n![](/images/panel/common/console/console.png)\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "endLine": 66,
+          "excerpt": "### 4. 仍無法連線或延遲很高時回報\n\n如果上述方法都無法解決問題，或使用原本位址及 `udp.cfh.tw:<連接埠>` 時延遲都很高，請前往 [Discord 客服群組](https://discord.gg/hpe2aWVaYs) 開啟「售後服務」客服單，並提供：\n\n- [MTR 路由追蹤](/docs/debug/mtr) 的完整 WinMTR 截圖。\n- Minecraft 無法連線、Connection Reset、逾時或延遲異常的完整遊戲畫面截圖。\n- 使用的連線位址與連接埠、發生時間、網路環境，以及已嘗試過的 Google DNS、替代位址或 WARP 步驟。\n\n\n\n\n"
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 171,
+          "endLine": 173,
+          "excerpt": "### 子用戶找不到伺服器？\n請確認您輸入的電子郵件地址正確，且對方已經註冊 CoffeeHost 帳號。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 228,
+          "score": 0.597761932324796
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "score": 0.6014339682365082
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 11,
+          "score": 0.5276064387382697
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "score": 0.5257378651943181
+        },
+        {
+          "source": "store/discord.md",
+          "startLine": 6,
+          "score": 0.520342969447044
+        },
+        {
+          "source": "panel/common/console.md",
+          "startLine": 1,
+          "score": 0.47975415587495057
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "score": 0.4956007077691284
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 171,
+          "score": 0.49255804851948715
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "missing",
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The answer does not mention refreshing the DNS cache, switching to Google DNS, or that reconnecting should work if DNS is functioning normally."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-030",
+      "category": "cannot_connect",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我會先查閱目前的連線故障處理文件，並檢查這張工單所選伺服器的狀態與近期記錄，以確認是否有可見的啟動或連線錯誤。",
+        "目前後端顯示伺服器狀態為 **running**。伺服器記錄讀取不到，因此無法從後端確認剛才強制斷線的原因，也沒有可提供的錯誤時間戳。\n\n請依照以下順序測試。\n\n1. 先在瀏覽器開啟 `https://fast-line.tw/`。如果無法開啟，請暫時把 Minecraft Java 的連線位址改成 `udp.cfh.tw:<原本連接埠>`，例如原本是 `a.x.cfh.tw:13105`，就改成 `udp.cfh.tw:13105`。測試時請避免頻繁進出伺服器或重新整理伺服器列表。\n\n### 檢查封鎖狀態並視情況更換連線位址\n\n請先在瀏覽器開啟 [https://fast-line.tw/](https://fast-line.tw/)。如果無法瀏覽，通常表示目前連線已被抗攻擊上游的防火牆判定為異常流量並封鎖。\n\n如果確認被封鎖，請暫時將 Minecraft 的連線位址改為 `udp.cfh.tw:<連接埠>`。例如原本使用 `a.x.cfh.tw:13105`，請暫時改為 `udp.cfh.tw:13105`。\n\n若後續上游已解除封鎖，建議使用原本的連線位址。為避免再次遭到封鎖，請不要頻繁進出伺服器，也不要太頻繁重新整理伺服器列表，避免短時間內產生大量連線請求。\n\n[debug/connection.md:23-32]\n\n2. 如果仍無法連線，將 DNS 設為 `8.8.8.8` 和 `8.8.4.4`，在 Windows 命令提示字元執行：\n\n```text\nipconfig /flushdns\n```\n\n再執行 `nslookup <主機位址>`，確認輸出中的 DNS Server 是 `8.8.8.8` 或 `8.8.4.4`，然後重新開啟 Minecraft 測試。\n\n### 設定 Google DNS 並清除快取\n\n完成第一步後若仍然無法連線，請依照 [Google DNS 教學](/docs/debug/googledns) 將 DNS 設定為 `8.8.8.8` 與 `8.8.4.4`。\n\n開啟命令提示字元，執行以下指令清除 DNS 快取：\n\n   ```text\n   ipconfig /flushdns\n   ```\n\n使用 `nslookup <主機位址>` 確認輸出中的 **Server** 或 **伺服器** 是否為 `8.8.8.8` 或 `8.8.4.4`，再重新開啟 Minecraft 連線。\n\n[debug/connection.md:33-47]\n\n3. 如果 DNS 處理後仍無法連線，安裝並開啟 Cloudflare WARP，等待顯示 **Connected／已連線**，再使用原本的伺服器位址和連接埠測試。WARP、VPN、Proxy 或加速器不要同時啟用多個。\n\n### 使用 WARP 後進入 Minecraft\n\n1. 保持 WARP 顯示 **Connected／已連線**。\n2. 開啟 Minecraft，進入多人遊戲或伺服器清單。\n3. 使用原本的伺服器位址與連接埠，不要因為開啟 WARP 而修改遊戲內設定。\n4. 進入伺服器後，實際移動、開啟箱子或進行幾分鐘遊戲，觀察是否仍會斷線或延遲升高。\n\n如果開啟 WARP 後可以連線或狀況改善，請記下發生時間、使用的網路環境及 Minecraft 的連線結果，回報客服協助判斷原本的 ISP 路由問題。\n\n[debug/warp.md:102-112]\n\n若以上步驟仍無法連線，請準備以下資料交由客服檢查。\n\n- 發生問題的時間\n- 使用的網路環境，例如家用網路、公司網路或行動網路\n- 使用的連線位址與連接埠\n- Minecraft 完整錯誤畫面\n- 以 `udp.cfh.tw:<連接埠>` 為目標的完整 MTR／WinMTR 結果\n- 已嘗試 Google DNS、替代位址及 WARP 的結果\n\n由於本次伺服器記錄沒有回傳資料，客服人員仍需確認斷線當時的服務端錯誤與網路狀態。測試完成後，請確認是否能重新進入伺服器，並提供實際顯示的完整錯誤訊息。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 61154,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[debug/connection.md:23-32]",
+            "[debug/connection.md:33-47]"
+          ],
+          "failures": [
+            {
+              "citation": "[debug/warp.md:102-112]",
+              "reason": "truncated"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "debug/connection.md",
+          "startLine": 23,
+          "endLine": 32,
+          "excerpt": "### 檢查封鎖狀態並視情況更換連線位址\n\n請先在瀏覽器開啟 [https://fast-line.tw/](https://fast-line.tw/)。如果無法瀏覽，通常表示目前連線已被抗攻擊上游的防火牆判定為異常流量並封鎖。\n\n如果確認被封鎖，請暫時將 Minecraft 的連線位址改為 `udp.cfh.tw:<連接埠>`。例如原本使用 `a.x.cfh.tw:13105`，請暫時改為 `udp.cfh.tw:13105`。\n\n若後續上游已解除封鎖，建議使用原本的連線位址。為避免再次遭到封鎖，請不要頻繁進出伺服器，也不要太頻繁重新整理伺服器列表，避免短時間內產生大量連線請求。\n\n\n"
+        },
+        {
+          "source": "debug/warp.md",
+          "startLine": 129,
+          "endLine": 140,
+          "excerpt": "### WARP 無法連線\n\n先確認一般網路可以開啟網站，再暫時關閉其他 VPN、Proxy、加速器及防毒軟體的網路過濾功能。若仍無法連線，請重新啟動 WARP 或電腦；不要同時啟用多個 VPN 工具。\n\n\n- **開啟 WARP 後所有網站都無法開啟：** 先關閉 WARP，確認原本網路恢復後，再嘗試重新連線。\n- **Minecraft 仍然無法連線：** 確認伺服器位址、連接埠及伺服器狀態；如果 Google DNS 與 WARP 都沒有改善，請提供完整錯誤訊息與發生時間給客服。\n- **延遲沒有降低：** WARP 不保證每個 ISP 或每個目的地都會有更短路徑；如果實際遊戲體驗沒有改善，請關閉 WARP。\n- **WARP 連線一下就中斷：** 檢查 Wi-Fi 是否穩定，並確認公司、學校或公共網路沒有封鎖 WARP 所需的連線。\n\n回報問題時，請提供發生時間、主機位址與連接埠、Google DNS 設定結果、WARP 顯示的連線狀態，以及 Minecraft 的完整錯誤訊息。截圖前請先遮蔽帳號、玩家名稱、公開 IP 與其他個人資訊。\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 85,
+          "endLine": 98,
+          "excerpt": "### 3. 仍無法連線時提供資料\n\n如果開啟 WARP 後仍然無法連線，請依照 [MTR 路由追蹤](/docs/debug/mtr) 執行 WinMTR，並在問題發生時保存完整結果。\n\n前往 [Discord 客服群組](https://discord.gg/hpe2aWVaYs) 開啟「售後服務」客服單時，請一併提供：\n\n- 以 `udp.cfh.tw:<連接埠>` 為目標的完整 MTR／WinMTR 截圖。\n- 遊戲顯示無法連線、逾時、Connection Reset 或其他錯誤的完整畫面截圖。\n- 使用的遊戲、連線位址與連接埠、發生時間、網路環境，以及詳細問題描述。\n\n\n\n\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "endLine": 66,
+          "excerpt": "### 4. 仍無法連線或延遲很高時回報\n\n如果上述方法都無法解決問題，或使用原本位址及 `udp.cfh.tw:<連接埠>` 時延遲都很高，請前往 [Discord 客服群組](https://discord.gg/hpe2aWVaYs) 開啟「售後服務」客服單，並提供：\n\n- [MTR 路由追蹤](/docs/debug/mtr) 的完整 WinMTR 截圖。\n- Minecraft 無法連線、Connection Reset、逾時或延遲異常的完整遊戲畫面截圖。\n- 使用的連線位址與連接埠、發生時間、網路環境，以及已嘗試過的 Google DNS、替代位址或 WARP 步驟。\n\n\n\n\n"
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "endLine": 38,
+          "excerpt": "### 除了可以使用帳號密碼登入外，還可以透過 Google 或 Discord 等社群帳號登入。\n只要社群帳號 Email 地址與控制面板帳號 Email 相同，即可快速登入！\n\n登入後即可看到伺服器列表，左下角可管理您的帳號。\n![圖片](/images/panel/start-server/panel.png)\n\n切換至「控制台」分頁。\n![圖片](/images/panel/start-server/dashboard.png)\n\n點擊「啟動」按鈕。\n![圖片](/images/panel/start-server/console.png)\n\n按「I Accept」以同意 Eula。\n![圖片](/images/panel/start-server/eula.png)\n\n看到「Done! For help, type \"help\"」即啟動成功。\n![圖片](/images/panel/start-server/done.png)\n\n點擊上方紅框複製連線位址。\n![圖片](/images/panel/start-server/copy.png)\n\n至遊戲貼上並連線。\n![圖片](/images/panel/start-server/connect.png)\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 33,
+          "endLine": 47,
+          "excerpt": "### 設定 Google DNS 並清除快取\n\n完成第一步後若仍然無法連線，請依照 [Google DNS 教學](/docs/debug/googledns) 將 DNS 設定為 `8.8.8.8` 與 `8.8.4.4`。\n\n開啟命令提示字元，執行以下指令清除 DNS 快取：\n\n   ```text\n   ipconfig /flushdns\n   ```\n\n使用 `nslookup <主機位址>` 確認輸出中的 **Server** 或 **伺服器** 是否為 `8.8.8.8` 或 `8.8.4.4`，再重新開啟 Minecraft 連線。\n\n\n\n"
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 223,
+          "endLine": 228,
+          "excerpt": "## 1. 限制子伺服器連線\n\n只允許 Velocity 連接子伺服器，防止玩家直接連線繞過驗證：\n\n**方法 A：使用防火牆**\n```bash"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 110,
+          "endLine": 115,
+          "excerpt": "### 2. 使用 Cloudflare WARP 改善路由\n\n完成第一步後，請依照 [Cloudflare WARP 教學](/docs/debug/warp) 開啟 WARP，等待顯示已連線後，再使用相同的 VPS 位址及服務連接埠重新嘗試連線。\n\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "debug/connection.md",
+          "startLine": 23,
+          "score": 0.608457849021526
+        },
+        {
+          "source": "debug/warp.md",
+          "startLine": 129,
+          "score": 0.578552429242654
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 85,
+          "score": 0.5840453218131169
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "score": 0.569559603339775
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "score": 0.5477933304791499
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 33,
+          "score": 0.5388605164886598
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 223,
+          "score": 0.5298150492706765
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 110,
+          "score": 0.5308527212722807
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "partial",
+        "judgment": {
+          "points": [
+            "covered",
+            "missing",
+            "partial"
+          ],
+          "verdict": "partial",
+          "reason": "The answer advises clearing the DNS cache before retrying the connection. It recommends Google DNS without explaining that it updates faster, and it does not mention that the server address automatically switches routes."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "partial"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-049",
+      "category": "plan_cancel",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "",
+        "我會再確認知識庫是否有說明「到期取消後資料能否保留至日後重新簽約」，再據此回答可操作的取消方式與檔案風險。",
+        "",
+        "",
+        "您好，您可以申請「等待帳單週期結束」取消，服務會持續到本期帳單最後一天，之後停止續約。請登入客戶中心，選擇伺服器，進入左側的「要求撤銷」，填寫取消原因，選擇「等待帳單週期結束」，送出後確認頁面顯示申請成功。\n\n> # 取消產品或服務\n>\n> > Source: Coffee-Host/docs content/docs/store/services/cancel.mdx\n> > draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n>\n> 如果您因為任何原因不再需要我們的服務，您可以透過客戶中心隨時提出取消申請。\n> 請注意，當您提交取消申請時，即代表您已經詳細閱讀並完全同意我們的取消服務免責聲明。\n>\n>\n> **取消免責聲明與重大風險提示**\n> 若您在申請時選擇 **「立即取消」**，您的伺服器與相關服務將會在 **24 小時內**被系統強制終止並徹底銷毀。\n> - 您的所有檔案、設定與資料將會**永久遺失且絕對無法恢復**。\n> - 您已支付之所有當期款項，**恕不提供任何形式之退費**。\n> 請在執行此動作前，務必再三確認已妥善備份所有重要資料！\n>\n>\n> 如果您當前的服務尚未到期，但確定下個月不打算繼續續約，我們建議您選擇**提前取消訂閱（等待帳單週期結束）**。這樣系統就不會在下個月產生新的帳單，也不會發送擾人的繳費通知給您。\n> [store/services/cancel.md:1-18]\n\n請先備份伺服器內的檔案。知識庫沒有確認「到期取消後，日後重新簽約是否能直接使用原本檔案」，因此無法保證之後仍可取回或沿用。資料保留規則只明確說明逾期後的期限如下：\n\n> ## 資料刪除\n>\n> 超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n> [store/services/suspension-retention.md:14-17]\n\n目前系統顯示該伺服器狀態為 `running`。帳單讀取沒有返回紀錄，所以我無法確認目前帳單週期或到期日期。若您希望日後重新簽約時保留並使用原檔案，請在取消前完成完整備份，並請客服確認取消後的資料保留及重新啟用規則。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/invoice:HTTP_403",
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "tool-calls",
+        "tool-calls",
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 5,
+      "attempts": 1,
+      "latencyMs": 59457,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[store/services/cancel.md:1-18]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[store/services/suspension-retention.md:14-17]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 1,
+          "endLine": 18,
+          "excerpt": "# 取消產品或服務\n\n> Source: Coffee-Host/docs content/docs/store/services/cancel.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n如果您因為任何原因不再需要我們的服務，您可以透過客戶中心隨時提出取消申請。\n請注意，當您提交取消申請時，即代表您已經詳細閱讀並完全同意我們的取消服務免責聲明。\n\n\n**取消免責聲明與重大風險提示**\n若您在申請時選擇 **「立即取消」**，您的伺服器與相關服務將會在 **24 小時內**被系統強制終止並徹底銷毀。\n- 您的所有檔案、設定與資料將會**永久遺失且絕對無法恢復**。\n- 您已支付之所有當期款項，**恕不提供任何形式之退費**。\n請在執行此動作前，務必再三確認已妥善備份所有重要資料！\n\n\n如果您當前的服務尚未到期，但確定下個月不打算繼續續約，我們建議您選擇**提前取消訂閱（等待帳單週期結束）**。這樣系統就不會在下個月產生新的帳單，也不會發送擾人的繳費通知給您。\n"
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 19,
+          "endLine": 61,
+          "excerpt": "## 申請取消服務的完整步驟\n\n請依照以下流程來完成您的取消申請：\n\n\n\n**登入您的帳戶**\n請前往我們的網站並登入您的客戶中心。\n![圖片](/images/store/services/cancel/login.png)\n\n\n**選擇欲取消的產品**\n在首頁找到 **「您目前可用的產品與服務」** 區塊，點擊並選擇您確定要取消的伺服器或方案。\n![圖片](/images/store/services/cancel/clientarea.png)\n\n\n**進入取消申請頁面**\n在左側的動作選單導覽列中，找到並點擊 **「要求撤銷」** 選項。\n![圖片](/images/store/services/cancel/cancel.png)\n\n\n**填寫您的取消原因**\n為了提供更好的服務品質，我們非常渴望了解您的想法！請在欄位中簡述您的取消原因或提供給我們的寶貴建議。\n![圖片](/images/store/services/cancel/reason.png)\n\n\n**選擇取消類型並送出**\n請根據您的需求，選擇以下兩種取消類型之一，確認無誤後點擊送出按鈕：\n- **立即取消**：您的服務會在 24 小時內立刻被系統終止。這代表您同意提前解除合約，且了解任何剩餘天數都不會獲得退費。\n- **等待帳單週期結束**（推薦）：系統會讓您繼續使用到本期帳單的最後一天。期滿後服務將自動終止，且在此期間您不會收到任何催繳或停權通知。\n![圖片](/images/store/services/cancel/confirm.png)\n\n\n**確認申請結果**\n送出後，請確認頁面是否顯示已成功處理您的取消請求。\n![圖片](/images/store/services/cancel/success.png)\n\n\n\n\n**反悔了怎麼辦？**\n如果您不小心點錯選項，或者在送出申請後改變了心意"
+        },
+        {
+          "source": "store/services/renew.md",
+          "startLine": 1,
+          "endLine": 7,
+          "excerpt": "# 提前續約服務\n\n> Source: Coffee-Host/docs content/docs/store/services/renew.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n為了避免服務因忘記繳費而中斷，影響到您伺服器上玩家的權益，您可以隨時選擇為您的服務進行「提前續約」。這不僅能確保伺服器穩定運作，也能讓您更彈性地規劃資金。\n"
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 159,
+          "endLine": 168,
+          "excerpt": "## 移除子用戶\n\n1. 在使用者列表中找到要移除的子用戶\n2. 點擊該用戶旁的刪除按鈕\n3. 確認移除操作\n\n![移除子用戶](/images/panel/config/user/delete.png)\n\n移除子用戶後，該用戶將立即失去對此伺服器的所有存取權限。\n"
+        },
+        {
+          "source": "store/services/cancel-withdraw.md",
+          "startLine": 12,
+          "endLine": 15,
+          "excerpt": "## 到期取消\n\n選擇到期取消（等帳單週期結束才取消），應可由客戶自行撤回。如果自行撤回不行，請聯絡客服處理。\n"
+        },
+        {
+          "source": "store/services/cancel-withdraw.md",
+          "startLine": 8,
+          "endLine": 11,
+          "excerpt": "## 立即取消\n\n選擇立即取消後，如果想撤回，請在當天結束前聯絡客服撤回。\n"
+        },
+        {
+          "source": "legal/tos.md",
+          "startLine": 26,
+          "endLine": 32,
+          "excerpt": "# 三、暫停或結束服務\n\n1. 用戶自行停止使用，或因違反本條款而遭本公司終止服務者，本公司在任何情況下均無須退還已收費用之全部或任何部分。\n2. 因情勢改變或營運需要，本公司如擬停止或結束全部或部分服務，將在預定日期前通知用戶；用戶同意配合相關作業且不提出異議。本公司得將已收取但尚未使用的款項退還用戶。\n3. 若合作夥伴或其他網路服務業者因情勢變動或營運考量，停止其所提供的全部或部分服務，此屬不可抗力事由，本公司不負相關責任。本公司將盡力協助尋找替代方案，但改用新服務所需的所有費用由用戶自行負擔。\n4. 涉及合作夥伴或第三方供應之服務時，租用終止程序依該供應單位的條款辦理，用戶不得異議。\n"
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "endLine": 17,
+          "excerpt": "## 資料刪除\n\n超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 1,
+          "score": 0.5624786877372898
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 19,
+          "score": 0.5535943178524892
+        },
+        {
+          "source": "store/services/renew.md",
+          "startLine": 1,
+          "score": 0.5369337085145558
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 159,
+          "score": 0.5297909116669921
+        },
+        {
+          "source": "store/services/cancel-withdraw.md",
+          "startLine": 12,
+          "score": 0.5178505352472429
+        },
+        {
+          "source": "store/services/cancel-withdraw.md",
+          "startLine": 8,
+          "score": 0.5047897288635546
+        },
+        {
+          "source": "legal/tos.md",
+          "startLine": 26,
+          "score": 0.5046103510714613
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "score": 0.49396500600953225
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "partial",
+        "judgment": {
+          "points": [
+            "partial",
+            "covered"
+          ],
+          "verdict": "partial",
+          "reason": "The answer advises backing up files before cancellation but does not clearly state that the files will not be retained and must be downloaded before expiration. It does confirm that selecting cancellation at the end of the billing cycle prevents a new bill from being generated."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/invoice",
+          "status": "error",
+          "detail": "HTTP_403"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "partial"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-053",
+      "category": "billing_payment",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我會查詢帳單與伺服器狀態，並核對逾期續費、重新下訂和恢復服務的現行規定。",
+        "",
+        "您好！後台查到您帳戶下有一台伺服器，狀態為 **運行中（`running`）**。查詢結果沒有提供狀態時間戳，也沒有傳回帳單或日誌紀錄，因此目前無法核對 7 月帳單的到期日、付款狀態，或確認這台就是您想恢復的原伺服器。\n\n請先登入客戶中心，查看原服務及 7 月帳單是否仍列出，並用原本的伺服器位址重新連線。如果能連上，請確認原本的世界或檔案是否仍在。若原帳單仍可付款，且仍在逾期 7 天內，可補繳原帳單以解除暫停，再重新連線確認。[store/services/suspension-retention.md:10-13]\n\n## 資料刪除\n\n超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n [store/services/suspension-retention.md:14-17]\n\n目前查到的文件未確認原方案是否仍開放新訂，也無法確認您的原資料是否還有可還原的備份。若您希望保留原資料，建議先等客服確認再付款。客服需核對原帳單能否補繳、原方案目前能否重新下訂，以及原伺服器或備份是否仍可恢復。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/invoice:HTTP_403",
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 3,
+      "attempts": 1,
+      "latencyMs": 33146,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[store/services/suspension-retention.md:14-17]"
+          ],
+          "failures": [
+            {
+              "citation": "[store/services/suspension-retention.md:10-13]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "store/services/upgrade.md",
+          "startLine": 13,
+          "endLine": 53,
+          "excerpt": "## 同系列方案升級/降級流程\n\n若您是在相同系列內進行規格升降級，請遵循以下步驟：\n\n\n\n**登入並選擇服務**\n![圖片](/images/store/services/upgrade/login.png)\n請先登入您的客戶中心，並於首頁的 **「您目前可用的產品與服務」** 區塊中，點選您想要升級或降級的伺服器。\n![圖片](/images/store/services/upgrade/clientarea.png)\n\n\n**進入升降級選單**\n在左側邊欄的動作選單中，點選並進入 **「升級/降級」** 選項。\n![圖片](/images/store/services/upgrade/service.png)\n\n\n**選擇全新方案**\n在方案列表中，挑選您心儀的新方案規格。系統將會在您選擇後跳轉至下一個頁面，並為您精確計算因升降級所產生的費用差額。\n![圖片](/images/store/services/upgrade/choose.png)\n\n\n**確認訂單與折扣**\n請仔細核對系統計算出來的差額與您的預設付款方式。若您持有專屬優惠代碼，請務必於此步驟的欄位中填入以享有折扣。確認無誤後，請點擊 **「結帳」**。\n![圖片](/images/store/services/upgrade/checkout.png)\n\n\n**執行付款**\n- 您可以優先使用帳戶內的可用餘額直接結帳，系統將會瞬間處理您的訂單。\n- 若無餘額，系統會引導您至電子帳單頁面，協助您順利完成後續的付款流程。\n\n\n**接收確認與生效**\n付款順利完成後，您將會收到一封系統發出的 Email 升級確認通知。\n\n\n\n\n**零停機時間的極致體驗**\n目前針對遊戲伺服器的同系列升降級，我們已經實作了全自動化系統。這代表當您完成繳費的當下，系統就會立刻為您更新資源配額，過程中通常不需要漫長的等待，讓您的社"
+        },
+        {
+          "source": "store/services/renew.md",
+          "startLine": 1,
+          "endLine": 7,
+          "excerpt": "# 提前續約服務\n\n> Source: Coffee-Host/docs content/docs/store/services/renew.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n為了避免服務因忘記繳費而中斷，影響到您伺服器上玩家的權益，您可以隨時選擇為您的服務進行「提前續約」。這不僅能確保伺服器穩定運作，也能讓您更彈性地規劃資金。\n"
+        },
+        {
+          "source": "index.md",
+          "startLine": 9,
+          "endLine": 10,
+          "excerpt": "### ⭐ 超便宜的價格換到物超所值的伺服器體驗\n**月繳只要 NT$89** 起，即可獲得一台高品質伺服器！"
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "endLine": 17,
+          "excerpt": "## 資料刪除\n\n超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n"
+        },
+        {
+          "source": "store/services/upgrade-addon.md",
+          "startLine": 8,
+          "endLine": 50,
+          "excerpt": "## 升級配置操作指南\n\n\n\n**登入系統**\n請登入您的客戶中心。\n![圖片](/images/store/services/upgrade-addon/login.png)\n\n\n**選擇目標服務**\n在首頁的 **「您目前可用的產品與服務」** 列表中，點選您想要進行資源升級的伺服器方案。\n![圖片](/images/store/services/upgrade-addon/clientarea.png)\n\n\n**進入選項調整頁面**\n在畫面左側的動作選單中，點選 **「升級/降級 選項」** 以進入配置管理介面。\n![圖片](/images/store/services/upgrade-addon/service.png)\n\n\n**調整您的硬體配置**\n在這個頁面中，您將會看到所有可供調整的加購選項（例如：端口數量或備份數量）。選擇您所需要的最新配置後，請點擊 **「點此繼續 >>」**。\n![圖片](/images/store/services/upgrade-addon/addon.png)\n\n\n**確認金額與輸入折扣碼**\n系統會自動為您計算升級所需補足的差額。請仔細確認付款總金額與支付方式。若您手邊有優惠代碼，請在此頁面的專屬欄位中輸入並套用。確認無誤後，點擊 **「結帳」**。\n![圖片](/images/store/services/upgrade-addon/checkout.png)\n\n\n**完成付款**\n- **餘額扣款**：若您的帳戶內有充足的可用餘額，可直接抵扣，訂單將會立即成立。\n- **線上支付**：系統會引導您至加密的帳單頁面，請依照步驟完成刷卡或轉帳程序。\n\n\n**等待自動升級生效**\n付款成功後，您會收到一封 Email 確認信。\n\n\n\n\n**自動化升級優勢**\n目前我們的遊戲伺服器已全面支援「自動化升級作業」。當您的繳費狀態轉為已付款"
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 19,
+          "endLine": 61,
+          "excerpt": "## 申請取消服務的完整步驟\n\n請依照以下流程來完成您的取消申請：\n\n\n\n**登入您的帳戶**\n請前往我們的網站並登入您的客戶中心。\n![圖片](/images/store/services/cancel/login.png)\n\n\n**選擇欲取消的產品**\n在首頁找到 **「您目前可用的產品與服務」** 區塊，點擊並選擇您確定要取消的伺服器或方案。\n![圖片](/images/store/services/cancel/clientarea.png)\n\n\n**進入取消申請頁面**\n在左側的動作選單導覽列中，找到並點擊 **「要求撤銷」** 選項。\n![圖片](/images/store/services/cancel/cancel.png)\n\n\n**填寫您的取消原因**\n為了提供更好的服務品質，我們非常渴望了解您的想法！請在欄位中簡述您的取消原因或提供給我們的寶貴建議。\n![圖片](/images/store/services/cancel/reason.png)\n\n\n**選擇取消類型並送出**\n請根據您的需求，選擇以下兩種取消類型之一，確認無誤後點擊送出按鈕：\n- **立即取消**：您的服務會在 24 小時內立刻被系統終止。這代表您同意提前解除合約，且了解任何剩餘天數都不會獲得退費。\n- **等待帳單週期結束**（推薦）：系統會讓您繼續使用到本期帳單的最後一天。期滿後服務將自動終止，且在此期間您不會收到任何催繳或停權通知。\n![圖片](/images/store/services/cancel/confirm.png)\n\n\n**確認申請結果**\n送出後，請確認頁面是否顯示已成功處理您的取消請求。\n![圖片](/images/store/services/cancel/success.png)\n\n\n\n\n**反悔了怎麼辦？**\n如果您不小心點錯選項，或者在送出申請後改變了心意"
+        },
+        {
+          "source": "legal/tos.md",
+          "startLine": 101,
+          "endLine": 109,
+          "excerpt": "## 續費、逾期繳款與到期資料\n\n1. 所有服務續費帳單將於到期日前七日產生。如用戶未於到期日前付款，將導致服務終止；逾期繳費者將收取應繳費用 10% 之滯納金，最低收取新臺幣 30 元。\n2. 系統將於服務到期日前三日再次透過電子郵件或 Discord 通知用戶付款。\n3. 繳費後，帳單資訊及服務期間可於客戶中心或電子郵件中查詢。如對啟用日、到期日或其他帳務內容有疑義，應於購買後三日內向客服提出，逾期不予受理。\n4. 本公司不對因逾期付款而導致服務終止所造成的任何資料遺失負責。\n5. 本公司保留於服務到期後拒絕提供伺服器或服務內資料之權利。\n6. 本公司保留於服務到期後三日（七十二小時）或更短期間內終止服務之權利。\n"
+        },
+        {
+          "source": "store/discord.md",
+          "startLine": 6,
+          "endLine": 43,
+          "excerpt": "### 警告\n\n\n如果要接收到 Discord 通知，請先開啟伺服器私人訊息功能。\n\n\n\n如果您是我們的客戶，可以透過綁定 Discord 帳號，取得客戶、贊助專屬身份組。\n\n取得客戶、贊助身份組後，您將可以：\n- 接收最新伺服器通知\n- 開啟「售後服務」類別客服單\n- 存取客戶、贊助專屬聊天頻道\n- 獲得客戶、贊助專屬顏色、圖示\n\n\n\n\t\n\t    ### 進入「客戶中心」\n        從「[商店](https://store.coffeehost.net)」首頁點擊「客戶中心」進入。\n        ![圖片](/images/store/discord/home.png)\n    \n    \n        ### 登入商店\n        使用您先前註冊的帳號登入官方商店。\n        ![圖片](/images/store/discord/login.png)\n    \n    \n        ### 綁定 Discord 帳號\n        點擊 Discord 旁的「綁定」按鈕。\n        ![圖片](/images/store/discord/clientarea.png)\n    \n    \n        ### 授權存取\n        點擊「授權」按鈕以繼續。\n        ![圖片](/images/store/discord/oauth.png)\n\n        "
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "store/services/upgrade.md",
+          "startLine": 13,
+          "score": 0.6028969807737877
+        },
+        {
+          "source": "store/services/renew.md",
+          "startLine": 1,
+          "score": 0.5769066172602205
+        },
+        {
+          "source": "index.md",
+          "startLine": 9,
+          "score": 0.5718562854175006
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "score": 0.5612035743814584
+        },
+        {
+          "source": "store/services/upgrade-addon.md",
+          "startLine": 8,
+          "score": 0.5601593669233633
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 19,
+          "score": 0.5507408899152363
+        },
+        {
+          "source": "legal/tos.md",
+          "startLine": 101,
+          "score": 0.5472895496729477
+        },
+        {
+          "source": "store/discord.md",
+          "startLine": 6,
+          "score": 0.5454925658052728
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "partial",
+        "judgment": {
+          "points": [
+            "covered",
+            "missing"
+          ],
+          "verdict": "partial",
+          "reason": "The answer explains that data may be deleted from the node after 7 days and from backups after another 7 days, supporting a maximum retention period of 14 days. However, it does not state that the customer has exceeded 14 days or that the data is no longer retained and cannot be restored."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/invoice",
+          "status": "error",
+          "detail": "HTTP_403"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "partial"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-056",
+      "category": "server_other",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "",
+        "我先確認目前知識庫對資料刪除與備份保留的說明，再查看帳戶所選伺服器的目前狀態，這樣能區分一般影響與你這台伺服器現在是否已受影響。",
+        "會有影響，但目前無法確認影響範圍。你所選伺服器目前回報為 **running**，不過伺服器日誌沒有可用紀錄，因此無法確認哪些檔案已被刪除，也無法判定是否能恢復。\n\n知識庫目前只確認以下備份與保留規則：\n\n> ### 💾 每日檔案備份\n> 我們**每天會進行節點檔案備份作業**，並且資料保留至少三天，全方面保護您的伺服器資料安全！ [index.md:18-19]\n\n另外，逾期停權情境的資料保留說明如下：\n\n> ## 資料刪除\n>\n> 超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。 [store/services/suspension-retention.md:14-17]\n\n這些資料沒有說明你剛才手動刪除的檔案是否一定能從備份還原。請先不要再刪除或覆寫任何檔案，並確認伺服器內的重要資料是否仍存在。若需要恢復刪除的資料，請由客服確認可用備份與可恢復範圍。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 3,
+      "attempts": 1,
+      "latencyMs": 65691,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[index.md:18-19]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[store/services/suspension-retention.md:14-17]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "endLine": 17,
+          "excerpt": "## 資料刪除\n\n超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n"
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 180,
+          "endLine": 184,
+          "excerpt": "## 清理 CoreProtect 資料\n\nCoreProtect 會記錄大量方塊變更，定期清理舊資料：\n\n```"
+        },
+        {
+          "source": "index.md",
+          "startLine": 18,
+          "endLine": 19,
+          "excerpt": "### 💾 每日檔案備份\n我們**每天會進行節點檔案備份作業**，並且資料保留至少三天，全方面保護您的伺服器資料安全！"
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 185,
+          "endLine": 190,
+          "excerpt": "# 刪除 30 天前的記錄\n/co purge t:30d\n```\n\n可以設定排程自動執行。\n"
+        },
+        {
+          "source": "practice/advanced/performance.md",
+          "startLine": 218,
+          "endLine": 221,
+          "excerpt": "# 實體清理\n\n使用插件定期清理實體可以有效降低負載。\n"
+        },
+        {
+          "source": "practice/advanced/performance.md",
+          "startLine": 242,
+          "endLine": 251,
+          "excerpt": "## CMI 清理功能\n\n如果使用 CMI，可以使用內建的清理功能：\n\n```\n/cmi clear\n```\n\n或設定自動清理排程。\n"
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 10,
+          "endLine": 13,
+          "excerpt": "## 7 天內繳費\n\n逾期後 7 天內繳費，可以解除暫停。這段期間資料還在節點上，還沒有離開節點。\n"
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 1,
+          "endLine": 18,
+          "excerpt": "# 取消產品或服務\n\n> Source: Coffee-Host/docs content/docs/store/services/cancel.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n如果您因為任何原因不再需要我們的服務，您可以透過客戶中心隨時提出取消申請。\n請注意，當您提交取消申請時，即代表您已經詳細閱讀並完全同意我們的取消服務免責聲明。\n\n\n**取消免責聲明與重大風險提示**\n若您在申請時選擇 **「立即取消」**，您的伺服器與相關服務將會在 **24 小時內**被系統強制終止並徹底銷毀。\n- 您的所有檔案、設定與資料將會**永久遺失且絕對無法恢復**。\n- 您已支付之所有當期款項，**恕不提供任何形式之退費**。\n請在執行此動作前，務必再三確認已妥善備份所有重要資料！\n\n\n如果您當前的服務尚未到期，但確定下個月不打算繼續續約，我們建議您選擇**提前取消訂閱（等待帳單週期結束）**。這樣系統就不會在下個月產生新的帳單，也不會發送擾人的繳費通知給您。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "score": 0.5364104123765635
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 180,
+          "score": 0.5046468307402843
+        },
+        {
+          "source": "index.md",
+          "startLine": 18,
+          "score": 0.47090159937317644
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 185,
+          "score": 0.4728764589138727
+        },
+        {
+          "source": "practice/advanced/performance.md",
+          "startLine": 218,
+          "score": 0.4715407468649912
+        },
+        {
+          "source": "practice/advanced/performance.md",
+          "startLine": 242,
+          "score": 0.4667462537554484
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 10,
+          "score": 0.44463085846204276
+        },
+        {
+          "source": "store/services/cancel.md",
+          "startLine": 1,
+          "score": 0.4353558001278051
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The answer does not state that deleting all data resets the world, nor does it instruct the user to reinstall the server from Settings and restart it to reset the world."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-062",
+      "category": "pre_sales",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我先查看这台机器的运行状态和近期日志，再核对反复掉线时可以做哪些检查。",
+        "您好，您已经多次重装，每次不到十分钟就再次断线。先暂停重装。后台返回的服务器状态是 `running`（运行中），但没有提供状态时间戳，日志查询也没有返回记录。目前还无法确认网络是否恢复，也无法判断断线原因。\n\n如果现在仍连不上，请按下面的顺序排查：\n\n1. **确认地址和端口，在断线时做一次路由追踪。** 先核对 VPS 的 IP 或域名及服务端口。在出现问题的电脑上，使用原来的网络，关闭 VPN、加速器和代理，打开 WinMTR。在「主机（Host）」栏只填 VPS 的 IP 或域名，不填端口。点击「Start」，等 `Sent` 超过 100，再点「截图至剪贴簿」，保存完整窗口，保留所有节点、丢包率和最后一行。[debug/connection.md:103-109] [debug/connection.md:129-132] [debug/mtr.md:13-54]\n2. **保留原网络的测试结果后，再用 WARP 对比。** 按 [Cloudflare WARP 教程](/docs/debug/warp) 开启 WARP，等它显示已连接，再用同一个 VPS 地址和服务端口重连。如果能连上，请确认这次能否持续超过十分钟。[debug/connection.md:110-115]\n3. **在当前工单补充结果。** 请附上完整的 WinMTR 和连接报错截图，注明最近一次断线的时间和时区、使用的网络、服务类型（如 SSH 或远程桌面）、连接地址和端口，以及开启 WARP 前后的结果。[debug/connection.md:9-13] [debug/connection.md:116-128]\n\n### MTR 截圖注意事項\n\n請在發生問題的那台電腦與相同網路環境下執行 WinMTR，等待 **Sent** 超過 100 後提供完整視窗截圖。請不要裁切節點、遺失率或最後一列的資料，這些資訊有助於我們判斷問題所在。\n [debug/connection.md:129-132]\n\n这次需要人工核对断线时段的宿主节点和上游网络记录，确认这台 VPS 当时是否有丢包或连接中断。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 24503,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[debug/connection.md:129-132]"
+          ],
+          "failures": [
+            {
+              "citation": "[debug/connection.md:103-109]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/connection.md:129-132]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/mtr.md:13-54]",
+              "reason": "wrong_lines"
+            },
+            {
+              "citation": "[debug/connection.md:110-115]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/connection.md:9-13]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/connection.md:116-128]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "debug/connection.md",
+          "startLine": 9,
+          "endLine": 13,
+          "excerpt": "### 回報問題前請先準備\n\n請記下發生問題的時間、使用的網路環境（家用網路、公司網路或行動網路）、連線位址與連接埠，以及完整的錯誤訊息。需要提供截圖時，請保留完整畫面，不要只截取單一錯誤文字。\n\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "endLine": 66,
+          "excerpt": "### 4. 仍無法連線或延遲很高時回報\n\n如果上述方法都無法解決問題，或使用原本位址及 `udp.cfh.tw:<連接埠>` 時延遲都很高，請前往 [Discord 客服群組](https://discord.gg/hpe2aWVaYs) 開啟「售後服務」客服單，並提供：\n\n- [MTR 路由追蹤](/docs/debug/mtr) 的完整 WinMTR 截圖。\n- Minecraft 無法連線、Connection Reset、逾時或延遲異常的完整遊戲畫面截圖。\n- 使用的連線位址與連接埠、發生時間、網路環境，以及已嘗試過的 Google DNS、替代位址或 WARP 步驟。\n\n\n\n\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 116,
+          "endLine": 128,
+          "excerpt": "### 3. 提供服務連線問題資料\n\n請前往 [Discord 客服群組](https://discord.gg/hpe2aWVaYs) 開啟「售後服務」客服單，並提供：\n\n- 以 VPS IP 位址或網域為目標的完整 MTR／WinMTR 截圖。\n- 您的服務連線有問題的完整截圖，例如瀏覽器錯誤、SSH、遠端桌面或服務端的錯誤訊息。\n- 發生時間、服務名稱與連接埠、使用的網路環境，以及問題的詳細情況。\n\n\n\n\n\n"
+        },
+        {
+          "source": "index.md",
+          "startLine": 57,
+          "endLine": 60,
+          "excerpt": "### 遇到問題怎麼辦？\n\n\t\t您可以透過 [Discord](https://discord.gg/hpe2aWVaYs) 客服單聯繫我們的客服人員。\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 1,
+          "endLine": 8,
+          "excerpt": "# 連線問題排查\n\n> Source: Coffee-Host/docs content/docs/debug/connection.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n使用超大咖託管服務時，若遇到連線問題，請先依照您使用的服務類型，按照以下步驟快速排查原因。\n\n"
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 129,
+          "endLine": 132,
+          "excerpt": "### MTR 截圖注意事項\n\n請在發生問題的那台電腦與相同網路環境下執行 WinMTR，等待 **Sent** 超過 100 後提供完整視窗截圖。請不要裁切節點、遺失率或最後一列的資料，這些資訊有助於我們判斷問題所在。\n"
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 11,
+          "endLine": 14,
+          "excerpt": "# 自動重啟\n\n長時間運行的伺服器可能會累積記憶體碎片或出現問題，定期重啟可以保持伺服器健康。\n"
+        },
+        {
+          "source": "debug/mtr.md",
+          "startLine": 39,
+          "endLine": 54,
+          "excerpt": "### ⚠️ 測試注意事項\n\n\n**網路環境限制**  \n請務必在**發生連線問題的那台客戶端電腦**上直接進行測試，且測試期間**請勿使用 VPN、加速器或任何代理服務**，否則測試結果將無法真實反映您原始網路的連線狀況。\n\n\n\n**完整截圖要求**  \n請提供 WinMTR 的**完整視窗截圖**，切勿裁切或遮蔽任何內容。畫面中的任何詳細資訊對於我們交叉比對連線紀錄至關重要。\n\n\n**💡 額外提示：**  \n* 建議在連線異常發生的**當下立即執行**此工具，以捕捉最真實的錯誤狀態。\n* 若您遭遇的是 Minecraft 伺服器無法連線的問題，回報時請**額外附上 Minecraft 遊戲客戶端畫面中顯示的錯誤訊息截圖**。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "debug/connection.md",
+          "startLine": 9,
+          "score": 0.5575081899207428
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 55,
+          "score": 0.5230644593456911
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 116,
+          "score": 0.5146522075795021
+        },
+        {
+          "source": "index.md",
+          "startLine": 57,
+          "score": 0.4970703321733968
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 1,
+          "score": 0.4967371406420593
+        },
+        {
+          "source": "debug/connection.md",
+          "startLine": 129,
+          "score": 0.4897030722766841
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 11,
+          "score": 0.48464049940420184
+        },
+        {
+          "source": "debug/mtr.md",
+          "startLine": 39,
+          "score": 0.4745011565949752
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "missing",
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The answer provides reasonable troubleshooting steps but directs the customer to update the current ticket instead of explaining that server disconnections require an after-sales support ticket and are not handled through general support. It also does not explain that opening duplicate tickets will not speed up resolution."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-084",
+      "category": "account_access",
+      "outcome": "resolved",
+      "answer": "請在這張工單回覆您使用的登入方式（帳號密碼、Google 或 Discord），以及畫面顯示的錯誤訊息。請勿附上密碼或驗證碼。目前無法確認登入失敗的原因，需要由人工客服查核您的控制面板帳號。\n\n# 帳號連結與登入問題\n\n> Source: Coffee-Host owner answers, 2026-11-08 (KB gap questions from golden-set evals)\n> Owner-provided; not sourced from published docs or past tickets.\n\n帳號連結或登入失敗，請找人工客服處理。\n [store/account/login-recovery.md:1-7]\n\n已轉交人工客服。",
+      "drafts": [
+        "",
+        "請在這張工單回覆您使用的登入方式（帳號密碼、Google 或 Discord），以及畫面顯示的錯誤訊息。請勿附上密碼或驗證碼。目前無法確認登入失敗的原因，需要由人工客服查核您的控制面板帳號。\n\n# 帳號連結與登入問題\n\n> Source: Coffee-Host owner answers, 2026-11-08 (KB gap questions from golden-set evals)\n> Owner-provided; not sourced from published docs or past tickets.\n\n帳號連結或登入失敗，請找人工客服處理。\n [store/account/login-recovery.md:1-7]\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 18313,
+      "citationGateViolation": false,
+      "citationGateAttempts": [
+        {
+          "status": "passed",
+          "grounded": true,
+          "matched": [
+            "[store/account/login-recovery.md:1-7]"
+          ],
+          "failures": []
+        }
+      ],
+      "evidence": [
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "endLine": 38,
+          "excerpt": "### 除了可以使用帳號密碼登入外，還可以透過 Google 或 Discord 等社群帳號登入。\n只要社群帳號 Email 地址與控制面板帳號 Email 相同，即可快速登入！\n\n登入後即可看到伺服器列表，左下角可管理您的帳號。\n![圖片](/images/panel/start-server/panel.png)\n\n切換至「控制台」分頁。\n![圖片](/images/panel/start-server/dashboard.png)\n\n點擊「啟動」按鈕。\n![圖片](/images/panel/start-server/console.png)\n\n按「I Accept」以同意 Eula。\n![圖片](/images/panel/start-server/eula.png)\n\n看到「Done! For help, type \"help\"」即啟動成功。\n![圖片](/images/panel/start-server/done.png)\n\n點擊上方紅框複製連線位址。\n![圖片](/images/panel/start-server/copy.png)\n\n至遊戲貼上並連線。\n![圖片](/images/panel/start-server/connect.png)\n"
+        },
+        {
+          "source": "store/account/login-recovery.md",
+          "startLine": 1,
+          "endLine": 7,
+          "excerpt": "# 帳號連結與登入問題\n\n> Source: Coffee-Host owner answers, 2026-11-08 (KB gap questions from golden-set evals)\n> Owner-provided; not sourced from published docs or past tickets.\n\n帳號連結或登入失敗，請找人工客服處理。\n"
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 148,
+          "endLine": 149,
+          "excerpt": "# 管理現有子用戶\n"
+        },
+        {
+          "source": "panel/manage/upload.md",
+          "startLine": 6,
+          "endLine": 28,
+          "excerpt": "### 警告\n\n1. 超過 100MB 的檔案或者資料夾請使用 [SFTP](/docs/panel/common/sftp)。\n2. 無法透過此頁面上傳資料夾！\n\n\n\n\t\n  \n\t\t### 點擊「檔案管理」\n    \n    點擊之後會出現一個頁面，有很多檔案。\n\n    ![圖片](/images/panel/manage/upload/manage.png)\n\n    \n    \n    ### 上傳檔案\n\n    點擊「上傳」或將檔案直接拖曳到頁面上\n\n    ![圖片](/images/panel/manage/upload/upload.png)\n"
+        },
+        {
+          "source": "store/account/reset-password.md",
+          "startLine": 1,
+          "endLine": 11,
+          "excerpt": "# 重設客戶中心密碼\n\n> Source: Coffee-Host/docs content/docs/store/account/reset-password.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n如果您忘記了客戶中心或控制面板的登入密碼，或者出於安全考量需要更改密碼，請依照以下說明進行重設。\n\n\n  **安全建議：** 為了保障您的伺服器與個資安全，強烈建議您使用包含大小寫字母、數字及特殊符號的強密碼，並避免與其他網站使用相同的密碼組合。\n\n"
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 174,
+          "endLine": 176,
+          "excerpt": "### 子用戶無法執行某些操作？\n請檢查是否已授予對應的權限。子用戶只能執行您授權的操作。\n"
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 1,
+          "endLine": 14,
+          "excerpt": "# 啟動伺服器\n\n> Source: Coffee-Host/docs content/docs/panel/start-server.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n如您是首次購買，您將會在服務開通後收到控制面板帳號創建通知。\n\n點擊中間 「開始設定您的帳號」，進入控制面板網頁。\n![圖片](/images/panel/start-server/email.png)\n\n輸入您帳號的新密碼後，點擊重設密碼即可開始使用。\n![圖片](/images/panel/start-server/reset.png)\n\n"
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 18,
+          "endLine": 71,
+          "excerpt": "# 新增子用戶\n\n\n    \n\n    ### 進入使用者管理頁面\n\n    1. 前往面板的「使用者」頁面\n    2. 您會看到目前所有子用戶的列表\n\n    ![使用者管理頁面](/images/panel/config/user/list.png)\n\n    \n\n    \n\n    ### 點擊「新增使用者」\n\n    點擊頁面上的「新增使用者」按鈕，開啟新增子用戶的視窗。\n\n    ![新增使用者按鈕](/images/panel/config/user/add-button.png)\n\n    \n\n    \n\n    ### 輸入子用戶的電子郵件\n\n    輸入您想邀請的用戶的電子郵件地址。\n\n    ![輸入電子郵件](/images/panel/config/user/email.png)\n\n    \n\n    \n\n    ### 設定子用戶權限\n\n    根據您的需求勾選要授予的權限。權限分為多個類別：\n\n    ![設定權限](/images/panel/config/user/permissions.png)\n\n    \n\n    \n\n    ### 確認新增\n\n    檢查設定無誤後，點擊「邀請使用者」完成新增。子用戶將會收到邀請通知。\n\n    \n\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "score": 0.4946344979415503
+        },
+        {
+          "source": "store/account/login-recovery.md",
+          "startLine": 1,
+          "score": 0.47719003351668726
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 148,
+          "score": 0.47734317428389994
+        },
+        {
+          "source": "panel/manage/upload.md",
+          "startLine": 6,
+          "score": 0.473334550921863
+        },
+        {
+          "source": "store/account/reset-password.md",
+          "startLine": 1,
+          "score": 0.46827869130212213
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 174,
+          "score": 0.45984661012159483
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 1,
+          "score": 0.45712447356456654
+        },
+        {
+          "source": "panel/config/user.md",
+          "startLine": 18,
+          "score": 0.45695900790578226
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The answer does not state that changing the panel password resolves incorrect password errors, nor does it provide the required navigation path. It instead directs the customer to human support without giving the confirmed resolution."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "passed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-094",
+      "category": "version_core",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "",
+        "如果你指的是將 Minecraft **1.26.2 更新至 1.26.3**，可以在控制面板的啟動設定中操作。\n\n1. 先建立伺服器備份。KB 建議在重大版本更新前備份。\n\n   > ## 伺服器備份服務\n   >\n   > 保障資料安全是經營伺服器的首要任務。您可以加購伺服器本地備份功能。\n   >\n   >\n   > **最佳實踐**：強烈建議您透過控制面板設定「排程自動備份」，例如在每天凌晨玩家最少時進行備份。這在進行重大版本更新、或是防範意外損壞（如玩家惡意破壞、地圖損壞）時，能提供最可靠的「回檔」保障。\n   >\n   >\n   > - 您可以在控制面板隨時手動建立備份。\n   > - 支援一鍵還原或直接下載備份檔案至您的個人電腦中。 [store/description/minecraft.md:8-18]\n\n2. 開啟伺服器的「啟動設定」。\n\n3. 將「Minecraft 版本」從目前版本改成 **1.26.3**。控制面板支援修改 Minecraft 版本。\n\n   > #### MINECRAFT 版本\n   >\n   >     - 可以更改您伺服器的 Minecraft 版本\n    [panel/config/startup.md:10-13]\n\n4. 確認「伺服器 JAR 檔」也對應到 1.26.3。控制面板支援修改伺服器 JAR 啟動檔案。\n\n   > #### 伺服器 JAR 檔\n   >\n   >     - 可以更改您伺服器的 JAR 啟動檔案 [panel/config/startup.md:14-17]\n\n5. 儲存設定後，依照面板提示重新啟動伺服器，然後確認伺服器主控台顯示的版本是否為 1.26.3。\n\n不同 Minecraft 版本可能需要不同的 Java 版本，請同時確認 Docker Image 或 Java 版本設定。\n\n> ### 警告\n>\n> \\t請注意不同 Minecraft 版本對應的 Java 版本 [panel/config/startup.md:34-39]\n\n目前可查到的文件只確認控制面板能更改 Minecraft 版本，沒有確認 **1.26.3 現在是否已經列在你的版本選單中**。如果選單沒有 1.26.3，需要請客服確認該版本是否已提供。"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 43196,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[store/description/minecraft.md:8-18]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[panel/config/startup.md:10-13]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[panel/config/startup.md:14-17]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[panel/config/startup.md:34-39]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 10,
+          "endLine": 13,
+          "excerpt": "#### MINECRAFT 版本\n\n    - 可以更改您伺服器的 Minecraft 版本\n"
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 141,
+          "endLine": 146,
+          "excerpt": "### 4. 網路與端口分配\n\n若您需要架設網頁地圖（如 Dynmap 或 BlueMap），需要加購額外的伺服器端口。針對需要無端口網域與 SSL 憑證的用戶，歡迎向客服申請 Reverse Proxy 反向代理服務。\n\n---\n"
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 208,
+          "endLine": 210,
+          "excerpt": "# 放大化世界（山更高、洞更深）\nlevel-type=minecraft\\:amplified\n"
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 269,
+          "endLine": 293,
+          "excerpt": "## 一般生存伺服器\n\n```properties\n#Minecraft server properties\nmotd=\\u00A7b我的生存伺服器\\u00A7r\\n\\u00A7e歡迎加入！\nmax-players=30\nonline-mode=true\nwhite-list=false\n\ngamemode=survival\ndifficulty=normal\npvp=true\nhardcore=false\nallow-flight=false\n\nlevel-name=world\ngenerate-structures=true\nspawn-monsters=true\nspawn-animals=true\n\nview-distance=10\nsimulation-distance=10\nspawn-protection=16\n```\n"
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 1,
+          "endLine": 12,
+          "excerpt": "# 《Minecraft》 選購指南\n\n> Source: Coffee-Host/docs content/docs/store/description/mc-guide.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n在挑選適合您的 Minecraft 伺服器時，面對多樣的硬體配置與方案，您可能會感到無從下手。本篇選購指南將為您深入解析各項資源配置的關鍵，並提供針對不同遊戲玩法的推薦方案，幫助您打造最流暢的遊戲體驗。\n\n\n**企業與大型專案支援**  \n若您正在籌備超大型伺服器群組，或有大量採購需求，建議直接聯繫我們的企業客服部門，以取得客製化的硬體資源配置建議與專屬優惠。\n\n"
+        },
+        {
+          "source": "store/description/minecraft.md",
+          "startLine": 8,
+          "endLine": 18,
+          "excerpt": "## 伺服器備份服務\n\n保障資料安全是經營伺服器的首要任務。您可以加購伺服器本地備份功能。\n\n\n**最佳實踐**：強烈建議您透過控制面板設定「排程自動備份」，例如在每天凌晨玩家最少時進行備份。這在進行重大版本更新、或是防範意外損壞（如玩家惡意破壞、地圖損壞）時，能提供最可靠的「回檔」保障。\n\n\n- 您可以在控制面板隨時手動建立備份。\n- 支援一鍵還原或直接下載備份檔案至您的個人電腦中。\n"
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 109,
+          "endLine": 112,
+          "excerpt": "## 深入解析：伺服器資源配置\n\n伺服器的流暢度取決於硬體資源的分配，錯誤的配置不僅會導致「方塊延遲 (Block Lag)」或「橡皮筋效應 (Rubberbanding)」，甚至可能引發伺服器崩潰。以下我們為您拆解各項硬體指標：\n"
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 294,
+          "endLine": 314,
+          "excerpt": "## 創造建築伺服器\n\n```properties\nmotd=\\u00A7e創造建築伺服器\\u00A7r\\n\\u00A7a自由發揮創意！\nmax-players=20\nonline-mode=true\n\ngamemode=creative\ndifficulty=peaceful\npvp=false\nallow-flight=true\n\nlevel-type=minecraft\\:flat\nspawn-monsters=false\nspawn-animals=false\nspawn-protection=0\n```\n\n\n修改設定後需要**重新啟動伺服器**才會生效。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 10,
+          "score": 0.6397401902098389
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 141,
+          "score": 0.5999617721852956
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 208,
+          "score": 0.5742758916584971
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 269,
+          "score": 0.5709753639557564
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 1,
+          "score": 0.5633498127054183
+        },
+        {
+          "source": "store/description/minecraft.md",
+          "startLine": 8,
+          "score": 0.5630519531361392
+        },
+        {
+          "source": "store/description/mc-guide.md",
+          "startLine": 109,
+          "score": 0.5628017994855
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 294,
+          "score": 0.5591589126042006
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "partial",
+        "judgment": {
+          "points": [
+            "covered",
+            "missing"
+          ],
+          "verdict": "partial",
+          "reason": "The answer correctly instructs the user to enter the new Minecraft version in the server startup settings. However, it tells the user to restart the server rather than going to Settings and selecting the reinstall-server option required to apply the version change."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "partial"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-108",
+      "category": "server_start_crash",
+      "outcome": "resolved",
+      "answer": "後端回報的伺服器狀態：running。\n\n相關說明 [debug/nojar.md:31-38]。\n\n我還無法確認完整答案。請核對控制台狀態，並告知是否仍有異常。\n\n已轉交人工客服。",
+      "drafts": [
+        "",
+        "",
+        "",
+        "目前系統回報您的伺服器狀態為 **running**，但回傳資料沒有提供狀態時間戳。啟動錯誤日誌目前沒有可讀取紀錄，因此無法確認實際失敗原因。\n\n請先重新整理控制面板，嘗試連線一次，確認伺服器是否已恢復。若仍無法啟動，請依照以下順序檢查。\n\n如果主控台出現 `Unable to access jarfile server.jar`，通常代表啟動設定指向的 `.jar` 檔案不存在，或檔名與啟動指令不一致。\n\n> ### 診斷問題\n>\n>\n> 在上述繁雜的啟動日誌中，請注意這行關鍵錯誤訊息：  \n> `Error: Unable to access jarfile server.jar`  \n> 這句話明確表示伺服器啟動程序在嘗試執行 `server.jar` 時失敗，因為該檔案不存在於根目錄，或是檔案名稱與啟動指令不符。\n>\n> [debug/nojar.md:31-38]\n\n1. 如果您是自行上傳伺服器核心，請在控制面板開啟「啟動設定」，找到「伺服器啟動 Jar 檔案」，填入檔案管理中實際的 `.jar` 檔名，包含 `.jar` 副檔名。\n\n> ### 情況一：您是自行上傳伺服器核心檔案\n> 如果您是從外部下載核心檔案並手動上傳至檔案管理中，檔名可能不一定是 `server.jar`（例如可能是 `paper-1.20.4.jar`）。  \n> 請前往控制面板的「啟動設定」頁面，找到「伺服器啟動 Jar 檔案」欄位。請將該欄位的值修改為您實際上傳的核心檔案名稱（需包含 `.jar` 副檔名）。  \n> ![圖片](/images/debug/nojar/custom.png)\n>\n> [debug/nojar.md:45-50]\n\n2. 如果核心檔案遺失，請開啟「其他設定」，選擇「重新安裝伺服器」，讓系統依照目前設定重新下載核心檔案。\n\n> ### 情況二：伺服器核心檔案遺失\n> 如果您原本使用面板自動化安裝核心，但不小心誤刪了該檔案。  \n> 請前往控制面板的「其他設定」頁面，點選重新安裝伺服器選項。系統會根據您當前的設定，自動重新下載並補齊遺失的核心檔案。  \n> ![圖片](/images/debug/nojar/reinstall.png)\n>\n> [debug/nojar.md:51-56]\n\n3. 如果核心檔案存在但仍然無法啟動，請回到「啟動設定」，檢查「啟動參數設定」是否有錯字或無法解析的特殊字元。\n\n> ### 情況三：啟動參數錯誤\n> 如果您已經重新安裝過核心，且檔案確實存在於目錄中，但仍出現此錯誤。  \n> 請回到「啟動設定」頁面，仔細檢查您的 <b>啟動參數設定</b> 是否有輸入錯誤，或是引入了無法解析的特殊字元，這可能導致指令解析錯亂而無法正確指向 Jar 檔案。  \n> ![圖片](/images/debug/nojar/startup.png)\n>\n>\n>\n>\n>\n> **最佳實踐**  \n> 為了避免日後混淆，建議您在手動上傳核心時，直接將該檔案重新命名為 `server.jar`，這樣就能維持預設的啟動設定而無須額外修改參數。\n>\n> [debug/nojar.md:57-67]\n\n完成檢查或重新安裝後，請再次啟動伺服器並確認是否能連線。若仍無法啟動，請提供主控台顯示的完整錯誤訊息，因目前沒有啟動日誌或時間戳，無法進一步判斷根因。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "tool-calls",
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 4,
+      "attempts": 1,
+      "latencyMs": 54291,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[debug/nojar.md:31-38]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/nojar.md:45-50]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/nojar.md:51-56]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[debug/nojar.md:57-67]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "debug/nojar.md",
+          "startLine": 31,
+          "endLine": 38,
+          "excerpt": "### 診斷問題\n\n\n在上述繁雜的啟動日誌中，請注意這行關鍵錯誤訊息：  \n`Error: Unable to access jarfile server.jar`  \n這句話明確表示伺服器啟動程序在嘗試執行 `server.jar` 時失敗，因為該檔案不存在於根目錄，或是檔案名稱與啟動指令不符。\n\n"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "endLine": 44,
+          "excerpt": "### 警告\n\n\t如果要更改啟動指令請至 [Discord 伺服器](https://dc.coffeehost.net)\n\t開啟客服單。\n"
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 57,
+          "endLine": 67,
+          "excerpt": "### 情況三：啟動參數錯誤\n如果您已經重新安裝過核心，且檔案確實存在於目錄中，但仍出現此錯誤。\n請回到「啟動設定」頁面，仔細檢查您的 <b>啟動參數設定</b> 是否有輸入錯誤，或是引入了無法解析的特殊字元，這可能導致指令解析錯亂而無法正確指向 Jar 檔案。\n![圖片](/images/debug/nojar/startup.png)\n\n\n\n\n**最佳實踐**  \n為了避免日後混淆，建議您在手動上傳核心時，直接將該檔案重新命名為 `server.jar`，這樣就能維持預設的啟動設定而無須額外修改參數。\n"
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 1,
+          "endLine": 30,
+          "excerpt": "# 找不到 Jar\n\n> Source: Coffee-Host/docs content/docs/debug/nojar.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n當您啟動伺服器卻立刻遭遇崩潰時，其中一個最常見的原因是控制面板無法找到指定的啟動檔案。在 Java 環境中，這通常會反映為無法存取 `.jar` 檔案。\n\n以下為控制面板終端機可能輸出的錯誤訊息範例：\n\n```text\n[Coffee Host 主控臺]: 正在更新进程配置文件...\n[Coffee Host 主控臺]: 确保文件权限设置正确，这可能需要几秒钟...\ncontainer@coffeehost~ Server marked as starting...\n[Coffee Host 主控臺]: 正在拉取 Docker 容器镜像，这可能需要几分钟才能完成...\nPulling from ptero-eggs/yolks \nDigest: sha256:afbe93630fc543361cd463630335fc04d799d52e1e87ca8d87005938e0508ad2 \nStatus: Image is up to date for ghcr.io/ptero-eggs/yolks:java_25 \n[Coffee Host 主控臺]: Docker 容器镜像已拉取完成\ncontainer@coffeehost~ java -version\nopenjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (b"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 1,
+          "endLine": 9,
+          "excerpt": "# 啟動設定\n\n> Source: Coffee-Host/docs content/docs/panel/config/startup.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n在面板點擊「啟動設定」\n\n可以調整的參數如下:\n"
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 16,
+          "endLine": 20,
+          "excerpt": "### 首次啟動\n\n如果您找不到這個檔案，請先啟動一次伺服器，它會自動生成。\n\n"
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 11,
+          "endLine": 14,
+          "excerpt": "# 自動重啟\n\n長時間運行的伺服器可能會累積記憶體碎片或出現問題，定期重啟可以保持伺服器健康。\n"
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 247,
+          "endLine": 250,
+          "excerpt": "### 測試排程\n\n設定好排程後，建議先手動測試一次確保正常運作。特別是重啟排程，要確認伺服器能正確啟動。\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "debug/nojar.md",
+          "startLine": 31,
+          "score": 0.4943727263583211
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "score": 0.48599399850291425
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 57,
+          "score": 0.4683700001783798
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 1,
+          "score": 0.4685353724812005
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 1,
+          "score": 0.4474396054969211
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 16,
+          "score": 0.42629610312083177
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 11,
+          "score": 0.42587667937655094
+        },
+        {
+          "source": "practice/advanced/automation.md",
+          "startLine": 247,
+          "score": 0.4243302136313134
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "correct",
+        "judgment": {
+          "points": [
+            "covered",
+            "covered"
+          ],
+          "verdict": "correct",
+          "reason": "The answer directs the customer to reinstall the server from Settings if the required JAR is missing and asks for the full console error if startup still fails. Neither recommendation contradicts the staff resolution."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "correct"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-140",
+      "category": "plugin_mod",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我會先核對目前伺服器狀態與相關日誌，再查詢 Better MC／Forge 模組包部署的現行文件，確認能由現有資料支持哪些檢查與後續步驟。",
+        "後台回報伺服器狀態為 `running`，但未提供狀態時間戳，日誌查詢也未傳回紀錄，因此目前無法確認 **Better MC [FORGE] BMC4 v59** 是否已完成部署。依你提供的資料，兩個 `.plugin-install-*` 目錄各有 21 個 JAR 和設定檔，但根目錄的 `/mods` 為空。這值得優先追查解壓後的部署階段。暫存檔本身還不足以判定索引中的模組是否全部下載，或安裝工作在哪一步中止。\n\n請先保留兩個暫存目錄，在面板的「**檔案管理**」重新確認根目錄的 `/mods` 是否仍為空，以及 `/config` 是否已有對應的設定檔。如果記得兩次安裝的大約時間，可以補在工單中，方便客服比對後台工作紀錄。\n\n### 不能混用！\n\n⚠️ **Forge 模組不能用在 Fabric 伺服器**，反之亦然！下載模組時請確認載入器類型。\n\n [practice/install/mod.md:44-48]\n\n索引中標記 NeoForge、Fabric 或 `1.20.4` 的伺服器端項目，需要逐一核對**實際解析到的檔案版本**是否支援 Forge／Minecraft `1.20.1`，並確認是否為伺服器端必要項目。現有資料沒有這些項目的檔名與版本，還無法判定哪些檔案相容。 [practice/install/mod.md:66-100] [practice/install/mod.md:101-183]\n\n請客服調閱兩次模組包安裝工作的完整紀錄，依序確認**索引檔案的下載結果、解壓後 `mods` 與 `config` 的實際部署路徑、工作最終狀態與清理結果**，並回報第一個失敗步驟及錯誤訊息。同時請核對上述標記項目實際解析到的檔案，以及安裝器是納入、略過，還是在處理該項目時中止。\n\nSTAFF_HANDOFF"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [
+        "/v1/me/server-logs:HTTP_404"
+      ],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 34900,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[practice/install/mod.md:44-48]"
+          ],
+          "failures": [
+            {
+              "citation": "[practice/install/mod.md:66-100]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[practice/install/mod.md:101-183]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 26,
+          "endLine": 33,
+          "excerpt": "#### BUILD TYPE(Forge)\n\n    - 選擇您要下載 **推薦版** 或是 **最新版** 的 Forge 核心\n\n設定完成後在面板點擊「設定」，並選擇「重新安裝伺服器」\n\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 101,
+          "endLine": 183,
+          "excerpt": "### 版本選擇範例\n\n    如果您的伺服器是 **Forge 1.20.1**：\n    - ✅ 下載標示 `Forge` + `1.20.1` 的版本\n    - ❌ 不要下載 `Fabric` 或 `1.19` 的版本\n    \n\n    \n\n    \n\n    ### 步驟三：檢查依賴模組\n\n    許多模組需要其他模組才能運作，這些稱為「依賴模組」：\n\n    **Fabric 伺服器必裝：**\n    - **Fabric API** - 幾乎所有 Fabric 模組都需要\n\n    **常見依賴模組：**\n    - Architectury API\n    - Cloth Config\n    - GeckoLib\n\n    ![依賴模組](/images/practice/install-mod/dependencies.png)\n\n    \n    模組頁面通常會列出需要的依賴，請一併下載安裝。\n    \n\n    \n\n    \n\n    ### 步驟四：上傳模組到伺服器\n\n    1. 前往面板的「**檔案管理**」頁面\n    2. 進入 `mods` 資料夾\n    3. 點擊「**上傳**」按鈕\n    4. 選擇所有下載的 `.jar` 檔案並上傳\n\n    ![上傳模組](/images/practice/install-mod/upload.png)\n\n    \n    如需上傳大檔案，或遇到無法上傳的問題，請參考 [SFTP 上傳教學](/docs/panel/common/sftp)。\n    \n\n    \n\n    \n\n    ### 步驟五：重新啟動伺服器\n\n    上傳完成後，重新啟動伺服器以載入模組。\n\n    \n    模組伺服器啟動較慢是正常的，請耐心等待。\n    \n\n    \n\n    \n\n    ### 步驟六：客戶"
+        },
+        {
+          "source": "practice/install/neoforge-1211.md",
+          "startLine": 1,
+          "endLine": 11,
+          "excerpt": "# NeoForge 1.21.1 核心安裝\n\n> Source: Coffee-Host owner answers, 2026-11-08 (KB gap questions from golden-set evals)\n> Owner-provided; not sourced from published docs or past tickets.\n\n安裝 NeoForge 1.21.1 核心的步驟：\n\n1. 先確認 Egg 是 NeoForge。\n2. 填好 Startup Config。\n3. Reinstall Server。\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 66,
+          "endLine": 100,
+          "excerpt": "# 安裝模組教學\n\n\n    \n\n    ### 步驟一：確認伺服器類型\n\n    在安裝模組前，請先確認您的伺服器使用哪種模組載入器：\n\n    1. 前往面板的「**啟動設定**」頁面\n    2. 查看伺服器核心類型\n    3. 記住載入器類型和版本\n\n    | 核心名稱包含 | 模組載入器 |\n    |--------------|------------|\n    | `forge` | Forge |\n    | `neoforge` | NeoForge |\n    | `fabric` | Fabric |\n\n    \n\n    \n\n    ### 步驟二：下載模組檔案\n\n    1. 前往 CurseForge 或 Modrinth\n    2. 搜尋您想要的模組\n    3. **選擇正確的版本**：\n       - 選擇正確的模組載入器（Forge/Fabric）\n       - 選擇正確的 Minecraft 版本\n    4. 點擊下載 `.jar` 檔案\n\n    ![下載模組](/images/practice/install-mod/download.png)\n\n    "
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 22,
+          "endLine": 25,
+          "excerpt": "#### BUILD NUMBER / Forge 版本\n\n    - 可以更改您伺服器的核心版本(無須特別指定版本則可以留空)\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 44,
+          "endLine": 48,
+          "excerpt": "### 不能混用！\n\n⚠️ **Forge 模組不能用在 Fabric 伺服器**，反之亦然！下載模組時請確認載入器類型。\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 32,
+          "endLine": 43,
+          "excerpt": "# 模組載入器介紹\n\nMinecraft 模組需要透過「模組載入器」來運行，主要有以下幾種：\n\n| 載入器 | 說明 | 適合場景 |\n|--------|------|----------|\n| **Forge** | 歷史最悠久，模組最多 | 大型模組包、科技/魔法模組 |\n| **NeoForge** | Forge 的分支，更現代化 | 新版本 Minecraft |\n| **Fabric** | 輕量、更新快 | 效能優化、輕量模組 |\n| **Quilt** | Fabric 的分支 | 較少使用 |\n\n"
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 6,
+          "endLine": 10,
+          "excerpt": "### 適用範圍\n\n本教學適用於 Forge、NeoForge、Fabric 等模組伺服器。如果您使用 Paper/Spigot 伺服器，請參考 [安裝插件](/docs/practice/install/plugin)。\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 26,
+          "score": 0.6262687425945775
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 101,
+          "score": 0.6288643562603361
+        },
+        {
+          "source": "practice/install/neoforge-1211.md",
+          "startLine": 1,
+          "score": 0.6397013454610049
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 66,
+          "score": 0.6333799095983552
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 22,
+          "score": 0.5951578281053357
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 44,
+          "score": 0.600094525317869
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 32,
+          "score": 0.6040381356870131
+        },
+        {
+          "source": "practice/install/mod.md",
+          "startLine": 6,
+          "score": 0.5955650178670057
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "missing",
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The response does not state that duplicate tickets will not accelerate handling, that the issue should use an after-sales service ticket, or that the customer should wait for technical staff rather than opening multiple tickets. It provides troubleshooting guidance instead of following the required handoff resolution."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/server-logs",
+          "status": "error",
+          "detail": "HTTP_404"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-163",
+      "category": "purchase_help",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "我先查閱目前的主機啟動說明，並確認系統中這張工單所選伺服器的目前狀態。",
+        "您好！後台回傳您的伺服器狀態為 **`running`（運行中）**，但未提供狀態時間。您現在可以先登入控制面板，從「控制台」複製連線位址，再貼到 Minecraft 裡試連線。[panel/start-server.md:15-38]\n\n如果您是第一次登入，請在服務開通後找到控制面板帳號建立通知，點選「開始設定您的帳號」。輸入新密碼後，點選「重設密碼」即可使用該帳號登入。[panel/start-server.md:1-14]\n\n如果之後需要手動開機，請在「控制台」點右上角的「啟動」（控制台說明中稱為「開機」）。首次啟動 Minecraft 伺服器時，若跳出 EULA 視窗，請在同意條款後點選「I Accept」繼續。[panel/common/console.md:1-22]\n\n### 除了可以使用帳號密碼登入外，還可以透過 Google 或 Discord 等社群帳號登入。\n只要社群帳號 Email 地址與控制面板帳號 Email 相同，即可快速登入！\n\n登入後即可看到伺服器列表，左下角可管理您的帳號。\n![圖片](/images/panel/start-server/panel.png)\n\n切換至「控制台」分頁。\n![圖片](/images/panel/start-server/dashboard.png)\n\n點擊「啟動」按鈕。\n![圖片](/images/panel/start-server/console.png)\n\n按「I Accept」以同意 Eula。\n![圖片](/images/panel/start-server/eula.png)\n\n看到「Done! For help, type \"help\"」即啟動成功。\n![圖片](/images/panel/start-server/done.png)\n\n點擊上方紅框複製連線位址。\n![圖片](/images/panel/start-server/copy.png)\n\n至遊戲貼上並連線。\n![圖片](/images/panel/start-server/connect.png) [panel/start-server.md:15-38]"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 54465,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": true,
+          "matched": [
+            "[panel/start-server.md:15-38]"
+          ],
+          "failures": [
+            {
+              "citation": "[panel/start-server.md:15-38]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[panel/start-server.md:1-14]",
+              "reason": "excerpt_mismatch"
+            },
+            {
+              "citation": "[panel/common/console.md:1-22]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "panel/start-server.md",
+          "startLine": 1,
+          "endLine": 14,
+          "excerpt": "# 啟動伺服器\n\n> Source: Coffee-Host/docs content/docs/panel/start-server.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n如您是首次購買，您將會在服務開通後收到控制面板帳號創建通知。\n\n點擊中間 「開始設定您的帳號」，進入控制面板網頁。\n![圖片](/images/panel/start-server/email.png)\n\n輸入您帳號的新密碼後，點擊重設密碼即可開始使用。\n![圖片](/images/panel/start-server/reset.png)\n\n"
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "endLine": 38,
+          "excerpt": "### 除了可以使用帳號密碼登入外，還可以透過 Google 或 Discord 等社群帳號登入。\n只要社群帳號 Email 地址與控制面板帳號 Email 相同，即可快速登入！\n\n登入後即可看到伺服器列表，左下角可管理您的帳號。\n![圖片](/images/panel/start-server/panel.png)\n\n切換至「控制台」分頁。\n![圖片](/images/panel/start-server/dashboard.png)\n\n點擊「啟動」按鈕。\n![圖片](/images/panel/start-server/console.png)\n\n按「I Accept」以同意 Eula。\n![圖片](/images/panel/start-server/eula.png)\n\n看到「Done! For help, type \"help\"」即啟動成功。\n![圖片](/images/panel/start-server/done.png)\n\n點擊上方紅框複製連線位址。\n![圖片](/images/panel/start-server/copy.png)\n\n至遊戲貼上並連線。\n![圖片](/images/panel/start-server/connect.png)\n"
+        },
+        {
+          "source": "store/order.md",
+          "startLine": 1,
+          "endLine": 5,
+          "excerpt": "# 購買伺服器\n\n> Source: Coffee-Host/docs content/docs/store/order.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "endLine": 44,
+          "excerpt": "### 警告\n\n\t如果要更改啟動指令請至 [Discord 伺服器](https://dc.coffeehost.net)\n\t開啟客服單。\n"
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 16,
+          "endLine": 20,
+          "excerpt": "### 首次啟動\n\n如果您找不到這個檔案，請先啟動一次伺服器，它會自動生成。\n\n"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 14,
+          "endLine": 17,
+          "excerpt": "#### 伺服器 JAR 檔\n\n    - 可以更改您伺服器的 JAR 啟動檔案\n"
+        },
+        {
+          "source": "panel/common/console.md",
+          "startLine": 1,
+          "endLine": 22,
+          "excerpt": "# 控制台\n\n> Source: Coffee-Host/docs content/docs/panel/common/console.mdx\n> draft v1 awaiting staff review — sourced from company published docs, still unreviewed as agent answers.\n\n您可以在右上角看到三個分別是開機、重啟、關機按鈕，首次使用請先點擊 「開機」 按鈕。\n![](/images/panel/common/console/buttons.png)\n\n如果是首次開啟 Minecraft 伺服器，您將看到同意 Minecraft EULA 視窗。\n點擊「I Accept」，即可繼續啟動伺服器。\n![](/images/panel/common/console/eula.png)\n\n接著伺服器就成功啟動了，您可以在控制台看到伺服器的啟動訊息。\n\n紅色區域是此伺服器的連線位置，點擊文字區域即可複製。\n您可以在黃色區域看到此伺服器目前的狀態，包含 CPU 使用率、記憶體、儲存空間、網路使用狀態等。\n藍色區域為控制台的終端，您可以在此輸入要控制的指令。\n\n若為 Minecraft 伺服器，指令前則不需要加上 `/`。（例如 `/help` 應輸入 `help`）\n\n![](/images/panel/common/console/console.png)\n"
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 26,
+          "endLine": 33,
+          "excerpt": "#### BUILD TYPE(Forge)\n\n    - 選擇您要下載 **推薦版** 或是 **最新版** 的 Forge 核心\n\n設定完成後在面板點擊「設定」，並選擇「重新安裝伺服器」\n\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "panel/start-server.md",
+          "startLine": 1,
+          "score": 0.7065941221808248
+        },
+        {
+          "source": "panel/start-server.md",
+          "startLine": 15,
+          "score": 0.6647567553255529
+        },
+        {
+          "source": "store/order.md",
+          "startLine": 1,
+          "score": 0.6034458846002738
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 40,
+          "score": 0.6216607504041826
+        },
+        {
+          "source": "practice/config/server-properties.md",
+          "startLine": 16,
+          "score": 0.5901487346206908
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 14,
+          "score": 0.5779756048309281
+        },
+        {
+          "source": "panel/common/console.md",
+          "startLine": 1,
+          "score": 0.5734044836497881
+        },
+        {
+          "source": "panel/config/startup.md",
+          "startLine": 26,
+          "score": 0.5599549105246957
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "correct",
+        "judgment": {
+          "points": [
+            "covered"
+          ],
+          "verdict": "correct",
+          "reason": "答案指出伺服器已是 running 狀態，並說明服務開通後可登入控制面板啟動或連線使用。這符合服務已開通、客戶即可使用伺服器的處理結果。"
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/servers/whmcs-service%3A1/status",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "error",
+          "detail": "Invalid judge output"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "error",
+          "detail": "Invalid judge output"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "correct"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    },
+    {
+      "id": "GS-166",
+      "category": "general_other",
+      "outcome": "resolved",
+      "answer": "我不知道，現有資料不足以確認答案，已轉交人工客服。",
+      "drafts": [
+        "",
+        "您好，控制面板的檔案管理頁面無法直接上傳資料夾。您可以先將資料夾壓縮成 `.zip` 檔，再以檔案形式上傳。\n\n官方文件說明：\n\n> ### 警告\n>\n> 1. 超過 100MB 的檔案或者資料夾請使用 [SFTP](/docs/panel/common/sftp)。\n> 2. 無法透過此頁面上傳資料夾！\n>\n>\n>\n> \t\n>  \t\n>   \n>   ### 點擊「檔案管理」\n>     點擊之後會出現一個頁面，有很多檔案。\n>\n>     ![圖片](/images/panel/manage/upload/manage.png)\n>\n>     \n>     \n>     ### 上傳檔案\n>\n>     點擊「上傳」或將檔案直接拖曳到頁面上\n>\n>     ![圖片](/images/panel/manage/upload/upload.png)\n\n[panel/manage/upload.md:6-28]\n\n如果壓縮後的 `.zip` 檔超過 100MB，請改用 SFTP 上傳。文件沒有說明控制面板是否支援直接解壓縮，若上傳後找不到解壓縮功能，需要使用 SFTP 或請客服協助確認。"
+      ],
+      "handedOff": true,
+      "error": false,
+      "toolErrors": [],
+      "modelFailures": [],
+      "finishReasons": [
+        "tool-calls",
+        "stop"
+      ],
+      "steps": 2,
+      "attempts": 1,
+      "latencyMs": 28942,
+      "citationGateViolation": true,
+      "citationGateAttempts": [
+        {
+          "status": "failed",
+          "grounded": false,
+          "matched": [],
+          "failures": [
+            {
+              "citation": "[panel/manage/upload.md:6-28]",
+              "reason": "excerpt_mismatch"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source": "store/description/palworld.md",
+          "startLine": 8,
+          "endLine": 18,
+          "excerpt": "## 伺服器備份服務\n\n《幻獸帕魯》的存檔極為珍貴，加購伺服器本地備份功能是保障您與好友心血的最佳方式。\n\n\n**專家建議**：強烈建議您利用控制面板設定「排程自動備份」。遊戲處於搶先體驗階段，偶爾會發生存檔異常或回溯的問題，擁有定期備份能讓您隨時輕鬆「回檔」，免除遺失資料的風險。\n\n\n- 您可以在控制面板中手動執行備份。\n- 您能隨時一鍵還原先前的狀態，或是將備份檔案下載回個人電腦中妥善保存。\n"
+        },
+        {
+          "source": "panel/manage/upload.md",
+          "startLine": 6,
+          "endLine": 28,
+          "excerpt": "### 警告\n\n1. 超過 100MB 的檔案或者資料夾請使用 [SFTP](/docs/panel/common/sftp)。\n2. 無法透過此頁面上傳資料夾！\n\n\n\n\t\n  \n\t\t### 點擊「檔案管理」\n    \n    點擊之後會出現一個頁面，有很多檔案。\n\n    ![圖片](/images/panel/manage/upload/manage.png)\n\n    \n    \n    ### 上傳檔案\n\n    點擊「上傳」或將檔案直接拖曳到頁面上\n\n    ![圖片](/images/panel/manage/upload/upload.png)\n"
+        },
+        {
+          "source": "index.md",
+          "startLine": 18,
+          "endLine": 19,
+          "excerpt": "### 💾 每日檔案備份\n我們**每天會進行節點檔案備份作業**，並且資料保留至少三天，全方面保護您的伺服器資料安全！"
+        },
+        {
+          "source": "store/description/minecraft.md",
+          "startLine": 8,
+          "endLine": 18,
+          "excerpt": "## 伺服器備份服務\n\n保障資料安全是經營伺服器的首要任務。您可以加購伺服器本地備份功能。\n\n\n**最佳實踐**：強烈建議您透過控制面板設定「排程自動備份」，例如在每天凌晨玩家最少時進行備份。這在進行重大版本更新、或是防範意外損壞（如玩家惡意破壞、地圖損壞）時，能提供最可靠的「回檔」保障。\n\n\n- 您可以在控制面板隨時手動建立備份。\n- 支援一鍵還原或直接下載備份檔案至您的個人電腦中。\n"
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 176,
+          "endLine": 177,
+          "excerpt": "# 跨服傳送\n"
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 198,
+          "endLine": 211,
+          "excerpt": "## 使用 BungeeCord API\n\n後端伺服器可以透過 BungeeCord API 傳送玩家：\n\n```java\n// Java 插件程式碼\nByteArrayDataOutput out = ByteStreams.newDataOutput();\nout.writeUTF(\"Connect\");\nout.writeUTF(\"survival\");\nplayer.sendPluginMessage(plugin, \"BungeeCord\", out.toByteArray());\n```\n\n許多插件（如 CMI、EssentialsX）支援跨服傳送指令。\n"
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "endLine": 17,
+          "excerpt": "## 資料刪除\n\n超過 7 天仍未繳費，資料會從節點刪除。資料從節點刪除後，再過 7 天才會從備份伺服器刪除。\n"
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 45,
+          "endLine": 50,
+          "excerpt": "### 情況一：您是自行上傳伺服器核心檔案\n如果您是從外部下載核心檔案並手動上傳至檔案管理中，檔名可能不一定是 `server.jar`（例如可能是 `paper-1.20.4.jar`）。\n請前往控制面板的「啟動設定」頁面，找到「伺服器啟動 Jar 檔案」欄位。請將該欄位的值修改為您實際上傳的核心檔案名稱（需包含 `.jar` 副檔名）。\n![圖片](/images/debug/nojar/custom.png)\n\n"
+        }
+      ],
+      "semanticSupport": "not assessed",
+      "semanticScores": [
+        {
+          "source": "store/description/palworld.md",
+          "startLine": 8,
+          "score": 0.5559393627914644
+        },
+        {
+          "source": "panel/manage/upload.md",
+          "startLine": 6,
+          "score": 0.5300556795695319
+        },
+        {
+          "source": "index.md",
+          "startLine": 18,
+          "score": 0.5288150618706305
+        },
+        {
+          "source": "store/description/minecraft.md",
+          "startLine": 8,
+          "score": 0.5199346847558228
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 176,
+          "score": 0.5064207070229695
+        },
+        {
+          "source": "practice/advanced/proxy.md",
+          "startLine": 198,
+          "score": 0.5052554560649378
+        },
+        {
+          "source": "store/services/suspension-retention.md",
+          "startLine": 14,
+          "score": 0.5007667256161741
+        },
+        {
+          "source": "debug/nojar.md",
+          "startLine": 45,
+          "score": 0.4985652592758519
+        }
+      ],
+      "semantic": {
+        "verdict": "wrong",
+        "basis": "lifecycle"
+      },
+      "handoffContentVerdict": {
+        "verdict": "wrong",
+        "judgment": {
+          "points": [
+            "partial",
+            "missing",
+            "missing"
+          ],
+          "verdict": "wrong",
+          "reason": "The answer recommends SFTP only for ZIP files over 100 MB, contradicting the staff’s 10 MB threshold. It also recommends zipping the folder instead of confirming direct drag-and-drop upload, and it does not explain that the destination folder depends on the file type."
+        },
+        "basis": "judge"
+      },
+      "referenceConflict": {
+        "status": "uncertain",
+        "reason": "No owner-confirmed current-KB passage was available."
+      },
+      "eventLog": [
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/search",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/knowledge/read",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "tool",
+          "name": "/v1/me/handoff",
+          "status": "ok"
+        },
+        {
+          "attempt": 1,
+          "kind": "gate",
+          "name": "citationGate",
+          "status": "failed"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "started"
+        },
+        {
+          "attempt": 1,
+          "kind": "judge",
+          "name": "semantic",
+          "status": "ok",
+          "detail": "wrong"
+        }
+      ],
+      "answerability": "docs-answerable",
+      "lexical": {
+        "covered": [
+          false,
+          false,
+          false
+        ],
+        "coverage": 0,
+        "resolvedCorrect": false,
+        "handoffCorrect": false,
+        "partial": false,
+        "wrong": true
+      }
+    }
+  ]
+}

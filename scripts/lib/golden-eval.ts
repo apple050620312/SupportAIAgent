@@ -4,6 +4,15 @@ export interface GoldenItem {
   conversation: { role: string; text: string }[];
   expected_points: string[]; staff_resolution: string; outcome: 'resolved' | 'handoff';
 }
+export function selectGoldenItems(items: GoldenItem[], options: { ids?: string[]; limit?: number } = {}): GoldenItem[] {
+  if (options.ids) {
+    const byId = new Map(items.map(item => [item.id, item]));
+    const unknown = options.ids.filter(id => !byId.has(id));
+    if (unknown.length) throw new Error(`Unknown golden ID(s): ${unknown.join(', ')}`);
+    return options.ids.map(id => byId.get(id)!);
+  }
+  return items.slice(0, options.limit);
+}
 export const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{Z}\s]/gu, '');
 export function inputFor(item: GoldenItem): string {
   const prefix: string[] = [];
