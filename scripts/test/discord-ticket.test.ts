@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner, type TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
+import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner, type TicketAgentRunner, type ShadowMode } from "@support-ai-agent/ticket-bridge";
 import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
-function fixture() {
+function fixture(shadow?: ShadowMode) {
   const row = { guildId: MOCK_SCOPE.guildId, channelId: MOCK_SCOPE.channelId, userId: MOCK_SCOPE.discordUserId,
     closed: false, deleted: false, claimedBy: null };
   const reader = { readByChannel: () => Promise.resolve(row) };
@@ -12,7 +12,7 @@ function fixture() {
   installLegacyMutationGuard({ findOneAndUpdate: () => ({ exec: () => Promise.resolve(undefined) }) }, adapter);
   const bridge = new TicketBridge(adapter, adapter, new TicketContextTokens("synthetic-discord-context-signing-key"));
   const run = vi.fn<TicketAgentRunner["run"]>().mockResolvedValue({ reply: "Synthetic support reply" });
-  const controller = new DiscordTicketSupport(reader, adapter, bridge, { run }, new Set([MOCK_OTHER_SCOPE.discordUserId]));
+  const controller = new DiscordTicketSupport(reader, adapter, bridge, { run }, new Set([MOCK_OTHER_SCOPE.discordUserId]), undefined, shadow ? { shadow } : {});
   const message = { guildId: MOCK_SCOPE.guildId, channelId: MOCK_SCOPE.channelId,
     author: { id: MOCK_SCOPE.discordUserId, bot: false }, content: "Synthetic question" };
   return { row, reader, send, adapter, bridge, run, controller, message };
@@ -124,6 +124,76 @@ describe("Discord ticket-main message ingress", () => {
     expect(await f.controller.receive(f.message)).toBe("silenced");
     expect(f.run).toHaveBeenCalledTimes(1); expect(await f.bridge.read(MOCK_SCOPE)).toMatchObject({ state: "HUMAN_NEEDED" });
     expect(JSON.stringify(f.send.mock.calls)).not.toContain("synthetic-private-runtime-detail");
+  });
+});
+
+describe("Discord shadow drafts", () => {
+  function shadowFixture(allowed = true) {
+    const threadId = "18446744073709551610";
+    const discard = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const publish = vi.fn<Awaited<ReturnType<ShadowMode["openThread"]>>["publish"]>()
+      .mockImplementation(async (_id, _text, assertCurrent) => { await assertCurrent(); return discard; });
+    const openThread = vi.fn<ShadowMode["openThread"]>().mockResolvedValue({ id: threadId, publish });
+    const recordVerdict = vi.fn<ShadowMode["recordVerdict"]>().mockResolvedValue(undefined);
+    const f = fixture({ channelIds: new Set(allowed ? [MOCK_SCOPE.channelId] : []), openThread, recordVerdict });
+    const staff = { ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false } };
+    return { ...f, staff, threadId, discard, publish, openThread, recordVerdict };
+  }
+
+  it("rejects admission when the allowlist is empty", async () => {
+    const f = shadowFixture(false);
+    await expect(f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId)).rejects.toThrow();
+    expect(await f.controller.receive(f.message)).toBe("ignored");
+    expect(f.run).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["accept", "accepted-as-is"], ["edit Synthetic replacement", "accepted-with-edits"], ["reject", "rejected"]
+  ])("records a private, authorized %s only once", async (command, verdict) => {
+    const f = shadowFixture();
+    await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+    expect(await f.controller.receive(f.message)).toBe("drafted");
+    const id = f.publish.mock.calls[0]?.[0];
+    const content = `!draft ${id} ${command}`;
+    expect(await f.controller.receive({ ...f.message, channelId: f.threadId, content })).toBe("ignored");
+    const review = { ...f.staff, channelId: f.threadId, content };
+    expect(await Promise.all([f.controller.receive(review), f.controller.receive(review)])).toEqual(["reviewed", "ignored"]);
+    expect(f.recordVerdict).toHaveBeenCalledExactlyOnceWith({
+      timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      verdict, channelId: MOCK_SCOPE.channelId, staffId: f.staff.author.id
+    });
+    expect(f.send).not.toHaveBeenCalled();
+  });
+
+  it.each(["staff replies", "ticket closes"])("discards an unreviewed draft when %s", async (event) => {
+    const f = shadowFixture();
+    await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+    expect(await f.controller.receive(f.message)).toBe("drafted");
+    if (event === "staff replies") {
+      expect(await f.controller.receive(f.staff)).toBe("staff-takeover");
+      expect(await f.bridge.read(MOCK_SCOPE)).toMatchObject({ state: "HUMAN_ACTIVE" });
+    } else {
+      await f.adapter.guardLegacyMutation(() => { f.row.closed = true; return Promise.resolve(); });
+    }
+    expect(f.discard).toHaveBeenCalledOnce();
+    const id = f.publish.mock.calls[0]?.[0];
+    expect(await f.controller.receive({ ...f.staff, channelId: f.threadId, content: `!draft ${id} accept` })).toBe("ignored");
+    expect(await f.controller.receive(f.message)).not.toBe("drafted");
+    expect(f.run).toHaveBeenCalledOnce();
+    expect(f.send).not.toHaveBeenCalled();
+  });
+
+  it("discards a draft if staff replies while Discord is publishing it", async () => {
+    const f = shadowFixture();
+    await f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId);
+    f.publish.mockImplementationOnce(async () => {
+      await f.controller.receive(f.staff);
+      return f.discard;
+    });
+    expect(await f.controller.receive(f.message)).toBe("silenced");
+    expect(f.discard).toHaveBeenCalledOnce();
+    expect(f.run.mock.calls[0]?.[1].aborted).toBe(true);
+    expect(f.send).not.toHaveBeenCalled();
   });
 });
 

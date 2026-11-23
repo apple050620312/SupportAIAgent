@@ -47,7 +47,7 @@ Read this first if you are picking this project up. It records where the work st
 
 1. ✅ KB gaps from owner answers (step 11, `e7621d1`).
 2. ✅ Contradiction fix — SYSTEM_PROMPT must check retrieved passages for current restrictions before confirming availability (`0245716`).
-3. ⏳ Shadow mode — wire the Vercel loop into Discord draft-only; staff approves before anything is sent. Proposal: `~/workspace/goals/coffee-host-support-ai-agent/files/shadow-mode-proposal.md`. BLOCKED on 3 owner decisions: (a) approver IDs / whether `staffUserIds` is current, (b) first 3–5 test tickets, (c) per-ticket staff thread destination. `createVercelTicketRunner` exists but is NOT wired into the Discord launcher; the current Discord path replies directly to customers.
+3. ✅ Shadow mode is implemented for opt-in test tickets. The allowlist is empty by default. See [Discord shadow mode](docs/testing-ticket-shadow.md) to add the first 3–5 ticket channels and review drafts.
 4. ⏳ Semantic scoring as primary metric (with a docs-answerable vs needs-account-state split).
 5. ⏳ KB staff review — the 51 published-docs articles are still marked draft v1.
 
