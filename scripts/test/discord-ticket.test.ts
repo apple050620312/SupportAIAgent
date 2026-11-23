@@ -152,7 +152,11 @@ describe("Discord shadow drafts", () => {
     const f = shadowFixture([], MOCK_SCOPE.guildId);
     const client = new EventEmitter();
     const failure = vi.fn();
-    const detach = attachTicketSupportEvents(client, f.controller, failure);
+    const events = {
+      on: (event: string, listener: (...args: never[]) => void) => Reflect.apply(client.on, client, [event, listener]),
+      off: (event: string, listener: (...args: never[]) => void) => Reflect.apply(client.off, client, [event, listener])
+    };
+    const detach = attachTicketSupportEvents(events, f.controller, failure);
     try {
       expect(await f.controller.receive(f.message)).toBe("ignored");
       client.emit("channelCreate", { id: f.message.channelId, guildId: f.message.guildId, type: 0 });
