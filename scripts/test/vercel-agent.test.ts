@@ -676,11 +676,25 @@ describe("Vercel read-only agent", () => {
       .run({ ...request, prompt: "My server status after a power error" }, signal);
     expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
     expect(result).toMatchObject({
-      reply: DEMO_ANSWER + (marker ? "\n\nI've handed this to support staff." : ""),
+      reply: DEMO_ANSWER,
       answerComplete: true, citationGate: { status: "passed" },
-      handoffMarkerPresent: marker, handoffMarkerOverridden: false
+      handoffMarkerPresent: marker, handoffMarkerOverridden: marker
     });
-    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe(marker ? "HUMAN_NEEDED" : "AI_ACTIVE");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+  });
+
+  it("retains a marker when an essential account-state read fails", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) }, logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_invoice"), mockCall("search_support_knowledge", { query: "invoice status" }),
+      mockText(`${DEMO_ANSWER}\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt: "What is my invoice status?" }, signal);
+    expect(result).toMatchObject({ handoffMarkerPresent: true, handoffMarkerOverridden: false });
+    expect(result.reply).toContain("I've handed this to support staff.");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
   it("forces status and log reads on a reported power error", async () => {

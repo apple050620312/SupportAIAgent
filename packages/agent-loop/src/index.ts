@@ -97,6 +97,12 @@ function requiredAccountReads(prompt: string): ReadTool[] {
   return reads;
 }
 
+/** Whether a missing account read prevents answering the question itself. */
+function accountStateReadRequired(prompt: string): boolean {
+  if (/\b(?:power error|failed to start|won't start|can't start)\b|電源.{0,5}(?:錯誤|異常)|無法啟動|開不了機/iu.test(prompt)) return false;
+  return /\b(?:my|our|this) (?:latest |current )?invoice\b|\binvoice (?:status|number)\b|我的.{0,6}(?:發票|帳單)|(?:發票|帳單)狀態|\b(?:when was .* suspended|suspension start|my server status|is my server (?:online|offline|running))\b|何時.{0,8}(?:停權|停機|暫停)|(?:停權|停機|暫停)時間/iu.test(prompt);
+}
+
 /** Lexical overlap is only a conservative relevance signal, not a probability. */
 export function retrievalConfidence(query: string, passage: string): number {
   const normalized = query.normalize("NFKC").toLowerCase();
@@ -210,6 +216,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         checkpoint = next;
       };
       const requiredReads = requiredAccountReads(prompt);
+      const essentialAccountState = accountStateReadRequired(prompt);
       const attempted = new Set<ReadTool>();
       const results = new Map<string, Promise<unknown>>();
       const call = (path: string, body: unknown, schema: TSchema) => options.core.call(path, body, schema, request.ticketToken, session, signal);
@@ -404,8 +411,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         // Optional account reads provide context. A failed read must not discard a
         // complete, cited KB procedure. Escalate only when the draft is incomplete
         // or the missing account state is required to answer the question.
-        const markerRequiresHandoff = requestedHandoff && (failedRequiredRead || hasAccountBlockerCue(prompt));
-        handoff ||= !acceptable || markerRequiresHandoff || (failedRequiredRead && !fitsHandoff);
+        const failedEssentialRead = failedRequiredRead && essentialAccountState;
+        const markerRequiresHandoff = requestedHandoff && (failedEssentialRead || hasAccountBlockerCue(prompt));
+        handoff ||= !acceptable || markerRequiresHandoff || (failedEssentialRead && !fitsHandoff);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
