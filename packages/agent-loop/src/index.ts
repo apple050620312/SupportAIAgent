@@ -60,7 +60,7 @@ function hasDowngradeSymptom(prompt: string): boolean {
 
 function hasReinstallSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
-  return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}(?:全部|全都)?刪除|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
+  return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}刪|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
 }
 
 function hasSupportFlowSymptom(prompt: string): boolean {

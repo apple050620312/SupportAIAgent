@@ -214,6 +214,29 @@ describe("Vercel read-only agent", () => {
     expect(search).toHaveBeenCalled();
   });
 
+  it("admits focused reinstall evidence for the GS-056 data deletion wording", async () => {
+    const prompt = "我剛剛把資料全刪了 會影響嗎";
+    const settings = {
+      articleRef: `kb:${"a".repeat(64)}`, source: "panel/common/settings.md",
+      title: "設定", heading: "重新安裝伺服器", startLine: 10, endLine: 12,
+      excerpt: "請先檢查備份，再開啟設定頁面確認重新安裝的選項。"
+    };
+    const search = vi.fn(({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const, matches: query.includes("reinstall server settings") ? [settings] : []
+    }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "資料" }),
+      mockText(`${settings.excerpt} [panel/common/settings.md:10-12]`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 });
+    expect(search.mock.calls.find(([input]) => input.query.includes("reinstall server settings"))?.[0]).toMatchObject({ limit: 3 });
+    expect(result.admittedEvidence).toContainEqual({ source: settings.source, startLine: 10, endLine: 12 });
+  });
+
   it("keeps broad-article passages from the primary search without their focused symptoms", async () => {
     const matches = ([
       ["panel/common/settings.md", "General settings passage."],
