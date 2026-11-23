@@ -10,6 +10,7 @@ import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-cor
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, summarize, type GoldenItem } from './lib/golden-eval.js';
 import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, summarizeSemantic, type SemanticResult } from './lib/semantic-judge.js';
+import { classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 
 // No environment files are loaded, and provider exceptions are never serialized.
@@ -20,13 +21,16 @@ const source = await readFile(process.env.GOLDEN_SET_PATH ?? '/home/hatch/worksp
 const parsed: unknown = JSON.parse(source);
 if (!Array.isArray(parsed) || !parsed.length || !parsed.every((item: GoldenItem) => item && typeof item.id === 'string' && typeof item.category === 'string' && typeof item.customer_problem === 'string' && Array.isArray(item.conversation) && item.conversation.every(m => m && typeof m.role === 'string' && typeof m.text === 'string') && typeof item.staff_resolution === 'string' && item.staff_resolution.trim() && Array.isArray(item.expected_points) && item.expected_points.length && item.expected_points.every(p => typeof p === 'string' && p.trim()) && ['resolved', 'handoff'].includes(item.outcome))) throw new Error('Invalid golden-set schema');
 const items = (parsed as GoldenItem[]).slice(0, limit);
+const datasetSha256 = createHash('sha256').update(source).digest('hex');
+const manifestSource = await readFile(process.env.GOLDEN_ANSWERABILITY_PATH ?? new URL('./lib/golden-answerability.json', import.meta.url), 'utf8');
+const answerability = classifyGolden(JSON.parse(manifestSource), datasetSha256, parsed.length);
 const outputDir = resolve('eval-results');
 await mkdir(outputDir, { recursive: true, mode: 0o700 });
 const output = join(outputDir, `golden-${new Date().toISOString().replace(/[:.]/g, '-')}-${items.length}.json`);
 const provider = (process.env.MODEL_PROVIDER ?? 'sub2api').toLowerCase();
 const endpoint = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://sub2api.coffeehost.net/v1';
 const modelId = process.env.MODEL_ID || process.env.AGENT_LIVE_MODEL_ID || 'gpt-6.1-sol';
-const metadata = { model: modelId, provider, endpoint, datasetSha256: createHash('sha256').update(source).digest('hex'), selected: items.length, total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: { primary: 'semantic', judgeModel, judgeEndpoint, rubricVersion, lexical: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring' }, trueResolution7d: null };
+const metadata = { model: modelId, provider, endpoint, datasetSha256, answerabilityManifestSha256: createHash('sha256').update(manifestSource).digest('hex'), selected: items.length, total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: { primary: 'semantic', judgeModel, judgeEndpoint, rubricVersion, lexical: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring' }, trueResolution7d: null };
 const blockers: string[] = [];
 if (process.env.EMBEDDING_PROVIDER && process.env.EMBEDDING_PROVIDER !== 'openai') blockers.push('EMBEDDING_PROVIDER must be openai or unset');
 if (process.env.GOLDEN_LIVE_MODEL !== '1') blockers.push('GOLDEN_LIVE_MODEL=1 required; no model calls made');
@@ -47,12 +51,12 @@ if (blockers.length) {
   const retrieval = semanticSearch ? { provider: 'openai', model: semanticSearch.index.model, threshold: 0.4, hybrid: 'cosine + 0.02/(lexical rank + 1)', digest: semanticSearch.index.digest } : { provider: 'lexical' };
   Object.assign(metadata, { retrieval });
   const history = await mkdtemp(join(tmpdir(), 'golden-history-'));
-  const results: ({ lexical: ReturnType<typeof score>; semantic: SemanticResult; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] })[] = [];
+  const results: ({ lexical: ReturnType<typeof score>; semantic: SemanticResult; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] })[] = [];
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
   try {
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       const turnStart = Date.now();
       let steps = 0; let handedOff = false; let answer = ''; let error = false; let attempts = 0; let transientFailure = false;
       const toolErrors: string[] = [];
@@ -122,7 +126,7 @@ if (blockers.length) {
         return { ...judgment, reason: scrub(judgment.reason) };
       });
       results.push({ id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
-        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, lexical: score(item, answer, handedOff, error) });
+        citationGateViolation: !error && !handedOff && !hasGateEvidence, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt) })), semanticSupport: 'not assessed', semanticScores, semantic, answerability: answerability[index] ?? 'unclassified', lexical: score(item, answer, handedOff, error) });
       await writeFile(output, JSON.stringify({ ...metadata, kbStats, status: 'running', results }, null, 2), { mode: 0o600 });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }
@@ -134,7 +138,7 @@ if (blockers.length) {
       overall: lexicalSummary(results),
       perCategory: Object.fromEntries(categories.map(category => [category, lexicalSummary(results.filter(r => r.category === category))])),
     };
-    const report = { ...metadata, kbStats, status: 'completed', elapsedMs: Date.now() - started, semanticSummary, perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
+    const report = { ...metadata, kbStats, status: 'completed', elapsedMs: Date.now() - started, semanticSummary, byAnswerability: summarizeAnswerability(results), perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
     await writeFile(output, JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ ...report, results: undefined, output }, null, 2));
     if (semanticSummary.unscored > 0) process.exitCode = 1;
