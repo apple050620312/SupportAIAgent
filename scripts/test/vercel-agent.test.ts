@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
@@ -100,6 +101,44 @@ describe("Vercel read-only agent", () => {
     const other = "Check the status in the panel.";
     const second = "[synthetic/status.md:3-5]";
 
+    const velocity = {
+      articleRef: `kb:${"a".repeat(64)}`,
+      source: "practice/advanced/velocity.md", title: "在主機上執行 Velocity",
+      heading: "在主機上執行 Velocity", startLine: 1, endLine: 9,
+      excerpt: [
+        "# 在主機上執行 Velocity",
+        "",
+        "> Source: Coffee-Host owner answers, 2026-11-23 (KB gap questions from golden-set evals)",
+        "> Owner-provided; not sourced from published docs or past tickets.",
+        "",
+        "客戶可以在主機上執行 Velocity，沒有特別限制，但不能違反服務條款。",
+        "",
+        "後端 Paper 放在自己的伺服器也可以，但到後端的連線品質不保證。",
+        ""
+      ].join("\n")
+    };
+    const velocityCitation = "[practice/advanced/velocity.md:1-9]";
+    const velocityQuote = velocity.excerpt.trimEnd().replace("\n\n> Source:", "\n> Source:").replace("後端 Paper", "後端  Paper");
+    const velocityDraft = (quote: string) =>
+      `您可以在 Coffee Host 主機上執行 Velocity，並將後端 Paper 放在自有伺服器上。\n\n${quote}\n${velocityCitation}`;
+
+    it.each([
+      ["checkpoint layout", velocity.excerpt.trimEnd()],
+      ["changed blank lines and spacing", velocityQuote]
+    ])("grounds the GS-138 Velocity quote with %s", (_layout, quote) => {
+      expect(evaluateCitationGate(velocityDraft(quote), [velocity], value => value)).toMatchObject({
+        status: "passed", grounded: true, matched: [velocityCitation], failures: []
+      });
+    });
+
+    it("rejects changed words in the GS-138 Velocity quote", () => {
+      const altered = velocityQuote.replace("連線品質不保證", "連線品質有保證");
+      expect(evaluateCitationGate(velocityDraft(altered), [velocity], value => value)).toMatchObject({
+        status: "failed", grounded: false, matched: [],
+        failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }]
+      });
+    });
+
     async function runDraft(draft: string, statusExcerpt = other) {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
@@ -143,7 +182,6 @@ describe("Vercel read-only agent", () => {
     it.each([
       ["wrong_lines", `${other} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
       ["missing_citation", other, second],
-      ["whitespace_mismatch", `${other.replace("the status", "the  status")} ${second}`, second],
       ["unknown_citation", `${other} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
