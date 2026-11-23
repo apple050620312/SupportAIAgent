@@ -15,6 +15,14 @@ function value(environment: Readonly<Record<string, string | undefined>>, name: 
   return result;
 }
 
+export function shadowAutoAdmissionEnabled(environment: Readonly<Record<string, string | undefined>>): boolean {
+  const flag = environment.SHADOW_AUTO_ADMIT ?? "true";
+  if (flag !== "true" && flag !== "false") {
+    throw new TicketSupportSetupError("SHADOW_AUTO_ADMIT must be true or false");
+  }
+  return flag === "true";
+}
+
 /** Validate every configuration before loading the baseline (which starts a live bot). */
 export function prepareTicketSupport(environment: Readonly<Record<string, string | undefined>>, fetchImpl: typeof fetch = fetch, shadow = false) {
   if (environment.TICKET_SUPPORT_ACK !== "I_HAVE_AUTHORIZATION" ||
@@ -28,7 +36,6 @@ export function prepareTicketSupport(environment: Readonly<Record<string, string
   try { knowledgeRoot = supportKnowledgeRoot(environment); }
   catch { throw new TicketSupportSetupError("SUPPORT_KNOWLEDGE_ROOT must be an absolute folder path"); }
   const guildId = value(environment, "TEST_TICKET_GUILD_ID");
-  // Leave empty by default. Add the owner's first 3–5 ticket channel IDs, comma separated.
   const allowlist = environment.SHADOW_TICKET_CHANNEL_IDS?.trim();
   const channelIds = shadow ? (allowlist ? allowlist.split(",").map(id => id.trim()) : [])
     : [value(environment, "TEST_TICKET_CHANNEL_ID")];

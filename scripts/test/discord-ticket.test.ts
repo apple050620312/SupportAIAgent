@@ -1,5 +1,6 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, createOpenClawTicketRunner, type TicketAgentRunner, type ShadowMode } from "@support-ai-agent/ticket-bridge";
+import { LegacyTicketAdapter, TicketBridge, installLegacyMutationGuard, DiscordTicketSupport, attachTicketSupportEvents, createOpenClawTicketRunner, type TicketAgentRunner, type ShadowMode } from "@support-ai-agent/ticket-bridge";
 import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 
@@ -128,24 +129,63 @@ describe("Discord ticket-main message ingress", () => {
 });
 
 describe("Discord shadow drafts", () => {
-  function shadowFixture(allowed = true) {
+  function shadowFixture(channelIds = [MOCK_SCOPE.channelId], autoAdmitGuildId?: string) {
     const threadId = "18446744073709551610";
     const discard = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     const publish = vi.fn<Awaited<ReturnType<ShadowMode["openThread"]>>["publish"]>()
       .mockImplementation(async (_id, _text, assertCurrent) => { await assertCurrent(); return discard; });
     const openThread = vi.fn<ShadowMode["openThread"]>().mockResolvedValue({ id: threadId, publish });
     const recordVerdict = vi.fn<ShadowMode["recordVerdict"]>().mockResolvedValue(undefined);
-    const f = fixture({ channelIds: new Set(allowed ? [MOCK_SCOPE.channelId] : []), openThread, recordVerdict });
+    const f = fixture({ channelIds: new Set(channelIds), ...(autoAdmitGuildId ? { autoAdmitGuildId } : {}), openThread, recordVerdict });
     const staff = { ...f.message, author: { id: MOCK_OTHER_SCOPE.discordUserId, bot: false } };
     return { ...f, staff, threadId, discard, publish, openThread, recordVerdict };
   }
 
   it("rejects admission when the allowlist is empty", async () => {
-    const f = shadowFixture(false);
+    const f = shadowFixture([]);
     await expect(f.controller.enableChannel(MOCK_SCOPE.guildId, MOCK_SCOPE.channelId)).rejects.toThrow();
     expect(await f.controller.receive(f.message)).toBe("ignored");
     expect(f.run).not.toHaveBeenCalled();
   });
+
+  it("drafts for a new ticket once its row is ready", async () => {
+    const f = shadowFixture([], MOCK_SCOPE.guildId);
+    const client = new EventEmitter();
+    const failure = vi.fn();
+    const events = {
+      on: (event: string, listener: (...args: never[]) => void) => client.on(event, listener as (...args: unknown[]) => void),
+      off: (event: string, listener: (...args: never[]) => void) => client.off(event, listener as (...args: unknown[]) => void)
+    };
+    const detach = attachTicketSupportEvents(events, f.controller, failure);
+    try {
+      expect(await f.controller.receive(f.message)).toBe("ignored");
+      client.emit("channelCreate", { id: f.message.channelId, guildId: f.message.guildId, type: 0 });
+      f.row.closed = true;
+      expect(await f.controller.receive(f.message)).toBe("ignored");
+      f.row.closed = false;
+      client.emit("messageCreate", f.message);
+      await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+      expect(failure).not.toHaveBeenCalled();
+      expect(f.send).not.toHaveBeenCalled();
+      expect(await f.controller.receive(f.staff)).toBe("staff-takeover");
+      expect(await f.controller.receive(f.message)).toBe("silenced");
+    } finally { detach(); }
+  });
+
+  it.each(["other guild", "thread", "outside allowlist", "disabled", "deleted"])(
+    "ignores new channels when %s", async (condition) => {
+      const f = shadowFixture(condition === "outside allowlist" ? [MOCK_OTHER_SCOPE.channelId] : [],
+        condition === "disabled" ? undefined : MOCK_SCOPE.guildId);
+      f.controller.observeChannelCreated({
+        id: f.message.channelId,
+        guildId: condition === "other guild" ? MOCK_OTHER_SCOPE.channelId : MOCK_SCOPE.guildId,
+        type: condition === "thread" ? 12 : 0
+      });
+      if (condition === "deleted") await f.controller.retireChannel(f.message.channelId);
+      expect(await f.controller.receive(f.message)).toBe("ignored");
+      expect(f.run).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     ["accept", "accepted-as-is"], ["edit Synthetic replacement", "accepted-with-edits"], ["reject", "rejected"]

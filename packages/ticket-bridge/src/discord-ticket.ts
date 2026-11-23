@@ -23,6 +23,8 @@ export interface ShadowVerdictEntry {
 }
 export interface ShadowMode {
   readonly channelIds: ReadonlySet<string>;
+  readonly autoAdmitGuildId?: string;
+  readonly excludedChannelId?: string;
   openThread(scope: TicketScope): Promise<ShadowThread>;
   recordVerdict(entry: ShadowVerdictEntry): Promise<void>;
 }
@@ -40,6 +42,7 @@ type ReceiveResult = "ignored" | "sent" | "silenced" | "staff-takeover" | "draft
 /** Bind to the unchanged bot's authenticated messageCreate stream. No fake actor headers. */
 export class DiscordTicketSupport {
   #leases = new Map<string, Lease>();
+  #newChannels = new Map<string, { pending?: Promise<void> }>();
   #unsubscribe: () => void;
   #humanIdleMs: number;
   #shadow: ShadowMode | undefined;
@@ -104,9 +107,38 @@ export class DiscordTicketSupport {
     catch { /* Audit cannot grant or delay customer authority. */ }
   }
 
-  /** Explicit test-ticket admission. Owner comes from the legacy row, not caller input. */
+  observeChannelCreated(channel: { id: string; guildId?: string; type: number }): void {
+    const shadow = this.#shadow;
+    // Discord GuildText is type 0. A channel event alone does not prove it's a ticket.
+    if (!shadow?.autoAdmitGuildId || channel.type !== 0 || channel.guildId !== shadow.autoAdmitGuildId ||
+        !isCanonicalDiscordSnowflake(channel.id) || channel.id === shadow.excludedChannelId ||
+        (shadow.channelIds.size && !shadow.channelIds.has(channel.id)) ||
+        this.#leases.has(channel.id) || this.#newChannels.has(channel.id)) return;
+    this.#newChannels.set(channel.id, {});
+  }
+
+  private async admitNewChannel(message: TicketCustomerMessage): Promise<void> {
+    const candidate = this.#newChannels.get(message.channelId);
+    if (!candidate || !message.guildId || message.guildId !== this.#shadow?.autoAdmitGuildId) return;
+    candidate.pending ??= this.enableChannel(message.guildId, message.channelId).then(async () => {
+      if (this.#newChannels.get(message.channelId) !== candidate) {
+        await this.retireChannel(message.channelId);
+        return;
+      }
+      this.#newChannels.delete(message.channelId);
+    }).catch((error: unknown) => {
+      // A ticket row may not exist yet. Allow a later message to retry.
+      delete candidate.pending;
+      if (!(error instanceof TicketBridgeError)) throw error;
+    });
+    await candidate.pending;
+  }
+
+  /** Owner comes from the legacy row. Automatic callers must first observe a new channel. */
   async enableChannel(guildId: string, channelId: string): Promise<void> {
-    if (this.#shadow && (!this.#shadow.channelIds.has(channelId) || this.#leases.has(channelId))) {
+    if (this.#shadow && (channelId === this.#shadow.excludedChannelId ||
+        (this.#shadow.channelIds.size ? !this.#shadow.channelIds.has(channelId)
+          : guildId !== this.#shadow.autoAdmitGuildId || !this.#newChannels.has(channelId)) || this.#leases.has(channelId))) {
       throw new TicketBridgeError();
     }
     if (![guildId, channelId].every(isCanonicalDiscordSnowflake) ||
@@ -125,8 +157,9 @@ export class DiscordTicketSupport {
   }
 
   async receive(message: TicketCustomerMessage): Promise<ReceiveResult> {
-    const lease = this.#leases.get(message.channelId);
     if (message.author.bot || !isCanonicalDiscordSnowflake(message.author.id)) return "ignored";
+    if (this.#newChannels.has(message.channelId)) await this.admitNewChannel(message);
+    const lease = this.#leases.get(message.channelId);
     if (!lease) return this.review(message);
     if (message.guildId !== lease.scope.guildId || lease.retired) return "ignored";
     if (this.staffUserIds.has(message.author.id) && (this.#shadow || message.author.id !== lease.scope.discordUserId)) {
@@ -212,6 +245,7 @@ export class DiscordTicketSupport {
   }
 
   async retireChannel(channelId: string): Promise<void> {
+    this.#newChannels.delete(channelId);
     const lease = this.#leases.get(channelId);
     if (!lease) return;
     lease.retired = true;
@@ -219,7 +253,7 @@ export class DiscordTicketSupport {
     await this.bridge.close(lease.scope);
   }
 
-  dispose(): void { this.#unsubscribe(); for (const lease of this.#leases.values()) { lease.retired = true; this.invalidate(lease); } }
+  dispose(): void { this.#newChannels.clear(); this.#unsubscribe(); for (const lease of this.#leases.values()) { lease.retired = true; this.invalidate(lease); } }
 }
 
 /** Existing Discord client, no second login or bot token. Errors are static, never raw causes. */
@@ -229,7 +263,9 @@ export function attachTicketSupportEvents(client: {
 }, support: DiscordTicketSupport, onFailure: (code: "TICKET_SUPPORT_UNAVAILABLE") => void): () => void {
   const message = (input: TicketCustomerMessage) => { void support.receive(input).catch(() => onFailure("TICKET_SUPPORT_UNAVAILABLE")); };
   const deleted = (channel: { id: string }) => { void support.retireChannel(channel.id).catch(() => onFailure("TICKET_SUPPORT_UNAVAILABLE")); };
+  const created = (channel: Parameters<DiscordTicketSupport["observeChannelCreated"]>[0]) => support.observeChannelCreated(channel);
+  client.on("channelCreate", created);
   client.on("messageCreate", message);
   client.on("channelDelete", deleted);
-  return () => { support.dispose(); client.off("messageCreate", message); client.off("channelDelete", deleted); };
+  return () => { support.dispose(); client.off("channelCreate", created); client.off("messageCreate", message); client.off("channelDelete", deleted); };
 }
