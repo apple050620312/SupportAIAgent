@@ -185,7 +185,7 @@ if (blockers.length) {
         }
         citationGateAttempts.push(citationGate);
         answerCompletenessAttempts.push(answerComplete);
-        finalContentCoverage = currentContentCoverage ?? answerComplete;
+        finalContentCoverage = currentContentCoverage;
         eventLog.push({ attempt: attempts, kind: 'gate', name: 'citationGate', status: citationGate?.status ?? 'none' });
         transientFailure ||= modelFailures.slice(failuresBeforeAttempt).some(f =>
           f.status === 502 || f.status === 503 || f.status === 504 ||

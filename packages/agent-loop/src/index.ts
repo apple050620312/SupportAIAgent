@@ -125,23 +125,31 @@ function normalizeCoverageText(value: string): string {
     .trim();
 }
 
-/** Checks content coverage independently from citation formatting. */
+/** Checks the content required for delivery independently from citation formatting. */
 export function answerCompletenessCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
   if (text.length < 80 || !evidence.length) return false;
   const answerText = normalizeCoverageText(text);
   const actionable = /(?:click|select|enter|set|open|check|query|confirm|retry|install|restart|use|connect|設定|選擇|輸入|開啟|檢查|重試|安裝|重啟|連線|請先|需要)/iu.test(text);
   const citedEvidence = evidence.some(match => answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)));
+  const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
+  const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
+  const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
+  return actionable && citedEvidence && downgradeCovered;
+}
+
+/** Measures reflection of admitted passages for diagnostics. */
+export function contentCoverageCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+  if (!answerCompletenessCheck(answer, prompt, evidence)) return false;
+  const text = answer.trim();
+  const answerText = normalizeCoverageText(text);
   const distinctEvidence = [...new Map(evidence.map(match => [citation(match), match])).values()];
   const reflectedEvidence = distinctEvidence.filter(match =>
     answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)) ||
     text.includes(citation(match))
   ).length;
   const reflectionRatio = distinctEvidence.length ? reflectedEvidence / distinctEvidence.length : 0;
-  const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
-  const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
-  const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
-  return actionable && citedEvidence && downgradeCovered && reflectionRatio >= 0.2;
+  return reflectionRatio >= 0.2;
 }
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
@@ -398,8 +406,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             }
           }
         }
-        contentCoverage = answerCompletenessCheck(reply, prompt, evidence);
-        answerComplete = contentCoverage;
+        answerComplete = answerCompletenessCheck(reply, prompt, evidence);
+        contentCoverage = contentCoverageCheck(reply, prompt, evidence);
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         const fitsHandoff = reply.length <= 5800;
         if (!invalidTool && fitsHandoff && citationGate.status === "passed") {

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
@@ -82,22 +82,33 @@ describe("Vercel read-only agent", () => {
     expect(answerCompletenessCheck(draft, "status", [{ excerpt: "Check the result.", source: "synthetic/a.md", startLine: 1, endLine: 1 }] as never)).toBe(false);
   });
 
-  it("rejects a GS-023-style draft that cites only one of many admitted passages", () => {
+  it("delivers an actionable draft that reflects only one of many admitted passages", async () => {
     const evidence = Array.from({ length: 26 }, (_, index) => ({
       excerpt: `Documented step ${index + 1}: check the setting and continue.`,
+      articleRef: `kb:${"a".repeat(64)}`, title: "Connection", heading: "DNS",
       source: "debug/connection.md", startLine: index + 1, endLine: index + 1
     }));
     const draft = `${evidence[0]!.excerpt} [debug/connection.md:1-1] Check the result and retry.`;
-    expect(answerCompletenessCheck(draft, "DNS connection", evidence as never)).toBe(false);
+    const { root, harness, request, signal } = await setup({
+      search: () => Promise.resolve({ trust: "reference_only", matches: evidence.slice(0, 8) }),
+      read: () => Promise.resolve(null)
+    });
+    const prompt = "DNS connection";
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: prompt }), mockText(draft)] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ reply: draft, answerComplete: true, contentCoverage: false });
+    expect(answerCompletenessCheck(draft, prompt, evidence)).toBe(true);
+    expect(contentCoverageCheck(draft, prompt, evidence)).toBe(false);
   });
 
-  it("accepts a draft reflecting most distinct admitted passages", () => {
+  it("accepts a draft reflecting all distinct admitted passages", () => {
     const evidence = Array.from({ length: 10 }, (_, index) => ({
       excerpt: `Documented step ${index + 1}: check the setting and continue.`,
       source: "synthetic/procedure.md", startLine: index + 1, endLine: index + 1
     }));
-    const draft = evidence.slice(0, 8).map((entry, index) => `${entry.excerpt} [synthetic/procedure.md:${index + 1}-${index + 1}]`).join(" ") + " Check the result and retry.";
+    const draft = evidence.map((entry, index) => `${entry.excerpt} [synthetic/procedure.md:${index + 1}-${index + 1}]`).join(" ") + " Check the result and retry.";
     expect(answerCompletenessCheck(draft, "procedure", evidence as never)).toBe(true);
+    expect(contentCoverageCheck(draft, "procedure", evidence as never)).toBe(true);
   });
 
   it("exposes only four matrix T0 reads and cites the exact retrieved KB passage", async () => {
