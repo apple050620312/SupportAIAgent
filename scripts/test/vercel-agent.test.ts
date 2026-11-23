@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
@@ -162,6 +162,41 @@ describe("Vercel read-only agent", () => {
     const model = new MockLanguageModelV4({ doGenerate: () => Promise.resolve(mockCall("search_support_knowledge", { query: "status" })) });
     expect((await demoRunner(harness, root, model).run(request, signal)).reply).toContain("I don't know");
     expect(model.doGenerateCalls).toHaveLength(10);
+  });
+
+  it("requires every documented step before deciding whether the unknown needs staff", () => {
+    expect(SYSTEM_PROMPT).toMatch(/Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off/);
+    expect(SYSTEM_PROMPT).toContain("Never ask staff to confirm a step the KB already documents");
+    expect(SYSTEM_PROMPT).toContain("If the procedure answers the request, state the remaining uncertainty without handing off");
+  });
+
+  it("delivers a complete cited procedure with a narrow restoration unknown without handing off", async () => {
+    const source = "panel/example-profile.md";
+    const excerpts = [
+      "Open Startup Settings and select the desired profile.",
+      "Back up your files before applying the profile. Then open Settings and choose Reinstall. Reinstall may erase files."
+    ];
+    const { root, harness, request, signal } = await setup({
+      search: () => Promise.resolve({
+        trust: "reference_only",
+        matches: excerpts.map((excerpt, i) => ({
+          articleRef: `kb:${"a".repeat(64)}`, source, title: "Apply a profile", heading: "Profile setup",
+          excerpt, startLine: i + 1, endLine: i + 1
+        }))
+      }),
+      read: () => Promise.resolve(null)
+    });
+    const draft = [
+      ...excerpts.map((excerpt, i) => `${i + 1}. ${excerpt} [${source}:${i + 1}-${i + 1}]`),
+      "I can't verify whether this will restore service. After reinstalling, check whether you can connect."
+    ].join("\n");
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "apply profile" }), mockText(draft)
+    ] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt: "How do I apply a profile?" }, signal);
+    expect(result.reply).toBe(draft);
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+    expect(harness.sent).toHaveLength(0);
   });
 
   it("keeps a cited procedure when staff still need to verify a separate detail", async () => {
