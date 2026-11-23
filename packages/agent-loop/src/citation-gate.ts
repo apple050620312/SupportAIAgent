@@ -36,6 +36,7 @@ const normalizeLineEndings = (text: string) => text.replaceAll("\r\n", "\n");
 /** Remove Markdown code-fence delimiter lines before locating verbatim quotes. */
 export function normalizeFencedDraft(text: string): string {
   const unfenced = text.replace(/^\s*```(?:[A-Za-z0-9_-]+)?\s*$/gmu, "");
+  if (!/^> > Source:/mu.test(unfenced)) return unfenced;
   return unfenced.replace(/^> >(Source:)/gmu, "> $1").replace(/^> (?!> Source:)/gmu, "");
 }
 
