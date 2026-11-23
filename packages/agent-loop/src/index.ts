@@ -179,7 +179,11 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const confirmed = new Set(result.matches
             .filter(match => match.startLine <= 5 && /^> Source: Coffee-Host owner answers, \d{4}-\d{2}-\d{2}\b/m.test(match.excerpt))
             .map(match => match.articleRef));
-          admitted.sort((a, b) => Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef)));
+          admitted.sort((a, b) => {
+            const provenance = Number(confirmed.has(b.articleRef)) - Number(confirmed.has(a.articleRef));
+            if (provenance) return provenance;
+            return retrievalConfidence(prompt, `${b.title} ${b.heading} ${b.excerpt}`) - retrievalConfidence(prompt, `${a.title} ${a.heading} ${a.excerpt}`);
+          });
           const unique = new Map([...evidence, ...admitted].map(match => [citation(match), match]));
           evidence = [...unique.values()];
           if (admitted[0]) await persistProgress();
@@ -244,7 +248,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           supportedPartial = reply;
           if (policyConflict) console.warn("Support KB policy conflicts with ticket history. Staff review flagged.");
         }
-        handoff ||= failedRequiredRead || !acceptable || requestedHandoff;
+        // Optional account reads provide context. A failed read must not discard a
+        // complete, cited KB procedure. Escalate only when the draft is incomplete
+        // or the missing account state is required to answer the question.
+        handoff ||= !acceptable || requestedHandoff || (failedRequiredRead && !supportedPartial);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {

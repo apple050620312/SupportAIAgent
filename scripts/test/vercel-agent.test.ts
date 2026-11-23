@@ -301,7 +301,7 @@ describe("Vercel read-only agent", () => {
     expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
-  it("hands off after a required status read fails even when KB guidance is grounded", async () => {
+  it("keeps grounded KB guidance when a required status read fails", async () => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) },
       logs: { read: () => Promise.resolve({ trust: "untrusted_data", lines: ["synthetic power error"] }) }
@@ -314,8 +314,8 @@ describe("Vercel read-only agent", () => {
       .run({ ...request, prompt: "My server status after a power error" }, signal);
     expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
     expect(result.reply).toContain(DEMO_ANSWER);
-    expect(result.reply).toContain("I've handed this to support staff.");
-    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+    expect(result.reply).not.toContain("I've handed this to support staff.");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
   });
 
   it("forces status and log reads on a reported power error", async () => {
