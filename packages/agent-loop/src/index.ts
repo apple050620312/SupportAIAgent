@@ -296,9 +296,6 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (!hasDowngradeSymptom(prompt)) {
             admitted = admitted.filter(match => match.source !== DOWNGRADE_SOURCE);
           }
-          if (!hasReinstallSymptom(prompt)) admitted = admitted.filter(match => match.source !== REINSTALL_SOURCE);
-          if (!hasSupportFlowSymptom(prompt)) admitted = admitted.filter(match => match.source !== SUPPORT_FLOW_SOURCE);
-          if (!hasSftpSymptom(prompt)) admitted = admitted.filter(match => match.source !== SFTP_SOURCE);
           if (admitted.length) {
             const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
             admitted = [...admitted, ...companions];

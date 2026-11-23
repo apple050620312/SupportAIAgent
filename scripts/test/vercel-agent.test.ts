@@ -203,6 +203,27 @@ describe("Vercel read-only agent", () => {
     expect(search).toHaveBeenCalled();
   });
 
+  it("keeps broad-article passages from the primary search without their focused symptoms", async () => {
+    const matches = ([
+      ["panel/common/settings.md", "General settings passage."],
+      ["store/discord.md", "Discord notification passage."],
+      ["panel/common/sftp.md", "SFTP settings passage."]
+    ] as const).map(([source, excerpt], index) => ({
+      articleRef: `kb:${String(index + 1).repeat(64)}`, source, title: source, heading: "General",
+      startLine: index + 1, endLine: index + 2, excerpt
+    }));
+    const search = vi.fn(() => Promise.resolve({ trust: "reference_only" as const, matches }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "status" }),
+      mockText(matches.map(match => `${match.excerpt} [${match.source}:${match.startLine}-${match.endLine}]`).join(" ") + " Check the result.")
+    ] });
+    const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run(request, signal);
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 });
+    expect(result.admittedEvidence).toEqual(expect.arrayContaining(matches.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }))));
+  });
+
 
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
