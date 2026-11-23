@@ -158,6 +158,33 @@ describe("Vercel read-only agent", () => {
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
   });
 
+  it.each(["semantic", "lexical"] as const)("filters incidental downgrade evidence on the %s admission path", async mode => {
+    const source = "practice/advanced/version-downgrade.md";
+    const downgrade = {
+      articleRef: `kb:${"d".repeat(64)}`, source, title: "Docker image", heading: "Docker image",
+      startLine: 1, endLine: 12, excerpt: "Switch the Docker image and select Java 8 for the server."
+    };
+    const network = {
+      articleRef: `kb:${"n".repeat(64)}`, source: "practice/advanced/docker.md", title: "Docker image", heading: "Docker image",
+      startLine: 1, endLine: 4, excerpt: "Switch the Docker image and select Java 8 for the server."
+    };
+    const search = vi.fn(() => Promise.resolve({ trust: "reference_only" as const, matches: [downgrade, network] }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const prompt = "The Docker image field is locked and I need Java 8.";
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "docker" }),
+      mockText("Switch the Docker image and select Java 8 for the server. [practice/advanced/docker.md:1-4] Check the result in the panel.")
+    ] });
+    const relevance = mode === "semantic" ? { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) } : undefined;
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
+    const content = message?.content[0];
+    if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
+    expect(JSON.stringify(content.output.value)).not.toContain(source);
+    expect(result.admittedEvidence.some(match => match.source === source)).toBe(false);
+    expect(search).toHaveBeenCalled();
+  });
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";

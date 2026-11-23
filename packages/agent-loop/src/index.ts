@@ -248,6 +248,12 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (downgrade) {
             admitted = [downgrade, ...admitted.filter(match => citation(match) !== citation(downgrade))].slice(0, 8);
           }
+          // A downgrade passage is admissible only when the customer's prompt
+          // contains a downgrade symptom. Filter before companion retrieval so
+          // neither the passage nor its nearby sections enter the evidence.
+          if (!hasDowngradeSymptom(prompt)) {
+            admitted = admitted.filter(match => match.source !== DOWNGRADE_SOURCE);
+          }
           if (admitted.length) {
             const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
             admitted = [...admitted, ...companions];
