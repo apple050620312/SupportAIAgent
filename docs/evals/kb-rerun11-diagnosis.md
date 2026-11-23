@@ -1,4 +1,6 @@
-# KB rerun 11 診斷草稿
+# KB rerun 11 診斷
+
+本報告主來源是 checkpoint `eval-results/golden-2026-11-23T17-40-32-806Z-13.json`。本輪 13 題結果為 1 正確、6 部分、6 錯，轉人工 4 題；本報告聚焦六題錯誤題 GS-023、GS-056、GS-084、GS-108、GS-140、GS-166。六題 outcome 都是 `resolved`，但 semantic verdict 都是 `wrong`。完整結果見 [rerun 11 報告](golden-set-step12-docs-rerun-11.md)。
 
 ## 證據盤點
 
@@ -88,9 +90,24 @@ GS-108 gate passed、完整度 true、handoffContentVerdict correct，仍因模�
 
 ## 排序的修正目標
 
-TODO：下一步補入排序的修正目標與驗證方式。
+1. **先讓模型按題目逐點覆蓋已 admitted 的解法。** 調整提示詞與完整度檢查，將問題中的每個必要動作和 admitted 段落轉成回答清單，避免 GS-023 漏掉清除 DNS 快取、Google DNS 與正常時重新加入，也避免 GS-056 在已有備份證據時只給保守警告。針對性重跑 GS-023、GS-056，通過標準是 semantic points 分別三項全為 `covered`、兩項全為 `covered`，且 `contentCoverage=true`。
+
+2. **修正客服流程與重裝程序的檢索供給。** 檢查檢索查詢和 KB admission，讓 GS-056 的設定重裝段落、GS-140 的重複開單／等待回覆／售後類別段落，以及 GS-166 的 SFTP 資料夾與目的地段落進入 admittedEvidence。這項目標只處理檢索與現有 KB 可用性。GS-166 的 10MB 與 100MB 衝突、GS-140 的重複開單政策若需改 KB 內容，待 owner 裁定。針對性重跑三題，通過標準是目標段落出現在 evidence 與 admittedEvidence，草稿涵蓋 golden 要點，且 semantic verdict 至少為 `partial`。
+
+3. **讓 citation gate 保留有根據的可交付內容。** 調整 gate 的錯行、截斷和 excerpt mismatch 處理及一次修正路徑，讓 GS-084 的 grounded 且 judge 判定 correct 草稿不因單一 `wrong_lines` 被整份丟棄，同時保留 GS-140、GS-166 無法驗證的引文阻擋能力。針對性重跑 GS-084、GS-140、GS-166，通過標準是 GS-084 `citationGateViolation=false` 且交付原有正確內容，GS-140 與 GS-166 的 gate 欄位能清楚反映合法 matched 或保留可驗證部分，不能以通用 fallback 取代有根據草稿。
+
+4. **把 marker 判斷限縮到實際帳戶阻礙。** 調整提示詞或 `hasAccountBlockerCue` 的判斷，使 GS-108 在已通過 gate、完整度為 true 且內容正確時交付 no-jar 重裝指引，GS-056 維持 marker overridden 的已驗證行為。針對性重跑 GS-108、GS-056，通過標準是 GS-108 `handoffMarkerPresent` 即使為 true 也不再造成不必要 handoff，`handedOff=false` 且 semantic points 全為 `covered`，GS-056 維持 `handoffMarkerOverridden=true` 與 `handedOff=false`。
+
+5. **使完整度檢查反映語義缺項。** 擴充完整度檢查，從目前的長度、證據存在、動作詞和 excerpt 前綴訊號，加入題目必要步驟的逐點檢查，尤其覆蓋 GS-023、GS-056、GS-166 已由 semantic judge 指出的缺項。針對性重跑三題，通過標準是漏掉必要步驟時 `contentCoverage=false`，完整回答時為 `true`，並與 semantic points 的 covered/missing 方向一致。
 
 ## 不是什麼原因
 
-TODO：下一步補入排除項與「不是什麼原因」。
+- **GS-084 的內容本身錯誤。** `handoffContentVerdict.verdict=correct`、兩個 points 都是 `covered`，而 `citationGateAttempts` 的 `grounded=true`；被丟棄的直接原因是 `wrong_lines` 導致 `citationGateViolation=true`。
+- **GS-084 是 marker 觸發轉人工。** 事件 12 的 `handoffMarker` 是 `absent`，事件 13 才出現 `citationGate` `failed`，因此路由由 gate lifecycle 造成。
+- **GS-108 是 gate 失敗。** checkpoint 的 citation gate 為 `passed`、完整度為 `true`、`handoffContentVerdict=correct`；事件 12 有 marker、事件 14 的 decision 為 `retained`，原因是題目含 account-blocker cue。
+- **GS-056 的 marker 造成轉人工。** checkpoint 明載 `handoffMarkerPresent=true`、`handoffMarkerOverridden=true`、`handedOff=false`，marker 已被覆寫，錯誤在內容未交付重裝程序。
+- **降版機制不是本六題的原因。** 共通機制已記錄本六題沒有降版題，沒有 checkpoint 證據支持把降版要求或過濾機制歸因到這六題。
+- **provider 或模型設定變更沒有證據是原因。** 本 checkpoint 的問題級證據只顯示各題的檢索、gate、marker 與 semantic 欄位，沒有記錄 provider/model 變更或 provider failure；不能據此歸因。
+- **GS-023 是目標段落完全未檢索到。** `admittedEvidence` 已含 `debug/connection.md:33-47`，`citationGateAttempts` 為 `passed`、`answerCompletenessAttempts` 為 `true`，證據顯示段落已 admitted 但未被答案採用。
+- **GS-166 只是引用格式問題。** `contentCoverage=false` 與 citation gate `failed` 同時存在，semantic judge 另指出資料夾與目的地兩項缺漏，因此不能只歸因於 `excerpt_mismatch`。
 
