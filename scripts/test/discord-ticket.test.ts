@@ -158,8 +158,9 @@ describe("Discord shadow drafts", () => {
     expect(await f.controller.receive({ ...f.message, channelId: f.threadId, content })).toBe("ignored");
     const review = { ...f.staff, channelId: f.threadId, content };
     expect(await Promise.all([f.controller.receive(review), f.controller.receive(review)])).toEqual(["reviewed", "ignored"]);
+    expect(f.recordVerdict.mock.calls[0]?.[0].timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(f.recordVerdict).toHaveBeenCalledExactlyOnceWith({
-      timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      timestamp: f.recordVerdict.mock.calls[0]?.[0].timestamp,
       verdict, channelId: MOCK_SCOPE.channelId, staffId: f.staff.author.id
     });
     expect(f.send).not.toHaveBeenCalled();
