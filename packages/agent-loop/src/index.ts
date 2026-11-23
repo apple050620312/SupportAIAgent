@@ -146,7 +146,7 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
   const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
   const sources = new Set(evidence.map(match => match.source));
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) {
-    const positiveInstall = hasUnnegatedMention(text, /(?:設定|设置|選擇|选择|select|click).{0,24}(?:重新安裝|重新安装|reinstall)/giu, /(?:先別|不要|勿|不必|do not|don.t)/iu);
+    const positiveInstall = hasUnnegatedMention(text, /重新安裝|重新安装|reinstall/giu, /(?:先別|不要|勿|不必|do not|don.t)/iu);
     const positiveRestart = hasUnnegatedMention(text, /重啟|重新啟動|再開機|restart/giu, /(?:先別|不要|勿|不必|do not|don.t|先不)/iu);
     const worldCovered = WORLD_RESET_PATTERN.test(text);
     if (!positiveInstall || !positiveRestart || !worldCovered) return false;
@@ -185,7 +185,7 @@ export function repairRequiredTaskDraft(answer: string, prompt: string, evidence
     const positiveReset = /(?:重新安裝|重新安装|reinstall).{0,40}(?:重啟|重新啟動|再開機|restart)/iu.test(normalized);
     const supportsReset = /重新安裝|重新安装|reinstall/iu.test(reinstall.excerpt) && /重啟|重新啟動|再開機|restart/iu.test(reinstall.excerpt);
     if (!positiveReset && supportsReset) append("請在設定頁面選擇「重新安裝伺服器」，完成後重新啟動伺服器。", reinstall);
-    if (!WORLD_RESET_PATTERN.test(normalized) && WORLD_RESET_PATTERN.test(reinstall.excerpt)) append("刪除全部伺服器資料會讓世界已被重置。", reinstall);
+    if (!WORLD_RESET_PATTERN.test(normalized) && WORLD_RESET_PATTERN.test(reinstall.excerpt)) append("刪除全部伺服器資料後，世界會被重置，建立全新的世界。", reinstall);
   }
   const start = evidence.find(match => match.source === "panel/start-server.md");
   if (start && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&

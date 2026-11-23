@@ -37,9 +37,19 @@ describe("reinstall task coverage", () => {
     expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
   });
 
+  it("accepts natural reset wording when an unrelated negation precedes the install", () => {
+    const answer = `${excerpt} ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。若你確定不要保留資料，請在設定頁面選擇「重新安裝伺服器」，完成後重新啟動伺服器。刪除全部伺服器資料會重置世界。`;
+    expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
+  });
+
+  it("accepts the fix-4 wording with 使用 before the reinstall mention", () => {
+    const answer = `${excerpt} ${citation} 如果你想保留原本的資料，先別重啟或重新安裝。此時使用「重新安裝伺服器」並重新啟動，即可完成重置並建立全新的世界。`;
+    expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
+  });
+
   it("accepts the repaired reset sentence and still rejects clean evidence", () => {
     const repaired = repairRequiredTaskDraft(`請在設定頁面選擇重新安裝伺服器，完成後重新啟動伺服器。 ${citation} 請依照設定頁面處理資料。`, prompt, evidence);
-    expect(repaired).toContain("世界已被重置");
+    expect(repaired).toContain("刪除全部伺服器資料後，世界會被重置，建立全新的世界。");
     expect(answerCompletenessCheck(repaired, prompt, evidence)).toBe(true);
     expect(answerCompletenessCheck(clean, prompt, cleanEvidence)).toBe(false);
   });
