@@ -44,9 +44,9 @@ Golden 要求缺少 server.jar 時到設定重裝，仍失敗則提供控制台�
 
 事件 12 是 /v1/me/handoff 成功，13 handoffMarker `present`，14 handoffMarkerDecision `retained`，15 gate passed。runner 原始碼先從模型文字末行以 `STAFF_HANDOFF` 判定 `requestedHandoff`，再計算 `markerRequiresHandoff = requestedHandoff && (failedRequiredRead || hasAccountBlockerCue(prompt))`，最後將 marker 保留。這個 marker 是模型寫在回覆末行的，不是 gate 流程新增。gate 只驗證引用。
 
-近期「無帳戶阻礙時忽略 marker」修正實際有執行條件，但本題 prompt 含帳戶/面板阻礙 cue（checkpoint 盤點將其歸為該類），所以 `hasAccountBlockerCue(prompt)` 使 `markerRequiresHandoff` 為真，`handoffMarkerOverridden=false`。因此修正沒有在本題生效，原因是題目被判定具有帳戶阻礙，不是 gate 失敗。checkpoint 的 handedOff=true、marker present、overridden=false 與此一致。
+近期「無帳戶阻礙時忽略 marker」修正沒有在本題生效，原因不是 account-blocker cue，而是 failed required read。題目「無法啟動」觸發 `requiredAccountReads` 的啟動錯誤模式，必要 reads 為 `get_my_server_status` 與 `get_server_logs`；checkpoint 事件 2 顯示 `get_server_logs` 回 `HTTP_404`，`toolErrors` 亦有 `/v1/me/server-logs:HTTP_404`，故 `failedRequiredRead=true`，`markerRequiresHandoff` 為真。另經核對，`hasAccountBlockerCue(prompt)` 對本題為 false——「無法啟動」「自行無法判斷如何處理」不在該函式的中英文模式內（模式只含鎖定、無法更改／修改、權限不足等）。checkpoint 的 handedOff=true、marker present、overridden=false 與此一致。對照組是 GS-056：同樣有 `server-logs HTTP_404`，但其題目未觸發任何 required read，`failedRequiredRead=false`，marker 即被覆寫。
 
-**機制分類：marker 判斷（次因：提示詞）。** 模型產生 marker，runner 依 account-blocker cue 保留，且 gate/完整度均通過。
+**機制分類：marker 判斷（次因：必要 reads 失敗即保留 marker）。** 模型產生 marker，runner 因必要日誌讀取失敗而保留，且 gate/完整度均通過。
 
 ### GS-140
 
@@ -76,14 +76,14 @@ GS-084 有 grounded matched 且 handoffContentVerdict correct，但 `wrong_lines
 
 ### 3. marker 路由與內容判定相互獨立
 
-GS-108 gate passed、完整度 true、handoffContentVerdict correct，仍因模型 marker present 且 account blocker cue 使 decision retained 而轉人工。GS-084 無 marker 仍因 gate fail 轉人工。GS-056 marker present 但 overridden=true，最後未轉人工。這證明「無帳戶阻礙時忽略 marker」在 GS-056 生效，在 GS-108 因 cue 判定不適用，GS-084/140/166 沒有足夠條件用來判斷。
+GS-108 gate passed、完整度 true、handoffContentVerdict correct，仍因模型 marker present 且必要日誌讀取失敗（`get_server_logs HTTP_404` → `failedRequiredRead=true`）使 decision retained 而轉人工。GS-084 無 marker 仍因 gate fail 轉人工。GS-056 marker present 但 overridden=true，最後未轉人工——同樣有 logs 404，但其題目未觸發 required read。這證明「無帳戶阻礙時忽略 marker」在 GS-056 生效，在 GS-108 因 failed required read 不適用，GS-084/140/166 沒有足夠條件用來判斷。
 
 ### 4. 近期修正逐項核對
 
 - **admittedEvidence 分開記錄：有生效。** 六題盤點均區分 evidence 與 admittedEvidence，GS-023 尤其顯示 `:33-47` 只在 admitted；但分開記錄沒有保證模型使用。
 - **引用失敗一次修正再驗證：只在 GS-023 生效。** 其 repair `attempted=true, repaired=true`，其餘四題有 gate failure 者均 `attempted=false`。
 - **驗證失敗仍保留有根據草稿：未普遍生效。** GS-084 有 grounded/正確內容卻被交付通用句；GS-023 repair 後交付但原因是 gate passed。GS-140、GS-166 沒有 grounded partial 可保留。
-- **無帳戶阻礙時忽略轉人工 marker：GS-056 生效，GS-108 未生效且有明確 cue。** GS-056 present/overridden=true/handedOff=false。GS-108 present/overridden=false/handedOff=true。
+- **無帳戶阻礙時忽略轉人工 marker：GS-056 生效，GS-108 未生效且原因已確認為 failed required read。** GS-056 present/overridden=true/handedOff=false。GS-108 present/overridden=false/handedOff=true，`get_server_logs HTTP_404` 使 `failedRequiredRead=true`；`hasAccountBlockerCue(prompt)` 經核對為 false。
 - **完整度格式無關、內容覆蓋分開記錄：欄位有分開記錄，但結果仍不能保證語義覆蓋。** GS-023、056、084、108、140 都 contentCoverage=true 而 semantic wrong；GS-166 兩者都 false。這證明格式與內容檢查分欄，不能證明內容檢查已涵蓋 golden 要點。
 - **降版要求限縮為聚焦檢索命中：本六題沒有降版題，無證據判定。**
 - **無症狀時過濾降版段落：本六題沒有降版題，無證據判定。**
@@ -96,7 +96,7 @@ GS-108 gate passed、完整度 true、handoffContentVerdict correct，仍因模�
 
 3. **讓 citation gate 保留有根據的可交付內容。** 調整 gate 的錯行、截斷和 excerpt mismatch 處理及一次修正路徑，讓 GS-084 的 grounded 且 judge 判定 correct 草稿不因單一 `wrong_lines` 被整份丟棄，同時保留 GS-140、GS-166 無法驗證的引文阻擋能力。針對性重跑 GS-084、GS-140、GS-166，通過標準是 GS-084 `citationGateViolation=false` 且交付原有正確內容，GS-140 與 GS-166 的 gate 欄位能清楚反映合法 matched 或保留可驗證部分，不能以通用 fallback 取代有根據草稿。
 
-4. **把 marker 判斷限縮到實際帳戶阻礙。** 調整提示詞或 `hasAccountBlockerCue` 的判斷，使 GS-108 在已通過 gate、完整度為 true 且內容正確時交付 no-jar 重裝指引，GS-056 維持 marker overridden 的已驗證行為。針對性重跑 GS-108、GS-056，通過標準是 GS-108 `handoffMarkerPresent` 即使為 true 也不再造成不必要 handoff，`handedOff=false` 且 semantic points 全為 `covered`，GS-056 維持 `handoffMarkerOverridden=true` 與 `handedOff=false`。
+4. **讓「必要讀取失敗即保留 marker」只在帳戶狀態真的必要時生效。** 目前 `markerRequiresHandoff = requestedHandoff && (failedRequiredRead || hasAccountBlockerCue(prompt))`：GS-108 的 `get_server_logs` 回 `HTTP_404` 即令 `failedRequiredRead=true`，縱使 gate、完整度通過且 no-jar 重裝程序已完整回答，marker 仍被保留。修正方向是區分「讀不到日誌」與「帳戶狀態是回答的必要條件」——文件程序已能回答時，失敗的輔助讀取不應單獨保留 marker；只有當缺失的帳戶狀態是回答所必需時才保留。針對性重跑 GS-108、GS-056，通過標準是 GS-108 `handoffMarkerPresent` 即使為 true 也不再造成不必要 handoff，`handedOff=false` 且 semantic points 全為 `covered`，GS-056 維持 `handoffMarkerOverridden=true` 與 `handedOff=false`；同時確認真正需要帳戶狀態的題目（例如帳單、停權時間）仍會轉人工。
 
 5. **使完整度檢查反映語義缺項。** 擴充完整度檢查，從目前的長度、證據存在、動作詞和 excerpt 前綴訊號，加入題目必要步驟的逐點檢查，尤其覆蓋 GS-023、GS-056、GS-166 已由 semantic judge 指出的缺項。針對性重跑三題，通過標準是漏掉必要步驟時 `contentCoverage=false`，完整回答時為 `true`，並與 semantic points 的 covered/missing 方向一致。
 
@@ -104,7 +104,7 @@ GS-108 gate passed、完整度 true、handoffContentVerdict correct，仍因模�
 
 - **GS-084 的內容本身錯誤。** `handoffContentVerdict.verdict=correct`、兩個 points 都是 `covered`，而 `citationGateAttempts` 的 `grounded=true`；被丟棄的直接原因是 `wrong_lines` 導致 `citationGateViolation=true`。
 - **GS-084 是 marker 觸發轉人工。** 事件 12 的 `handoffMarker` 是 `absent`，事件 13 才出現 `citationGate` `failed`，因此路由由 gate lifecycle 造成。
-- **GS-108 是 gate 失敗。** checkpoint 的 citation gate 為 `passed`、完整度為 `true`、`handoffContentVerdict=correct`；事件 12 有 marker、事件 14 的 decision 為 `retained`，原因是題目含 account-blocker cue。
+- **GS-108 是 gate 失敗。** checkpoint 的 citation gate 為 `passed`、完整度為 `true`、`handoffContentVerdict=correct`；事件 12 有 marker、事件 14 的 decision 為 `retained`，原因是必要日誌讀取失敗（`get_server_logs HTTP_404` → `failedRequiredRead=true`），而非 gate 或 account-blocker cue（`hasAccountBlockerCue(prompt)` 經核對為 false）。
 - **GS-056 的 marker 造成轉人工。** checkpoint 明載 `handoffMarkerPresent=true`、`handoffMarkerOverridden=true`、`handedOff=false`，marker 已被覆寫，錯誤在內容未交付重裝程序。
 - **降版機制不是本六題的原因。** 共通機制已記錄本六題沒有降版題，沒有 checkpoint 證據支持把降版要求或過濾機制歸因到這六題。
 - **provider 或模型設定變更沒有證據是原因。** 本 checkpoint 的問題級證據只顯示各題的檢索、gate、marker 與 semantic 欄位，沒有記錄 provider/model 變更或 provider failure；不能據此歸因。
