@@ -51,3 +51,25 @@ Checkpoint 的 `evidence` 保存成功 search 的原始回傳，`semanticScores`
 完整度檢查需要 trim 後至少 80 個 JS 字串單位、至少一段 evidence、命中任一中英文動作詞，且草稿含任一 excerpt 的前 24 個字串單位（兩側先 NFKC、再轉小寫）。它沒有使用問題參數，也未核對動作詞是否出現在解答或引文裡，不能衡量程序覆蓋度。上述前綴比對只用保存的草稿與 evidence 重現可見訊號，沒有重跑 eval，也沒有取得 runner 內完整 evidence 快照。見 [完整度規則](../../packages/agent-loop/src/index.ts#L72-L80)。
 
 GS-105 與 GS-138 的通用句是 runner fallback。Gate 容許空白變動，至少要有一組合法節錄和標籤，且不能有阻擋性的錯誤。兩題都是零匹配，因此 gate fail。Runner 要兩項檢查都過、完成必讀、非空、正常 stop 且無非法工具，才把符合長度的回覆保存在 `supportedPartial`。驗證失敗令它保持空值，兩題也沒有可用的必讀狀態 checkpoint，因此 handoff 分支交付通用句。這條路徑會整份捨棄草稿，連 GS-138 已答對的架構和品質限制也一起消失。GS-138 同時有 marker，GS-105 無 marker，仍得到相同通用句。見 [gate 通過條件](../../packages/agent-loop/src/citation-gate.ts#L97-L109)及 [fallback](../../packages/agent-loop/src/index.ts#L299-L326)。
+
+## 排序的修正目標與驗證方式
+
+1. **讓模型處理最能解釋症狀的段落。** 未來重跑 GS-105 時，分開記錄工具實際回傳的 admitted evidence 及最後草稿。確認草稿先問是否曾降版，保留面板位址說明，並依當前 KB 在確認降版後給出備份、替換成新世界或相容備份的條件式做法及驗證步驟。重啟是歷史評分點，另查當前證據是否支援。比較 `drafts`、`answer` 與語義逐點分數。
+2. **確保引文可驗證，並在交付前保留已驗證的部分。** 可評估由程式從 admitted 段落組裝引用，或在驗證失敗時先做一次有限的引用修正。用 GS-105、GS-138 驗證 `citationGateAttempts.matched` 有合法配對，且 `answer` 保留有根據的部分。加入錯行及未知來源對照，確認無法驗證的內容仍會被攔住。
+3. **把轉人工限制在原請求的剩餘阻礙。** 用 GS-096 檢查公告核對及重試能直接交付，用 GS-138 檢查架構和條款回答不因未問的庫存而升級。用 GS-041 確認帳戶鎖定仍可轉人工且保留自助指引。比較 `eventLog` 的 marker 和 handoff 事件以及 `answer`，以 GS-084 作為直接交付對照。
+4. **把內容覆蓋和引文格式分開驗證。** 用 GS-138 的同一政策草稿對照兩種引用格式，內容覆蓋判定應穩定，引用則獨立驗證。再用 GS-105 對照有合法引文卻漏掉降版分支的草稿，內容檢查應指出缺項。記錄 `answerCompletenessAttempts`、`citationGateAttempts` 與草稿逐點評估。保留歷史分數，待 owner 裁定後另列現行政策覆蓋分數。
+
+## 不是什麼原因
+
+- **三題的目標段落沒有取回。** GS-096、GS-138 的目標段落都在 rank 1，GS-105 的聚焦搜尋也取回了降版段落。GS-105 的主搜尋仍偏向網路資料，修復後剩下的是草稿選用問題。
+- **索引更新或更換模型 provider。** 三輪 checkpoint 的索引完整 digest、規模、檢索 provider、對話模型與 provider 均相同。這只排除已記錄的設定變更。
+- **僅有空白差異。** GS-138 rerun 8 的 Velocity 標籤記為 `whitespace_mismatch`，rerun 9 記為 `excerpt_mismatch`，新草稿含額外的 Markdown 字元。GS-105 的三個 mismatch 對應改寫，空白容忍無法補回原文。
+- **逾時、provider 失敗或 judge 觸發轉人工。** 四題均首試正常 stop，無 `modelFailures`，耗時低於 60 秒，`eventLog` 顯示先轉人工才開始評分。GS-041 和 GS-105 的選用日誌 404 也不會單獨觸發這條路由。
+- **一個 gate 問題能解釋四題。** GS-096、GS-041 驗證全過仍發出 marker。修好 GS-105 的引用仍補不回降版內容，修好 GS-138 的引用也不會消除 marker。
+
+## 未決事項
+
+- **GS-041**：歷史 Java 8 必要性、Netty 因果及客服能否開放該帳戶欄位，待 owner 裁定。
+- **GS-096**：歷史位址、版本及選型期望應如何與現行 Discord 公告指引一同比對，待 owner 裁定。
+- **GS-138**：歷史上的特殊網路處理理由是否仍適用，待 owner 裁定。
+- **GS-053**：逾期資料留存與恢復政策仍待 owner 裁定，未納入 rerun 9。見 [先前診斷](step12-diagnosis-2.md)。
