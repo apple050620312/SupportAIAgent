@@ -1,6 +1,6 @@
-# OpenClaw Hosting Support
+# SupportAIAgent
 
-Foundation for an AI-assisted hosting support platform. The repository is private, pre-MVP, and currently establishes contracts and authorization boundaries without connecting to production systems.
+Foundation for an AI-assisted hosting support platform. The repository is public, pre-MVP, and currently establishes contracts and authorization boundaries without connecting to production systems.
 
 ## Architecture
 

@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-hosting-support",
+  "name": "support-ai-agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,8 @@
     "node": ">=24.16.0"
   },
   "scripts": {
-    "build": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r build && tsc -p scripts/tsconfig.json --noEmit",
-    "typecheck": "corepack pnpm --filter \"!openclaw-hosting-support\" --if-present -r typecheck && tsc -p scripts/tsconfig.json --noEmit",
+    "build": "corepack pnpm --filter \"!support-ai-agent\" --if-present -r build && tsc -p scripts/tsconfig.json --noEmit",
+    "typecheck": "corepack pnpm --filter \"!support-ai-agent\" --if-present -r typecheck && tsc -p scripts/tsconfig.json --noEmit",
     "test": "corepack pnpm build && vitest run scripts/test && corepack pnpm --filter @openclaw-hosting/support-core test",
     "lint": "eslint .",
     "demo:mock": "corepack pnpm build && node --import tsx scripts/demo-mock-support.ts",

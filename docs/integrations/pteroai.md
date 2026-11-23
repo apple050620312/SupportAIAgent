@@ -52,7 +52,7 @@
 - `Request.whmcs_request` 將所有 WHMCS `result=error` 摺疊成空結果，可能把認證失敗或上游錯誤誤判成沒有客戶。這是新 resolver 必須避免的行為。
 - archive 的環境範例曾包含 token-like 歷史值。該值沒有被複製或使用；任何曾經暴露的舊憑證都應在環境外輪替。
 
-## 與目前 OpenClawHostingSupport 的比較
+## 與目前 SupportAIAgent 的比較
 
 | 能力 | PteroAI | 目前 OpenClaw 版本 | 判定 |
 | --- | --- | --- | --- |
