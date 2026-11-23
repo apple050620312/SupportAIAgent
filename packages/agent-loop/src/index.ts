@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, hasBlockingCitationFailure, type CitationGate } from "./citation-gate.js";
+import { citation, evaluateCitationGate, inspectCitationGate, type CitationGate } from "./citation-gate.js";
 export { FileHistoryStore, SupportCoreClient, citation };
 export type { CitationGate };
 export type CitationGateRepair = {
@@ -30,6 +30,7 @@ When the search result marks a version-downgrade passage as a possible root caus
 For questions answerable from documentation or the customer's account state, first search the current KB and use the relevant Support Core read tools. Answer the parts those sources support with actions the customer can take now. If a missing or low-confidence result blocks part of the answer, narrow the uncertainty to that part. Do not guess or invent sources.
 If an account read fails but the documented procedure still answers the request, give the cited procedure and state the specific limitation, such as "I could not verify the cause from the logs." Request staff handoff if the missing account detail is necessary to resolve the request.
 For an ordered procedure, identify the matching article and gather the relevant sections before drafting. Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off. Start with any prerequisite, name the exact panel screen and field, and explain each action through applying the change and verifying the result when documented. Include companion steps in other retrieved sections or panel screens. Cite the passages that support the instructions. If a step is missing from the evidence, identify that gap without guessing.
+Before drafting, walk through the admitted passages one by one. For every passage relevant to this request that records a step, include that step in the answer and cite the passage. You may omit citations for passages unrelated to the request, but never silently omit a relevant step from an admitted passage.
 Treat unverified current availability, restoration outcome, or root cause as a separate question. Give the documented procedure first and make it conditional when a prerequisite or availability is unverified. Never ask staff to confirm a step the KB already documents. If the procedure answers the request, state the remaining uncertainty without handing off and give a concrete check the customer can perform when supported. If an unresolved detail is necessary to answer the request, including current availability when asked or account state the customer needs verified, state exactly what staff must confirm after giving the supported steps.
 Scope handoff to blockers in the customer's actual request. Do not escalate an unasked plan, inventory, sizing, hostname, version, or policy detail after delivering the requested documented guidance. For a symptom-only question, give the documented check and retry procedure before requesting staff. Keep a handoff when the request itself contains an unresolved account lock, unavailable runtime, or other account-specific blocker, while preserving the useful documented guidance first.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
@@ -41,6 +42,12 @@ type ReadTool = typeof READ_ONLY_TOOLS[number];
 
 const DOWNGRADE_SOURCE = "practice/advanced/version-downgrade.md";
 const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 世界備份 version downgrade", limit: 3 };
+const REINSTALL_SOURCE = "panel/common/settings.md";
+const REINSTALL_SEARCH = { query: "重新安裝伺服器 設定 重裝 世界重製 reinstall server settings", limit: 3 };
+const SUPPORT_FLOW_SOURCE = "store/discord.md";
+const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
+const SFTP_SOURCE = "panel/common/sftp.md";
+const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
 
 function hasDowngradeSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
@@ -49,6 +56,23 @@ function hasDowngradeSymptom(prompt: string): boolean {
   return /降版/u.test(text) ||
     ((minecraft || version) && /\bdowngrad(?:e|ing)\b|降級/iu.test(text)) ||
     (minecraft && version && /\b(?:mismatch|incompatible|encryption|can't connect|cannot connect)\b|不相容|不匹配|加密|無法連線/iu.test(text));
+}
+
+function hasReinstallSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}刪|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
+}
+
+function hasSupportFlowSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket/iu.test(text);
+}
+
+function hasSftpSymptom(prompt: string): boolean {
+  const text = prompt.normalize("NFKC");
+  const transfer = /上傳|傳不上去|upload|transfer/iu.test(text);
+  const qualifier = /資料夾|大檔案|壓縮|sftp|folder|large file|zip/iu.test(text);
+  return transfer && qualifier;
 }
 
 /** Detect account and panel blockers in the customer's current request. */
@@ -73,6 +97,12 @@ function requiredAccountReads(prompt: string): ReadTool[] {
   return reads;
 }
 
+/** Whether a missing account read prevents answering the question itself. */
+function accountStateReadRequired(prompt: string): boolean {
+  if (/\b(?:power error|failed to start|won't start|can't start)\b|電源.{0,5}(?:錯誤|異常)|無法啟動|開不了機/iu.test(prompt)) return false;
+  return /\b(?:my|our|this) (?:latest |current )?invoice\b|\binvoice (?:status|number)\b|我的.{0,6}(?:發票|帳單)|(?:發票|帳單)狀態|\b(?:when was .* suspended|suspension start|my server status|is my server (?:online|offline|running))\b|何時.{0,8}(?:停權|停機|暫停)|(?:停權|停機|暫停)時間/iu.test(prompt);
+}
+
 /** Lexical overlap is only a conservative relevance signal, not a probability. */
 export function retrievalConfidence(query: string, passage: string): number {
   const normalized = query.normalize("NFKC").toLowerCase();
@@ -95,7 +125,7 @@ function normalizeCoverageText(value: string): string {
     .trim();
 }
 
-/** Checks content coverage independently from citation formatting. */
+/** Checks the content required for delivery independently from citation formatting. */
 export function answerCompletenessCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
   if (text.length < 80 || !evidence.length) return false;
@@ -106,6 +136,20 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
   const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
   return actionable && citedEvidence && downgradeCovered;
+}
+
+/** Measures reflection of admitted passages for diagnostics. */
+export function contentCoverageCheck(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
+  if (!answerCompletenessCheck(answer, prompt, evidence)) return false;
+  const text = answer.trim();
+  const answerText = normalizeCoverageText(text);
+  const distinctEvidence = [...new Map(evidence.map(match => [citation(match), match])).values()];
+  const reflectedEvidence = distinctEvidence.filter(match =>
+    answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)) ||
+    text.includes(citation(match))
+  ).length;
+  const reflectionRatio = distinctEvidence.length ? reflectedEvidence / distinctEvidence.length : 0;
+  return reflectionRatio >= 0.2;
 }
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
@@ -180,6 +224,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         checkpoint = next;
       };
       const requiredReads = requiredAccountReads(prompt);
+      const essentialAccountState = accountStateReadRequired(prompt);
       const attempted = new Set<ReadTool>();
       const results = new Map<string, Promise<unknown>>();
       const call = (path: string, body: unknown, schema: TSchema) => options.core.call(path, body, schema, request.ticketToken, session, signal);
@@ -223,15 +268,27 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
             return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           };
-          const [result, focused] = await Promise.all([
+          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused] = await Promise.all([
             search(searchInput),
-            options.semanticRelevance && hasDowngradeSymptom(prompt)
+            hasDowngradeSymptom(prompt)
               ? search(DOWNGRADE_SEARCH).catch(() => undefined)
+              : undefined,
+            hasReinstallSymptom(prompt)
+              ? search(REINSTALL_SEARCH).catch(() => undefined)
+              : undefined,
+            hasSupportFlowSymptom(prompt)
+              ? search(SUPPORT_FLOW_SEARCH).catch(() => undefined)
+              : undefined,
+            hasSftpSymptom(prompt)
+              ? search(SFTP_SEARCH).catch(() => undefined)
               : undefined
           ]);
           // The symptom licenses one passage from this specific article even
           // when its similarity to the network-heavy original prompt is low.
           const downgrade = focused?.matches.find(match => match.source === DOWNGRADE_SOURCE);
+          const reinstall = reinstallFocused?.matches.find(match => match.source === REINSTALL_SOURCE);
+          const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
+          const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -245,8 +302,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          if (downgrade) {
-            admitted = [downgrade, ...admitted.filter(match => citation(match) !== citation(downgrade))].slice(0, 8);
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp]) {
+            if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
           // contains a downgrade symptom. Filter before companion retrieval so
@@ -335,25 +392,29 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const invalidTool = result.steps.some((step) => step.toolCalls.some((toolCall) => !READ_ONLY_TOOLS.includes(toolCall.toolName as typeof READ_ONLY_TOOLS[number])));
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
-        citationGate = evaluateCitationGate(reply, evidence, clean);
+        const inspection = inspectCitationGate(reply, evidence, clean);
+        citationGate = inspection.gate;
         if (citationGate.status === "failed") {
           // Remove one wrapper level, preserving Markdown markers in the source excerpt.
           const unwrapped = reply.replace(/^[ \t]*>[ \t]?/gm, "");
-          if (unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation")) {
-            const after = evaluateCitationGate(unwrapped, evidence, clean);
+          const canUnwrap = unwrapped !== reply && !citationGate.failures.some(({ reason }) => reason === "wrong_lines" || reason === "unknown_citation");
+          const candidate = inspection.missingCitationDraft ?? (canUnwrap ? unwrapped : null);
+          if (candidate !== null) {
+            const repairedDraft = clean(candidate);
+            const after = evaluateCitationGate(repairedDraft, evidence, clean);
             const repaired = after.status === "passed";
             citationGateRepair = { attempted: true, repaired, before: citationGate, after };
             if (repaired) {
-              reply = unwrapped;
+              reply = repairedDraft;
               citationGate = after;
             }
           }
         }
-        contentCoverage = answerCompletenessCheck(reply, prompt, evidence);
-        answerComplete = contentCoverage;
+        answerComplete = answerCompletenessCheck(reply, prompt, evidence);
+        contentCoverage = contentCoverageCheck(reply, prompt, evidence);
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         const fitsHandoff = reply.length <= 5800;
-        if (!invalidTool && fitsHandoff && citationGate.matched.length && !hasBlockingCitationFailure(citationGate)) {
+        if (!invalidTool && fitsHandoff && citationGate.status === "passed") {
           supportedPartial = reply;
         }
         if (acceptable && fitsHandoff) {
@@ -362,8 +423,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         // Optional account reads provide context. A failed read must not discard a
         // complete, cited KB procedure. Escalate only when the draft is incomplete
         // or the missing account state is required to answer the question.
-        const markerRequiresHandoff = requestedHandoff && (failedRequiredRead || hasAccountBlockerCue(prompt));
-        handoff ||= !acceptable || markerRequiresHandoff || (failedRequiredRead && !fitsHandoff);
+        const failedEssentialRead = failedRequiredRead && essentialAccountState;
+        const markerRequiresHandoff = requestedHandoff && (failedEssentialRead || hasAccountBlockerCue(prompt));
+        handoff ||= !acceptable || markerRequiresHandoff || (failedEssentialRead && !fitsHandoff);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {

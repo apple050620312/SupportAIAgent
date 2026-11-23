@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
@@ -80,6 +80,35 @@ describe("Vercel read-only agent", () => {
 
   it.each(["Check the result.", ""]) ("rejects drafts without enough actionable content: %s", draft => {
     expect(answerCompletenessCheck(draft, "status", [{ excerpt: "Check the result.", source: "synthetic/a.md", startLine: 1, endLine: 1 }] as never)).toBe(false);
+  });
+
+  it("delivers an actionable draft that reflects only one of many admitted passages", async () => {
+    const evidence = Array.from({ length: 26 }, (_, index) => ({
+      excerpt: `Documented step ${index + 1}: check the setting and continue.`,
+      articleRef: `kb:${"a".repeat(64)}`, title: "Connection", heading: "DNS",
+      source: "debug/connection.md", startLine: index + 1, endLine: index + 1
+    }));
+    const draft = `${evidence[0]!.excerpt} [debug/connection.md:1-1] Check the result and retry.`;
+    const { root, harness, request, signal } = await setup({
+      search: () => Promise.resolve({ trust: "reference_only", matches: evidence.slice(0, 8) }),
+      read: () => Promise.resolve(null)
+    });
+    const prompt = "DNS connection";
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: prompt }), mockText(draft)] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ reply: draft, answerComplete: true, contentCoverage: false });
+    expect(answerCompletenessCheck(draft, prompt, evidence)).toBe(true);
+    expect(contentCoverageCheck(draft, prompt, evidence)).toBe(false);
+  });
+
+  it("accepts a draft reflecting all distinct admitted passages", () => {
+    const evidence = Array.from({ length: 10 }, (_, index) => ({
+      excerpt: `Documented step ${index + 1}: check the setting and continue.`,
+      source: "synthetic/procedure.md", startLine: index + 1, endLine: index + 1
+    }));
+    const draft = evidence.map((entry, index) => `${entry.excerpt} [synthetic/procedure.md:${index + 1}-${index + 1}]`).join(" ") + " Check the result and retry.";
+    expect(answerCompletenessCheck(draft, "procedure", evidence as never)).toBe(true);
+    expect(contentCoverageCheck(draft, "procedure", evidence as never)).toBe(true);
   });
 
   it("exposes only four matrix T0 reads and cites the exact retrieved KB passage", async () => {
@@ -185,6 +214,51 @@ describe("Vercel read-only agent", () => {
     expect(search).toHaveBeenCalled();
   });
 
+  it("admits focused reinstall evidence for the GS-056 data deletion wording", async () => {
+    const prompt = "我剛剛把資料全刪了 會影響嗎";
+    const settings = {
+      articleRef: `kb:${"a".repeat(64)}`, source: "panel/common/settings.md",
+      title: "設定", heading: "重新安裝伺服器", startLine: 10, endLine: 12,
+      excerpt: "請先檢查備份，再開啟設定頁面確認重新安裝的選項。"
+    };
+    const search = vi.fn(({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const, matches: query.includes("reinstall server settings") ? [settings] : []
+    }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "資料" }),
+      mockText(`${settings.excerpt} [panel/common/settings.md:10-12]`)
+    ] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 });
+    expect(search.mock.calls.find(([input]) => input.query.includes("reinstall server settings"))?.[0]).toMatchObject({ limit: 3 });
+    expect(result.admittedEvidence).toContainEqual({ source: settings.source, startLine: 10, endLine: 12 });
+  });
+
+  it("keeps broad-article passages from the primary search without their focused symptoms", async () => {
+    const matches = ([
+      ["panel/common/settings.md", "General settings passage."],
+      ["store/discord.md", "Discord notification passage."],
+      ["panel/common/sftp.md", "SFTP settings passage."]
+    ] as const).map(([source, excerpt], index) => ({
+      articleRef: `kb:${String(index + 1).repeat(64)}`, source, title: source, heading: "General",
+      startLine: index + 1, endLine: index + 2, excerpt
+    }));
+    const search = vi.fn(() => Promise.resolve({ trust: "reference_only" as const, matches }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "status" }),
+      mockText(matches.map(match => `${match.excerpt} [${match.source}:${match.startLine}-${match.endLine}]`).join(" ") + " Check the result.")
+    ] });
+    const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
+    const result = await demoRunner(harness, root, model, undefined, relevance).run(request, signal);
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 });
+    expect(result.admittedEvidence).toEqual(expect.arrayContaining(matches.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }))));
+  });
+
+
   describe("citation gate", () => {
     const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
     const first = "[synthetic/mod.md:101-183]";
@@ -229,12 +303,12 @@ describe("Vercel read-only agent", () => {
       });
     });
 
-    async function runDraft(draft: string, statusExcerpt = other, prompt = "status") {
+    async function runDraft(draft: string, statusExcerpt = other, prompt = "status", additionalEvidence: (typeof velocity)[] = []) {
       const { root, harness, request, signal } = await setup({
         search: () => Promise.resolve({ trust: "reference_only", matches: [
           { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
           { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt },
-          velocity
+          velocity, ...additionalEvidence
         ] }),
         read: () => Promise.resolve(null)
       });
@@ -313,20 +387,109 @@ describe("Vercel read-only agent", () => {
       expect(result.reply).toContain(other);
     });
 
+    it("adds the admitted citation to a standalone exact quote", async () => {
+      const draft = long.replaceAll("\n", "\r\n");
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({
+        reply: `${draft} ${first}`,
+        citationGate: { status: "passed", matched: [first], failures: [] },
+        citationGateRepair: {
+          attempted: true, repaired: true,
+          before: { status: "failed", matched: [], failures: [{ citation: first, reason: "missing_citation" }] },
+          after: { status: "passed", matched: [first], failures: [] }
+        }
+      });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
+    it("leaves missing citations unrepaired when an unknown citation also blocks delivery", async () => {
+      const unknown = "[invented.md:3-5]";
+      const { result, state } = await runDraft(`${long} ${first}\n\n${other}\n\nCheck the dashboard. ${unknown}`);
+      expect(result).toMatchObject({
+        citationGate: {
+          status: "failed", matched: [first],
+          failures: [{ citation: unknown, reason: "unknown_citation" }, { citation: second, reason: "missing_citation" }]
+        },
+        citationGateRepair: { attempted: false, repaired: false, before: null, after: null }
+      });
+      expect(state).toBe("HUMAN_NEEDED");
+    });
+
+    it("repairs three GS-108 startup quotes alongside a grounded nojar quote and wrong lines", async () => {
+      const nojar = {
+        articleRef: `kb:${"1".repeat(64)}`, source: "debug/nojar.md",
+        title: "Missing JAR", heading: "Check the JAR", startLine: 31, endLine: 38,
+        excerpt: "Open the file manager and check the exact name of the server JAR."
+      };
+      const startup = ["Select the runtime.", "Enter the JAR filename.", "Restart the server and check the console."].map((action, index) => ({
+        articleRef: `kb:${"2".repeat(64)}`, source: "panel/config/startup.md", title: "Startup",
+        heading: `Step ${index + 1}`, startLine: 10 + index * 4, endLine: 13 + index * 4,
+        excerpt: `## Step ${index + 1}\n${action}`
+      }));
+      const labels = startup.map(match => `[${match.source}:${match.startLine}-${match.endLine}]`);
+      const grounded = "[debug/nojar.md:31-38]";
+      const wrong = { citation: "[panel/config/startup.md:10-25]", reason: "wrong_lines" };
+      const prefix = `${nojar.excerpt} ${grounded}\n\nCheck the startup settings. ${wrong.citation}`;
+      const draft = [prefix, ...startup.map(match => match.excerpt)].join("\n\n");
+      const { result, state } = await runDraft(draft, other, "How do I fix the JAR filename?", [nojar, ...startup]);
+      const passed = { status: "passed", matched: [grounded, ...labels], failures: [wrong] };
+      expect(result).toMatchObject({
+        reply: [prefix, ...startup.map((match, index) => `${match.excerpt} ${labels[index]}`)].join("\n\n"),
+        citationGate: passed,
+        citationGateRepair: {
+          attempted: true, repaired: true,
+          before: { status: "failed", matched: [grounded] },
+          after: passed
+        }
+      });
+      const failures = result.citationGateRepair.before?.failures ?? [];
+      expect(failures).toHaveLength(4);
+      expect(failures).toContainEqual(wrong);
+      for (const citation of labels) expect(failures).toContainEqual({ citation, reason: "missing_citation" });
+      expect(state).toBe("AI_ACTIVE");
+    });
+
     it.each([
-      ["wrong_lines", `${wrapQuote(other)} [synthetic/status.md:3-6]`, "[synthetic/status.md:3-6]"],
-      ["missing_citation", other, second],
       ["unknown_citation", `${wrapQuote(other)} [invented.md:3-5]`, "[invented.md:3-5]"],
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
       const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
-      const expectedStatus = reason === "unknown_citation" || reason === "wrong_lines" || reason === "missing_citation" ? "failed" : "passed";
+      const expectedStatus = reason === "excerpt_mismatch" ? "passed" : "failed";
       expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
       expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
       if (expectedStatus === "failed") {
         expect(result.reply).not.toContain(first);
         expect(result.reply).toContain("I've handed this to support staff.");
       }
+    });
+
+    const wrongLines = "[synthetic/status.md:3-6]";
+    const wrongLinesTail = `The panel shows the current server state. ${wrongLines}`;
+
+    it.each([
+      ["GS-084 direct delivery", "status", "", "AI_ACTIVE", ""],
+      ["handoff with an account blocker", "My panel is locked", "\nSTAFF_HANDOFF", "HUMAN_NEEDED", "\n\nI've handed this to support staff."]
+    ])("retains a grounded draft with wrong lines for %s", async (_scenario, prompt, marker, expectedState, suffix) => {
+      const draft = `${long} ${first}\n\n${wrongLinesTail}`;
+      const { result, state } = await runDraft(draft + marker, other, prompt);
+      expect(result).toMatchObject({
+        reply: draft + suffix, answerComplete: true,
+        citationGate: { status: "passed", grounded: true, matched: [first], failures: [{ citation: wrongLines, reason: "wrong_lines" }] }
+      });
+      expect(state).toBe(expectedState);
+    });
+
+    it.each([
+      ["wrong_lines", wrongLinesTail, wrongLines],
+      ["truncated", `${long.split("\n").slice(0, 60).join("\n")} … ${first}`, first],
+      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
+    ])("hands off a draft whose only citation has %s", async (reason, draft, citation) => {
+      const { result, state } = await runDraft(draft);
+      expect(result).toMatchObject({
+        reply: "I don't know; I don't have enough verified information. I've handed this to support staff.",
+        citationGate: { status: "failed", grounded: false, matched: [], failures: [{ citation, reason }] }
+      });
+      expect(state).toBe("HUMAN_NEEDED");
     });
 
     it("passes a repeated citation when one occurrence has an exact excerpt", async () => {
@@ -407,7 +570,7 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls).toHaveLength(2);
   });
 
-  it.each([DEMO_ANSWER.slice(0, DEMO_ANSWER.indexOf(" [")), "Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
+  it.each(["Query status and verify the result with the customer.", "Everything is repaired.", "Everything is repaired. [invented.md:1-2]", DEMO_ANSWER.replace("1-2", "2-3")])("rejects a missing or fabricated citation: %s", async (answer) => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(answer)] });
     expect((await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run(request, signal)).reply).toContain("I don't know");
@@ -608,11 +771,25 @@ describe("Vercel read-only agent", () => {
       .run({ ...request, prompt: "My server status after a power error" }, signal);
     expect(JSON.stringify(model.doGenerateCalls[1]?.prompt)).toContain('"unavailable":true');
     expect(result).toMatchObject({
-      reply: DEMO_ANSWER + (marker ? "\n\nI've handed this to support staff." : ""),
+      reply: DEMO_ANSWER,
       answerComplete: true, citationGate: { status: "passed" },
-      handoffMarkerPresent: marker, handoffMarkerOverridden: false
+      handoffMarkerPresent: marker, handoffMarkerOverridden: marker
     });
-    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe(marker ? "HUMAN_NEEDED" : "AI_ACTIVE");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
+  });
+
+  it("retains a marker when an essential account-state read fails", async () => {
+    const { root, harness, request, signal } = await setup(undefined, {
+      invoiceRef: "synthetic-invoice", invoices: { find: () => Promise.resolve(null) }, logs: { read: () => Promise.reject(new Error("logs unavailable")) }
+    });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("get_invoice"), mockCall("search_support_knowledge", { query: "invoice status" }),
+      mockText(`${DEMO_ANSWER}\nSTAFF_HANDOFF`)
+    ] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt: "What is my invoice status?" }, signal);
+    expect(result).toMatchObject({ handoffMarkerPresent: true, handoffMarkerOverridden: false });
+    expect(result.reply).toContain("I've handed this to support staff.");
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
   it("forces status and log reads on a reported power error", async () => {

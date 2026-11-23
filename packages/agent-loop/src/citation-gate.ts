@@ -21,11 +21,13 @@ export type CitationGate = {
   claimSupport?: boolean;
 };
 
-export function hasBlockingCitationFailure(gate: Pick<CitationGate, "failures">): boolean {
-  return gate.failures.some(failure =>
-    failure.reason === "unknown_citation" || failure.reason === "wrong_lines"
-    || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
-  );
+export function hasBlockingCitationFailure(gate: Pick<CitationGate, "matched" | "failures">): boolean {
+  return gate.failures.some(failure => isBlockingCitationFailure(failure, gate.matched.length > 0));
+}
+
+function isBlockingCitationFailure(failure: CitationFailure, grounded: boolean): boolean {
+  return failure.reason === "unknown_citation" || (failure.reason === "wrong_lines" && !grounded)
+    || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence";
 }
 
 const citationPattern = /\[([^[\]\r\n]+):\d+-\d+\]/g;
@@ -56,6 +58,13 @@ function quoteFailure(before: string, excerpt: string): CitationFailure["reason"
 }
 
 export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scrub: (text: string) => string): CitationGate {
+  return inspectCitationGate(rawDraft, evidence, scrub).gate;
+}
+
+export function inspectCitationGate(rawDraft: string, evidence: Passage[], scrub: (text: string) => string): {
+  gate: CitationGate;
+  missingCitationDraft: string | null;
+} {
   const draft = normalizeLineEndings(rawDraft);
   const matched = new Set<string>();
   const failures: CitationFailure[] = [];
@@ -83,7 +92,9 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
 
   // An unused retrieved passage is allowed. A standalone exact quote in the
   // draft needs its own citation unless it is part of a larger exact quote.
+  const insertions = new Map<number, string>();
   for (const [label, excerpt] of passages) {
+    let missing = false;
     let start = draft.indexOf(excerpt);
     while (start >= 0) {
       const end = start + excerpt.length;
@@ -94,20 +105,48 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
       const insideQuote = quotes.some(quote => start >= quote.start && end <= quote.index);
       const followedByCitation = tokens.some(token => token.index >= end && /^\s+$/.test(draft.slice(end, token.index)));
       if (standalone && !insideQuote && !followedByCitation) {
-        failures.push({ citation: scrub(label), reason: "missing_citation" });
-        break;
+        missing = true;
+        // Identical excerpts may have multiple labels. Any admitted label grounds the quote.
+        if (!insertions.has(end)) insertions.set(end, label);
       }
       start = draft.indexOf(excerpt, end);
     }
+    if (missing) failures.push({ citation: scrub(label), reason: "missing_citation" });
   }
 
   if (!matched.size && !failures.length) {
     failures.push({ citation: null, reason: passages.size ? "missing_citation" : "no_admitted_evidence" });
   }
-  // Pass when at least one matched pair grounds the draft and every citation is admitted.
-  // Repeat quote mismatches remain diagnostics, while unknown and wrong-line citations block.
-  const status = matched.size > 0 && !hasBlockingCitationFailure({ failures }) ? "passed" : "failed";
+  const gate = { matched: [...matched], failures };
+  const grounded = matched.size > 0;
+  // Wrong lines and quote mismatches remain diagnostics when a matched pair grounds the draft.
+  const status = grounded && !hasBlockingCitationFailure(gate) ? "passed" : "failed";
   const firstSentence = draft.split(/[.!?。！？]/u)[0] ?? "";
-  const claimSupport = matched.size > 0 && firstSentence.length >= 12;
-  return { status, grounded: matched.size > 0, matched: [...matched], failures, claimSupport };
+  const claimSupport = grounded && firstSentence.length >= 12;
+  const canAppend = status === "failed" && insertions.size > 0 && failures.every(failure =>
+    failure.reason === "missing_citation" || !isBlockingCitationFailure(failure, grounded)
+  );
+  return {
+    gate: { ...gate, status, grounded, claimSupport },
+    missingCitationDraft: canAppend ? appendCitations(rawDraft, insertions) : null
+  };
+}
+
+function appendCitations(rawDraft: string, insertions: Map<number, string>): string {
+  const lineEndings = rawDraft.matchAll(/\r\n/g);
+  let lineEnding = lineEndings.next();
+  let extra = 0;
+  let cursor = 0;
+  let result = "";
+  for (const [end, label] of [...insertions].sort(([a], [b]) => a - b)) {
+    // Translate offsets back to the original draft to preserve its line endings.
+    while (!lineEnding.done && lineEnding.value.index - extra < end) {
+      extra++;
+      lineEnding = lineEndings.next();
+    }
+    const rawEnd = end + extra;
+    result += rawDraft.slice(cursor, rawEnd) + " " + label;
+    cursor = rawEnd;
+  }
+  return result + rawDraft.slice(cursor);
 }
