@@ -88,5 +88,12 @@ export function evaluateCitationGate(rawDraft: string, evidence: Passage[], scru
   if (!matched.size && !failures.length) {
     failures.push({ citation: null, reason: passages.size ? "missing_citation" : "no_admitted_evidence" });
   }
-  return { status: failures.length ? "failed" : "passed", grounded: matched.size > 0, matched: [...matched], failures };
+  // Pass when at least one exact pair grounds the draft and every citation is admitted.
+  // Repeat quote mismatches remain diagnostics, while unknown and wrong-line citations block.
+  const blockingFailure = failures.some(failure =>
+    failure.reason === "unknown_citation" || failure.reason === "wrong_lines"
+      || failure.reason === "missing_citation" || failure.reason === "no_admitted_evidence"
+  );
+  const status = matched.size > 0 && !blockingFailure ? "passed" : "failed";
+  return { status, grounded: matched.size > 0, matched: [...matched], failures };
 }

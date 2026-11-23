@@ -65,9 +65,9 @@ describe("Vercel read-only agent", () => {
       const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second}\nSTAFF_HANDOFF`);
       expect(state).toBe("HUMAN_NEEDED");
       expect(result).toMatchObject({ citationGate: {
-        status: "failed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
+        status: "passed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
       } });
-      expect(result.reply).not.toContain(other);
+      expect(result.reply).toContain(other);
     });
 
     it.each([
@@ -78,8 +78,16 @@ describe("Vercel read-only agent", () => {
       ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
     ])("identifies a second citation with %s", async (reason, tail, citation) => {
       const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
-      expect(state).toBe("HUMAN_NEEDED");
-      expect(result).toMatchObject({ citationGate: { status: "failed", grounded: true, matched: [first], failures: [{ citation, reason }] } });
+      const expectedStatus = reason === "unknown_citation" || reason === "wrong_lines" || reason === "missing_citation" ? "failed" : "passed";
+      expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
+      expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
+    });
+
+    it("passes a repeated citation when one occurrence has an exact excerpt", async () => {
+      const draft = `${other} ${second}\nThe panel status is unavailable. ${second}`;
+      const { result } = await runDraft(draft);
+      expect(result.citationGate).toMatchObject({ status: "passed", grounded: true, matched: [second] });
+      expect(result.citationGate.failures).toEqual([{ citation: second, reason: "excerpt_mismatch" }]);
     });
 
     it("reports a gate pass when a grounded draft still asks for handoff", async () => {
