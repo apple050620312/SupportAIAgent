@@ -20,7 +20,7 @@ describe('golden measurement', () => {
 describe('semantic measurement', () => {
   it('credits a judged paraphrase while retaining the strict lexical diagnostic', async () => {
     const answer = 'a paraphrase';
-    const semantic = await scoreSemantic(item, { answer, handedOff: false, error: false }, async () => ({
+    const semantic = await scoreSemantic(item, { answer, handedOff: false, error: false }, () => Promise.resolve({
       verdict: 'correct', points: ['covered', 'covered'], reason: 'Both points are paraphrased.',
     }));
     expect(semantic.verdict).toBe('correct');
@@ -29,7 +29,7 @@ describe('semantic measurement', () => {
 
   it('enforces the handoff outcome and reports unavailable judgments separately', async () => {
     const attempt = { answer: 'answer', handedOff: false, error: false };
-    const unavailable = vi.fn(async () => { throw new Error('provider unavailable'); });
+    const unavailable = vi.fn(() => Promise.reject(new Error('provider unavailable')));
     const failed = await scoreSemantic(item, attempt, unavailable);
     expect(unavailable).toHaveBeenCalledTimes(3);
     const neededHandoff = { ...item, outcome: 'handoff' } as const;

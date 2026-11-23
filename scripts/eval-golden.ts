@@ -23,7 +23,7 @@ if (!Array.isArray(parsed) || !parsed.length || !parsed.every((item: GoldenItem)
 const items = (parsed as GoldenItem[]).slice(0, limit);
 const datasetSha256 = createHash('sha256').update(source).digest('hex');
 const manifestSource = await readFile(process.env.GOLDEN_ANSWERABILITY_PATH ?? new URL('./lib/golden-answerability.json', import.meta.url), 'utf8');
-const answerability = classifyGolden(JSON.parse(manifestSource), datasetSha256, parsed.length);
+const answerability = classifyGolden(JSON.parse(manifestSource) as Parameters<typeof classifyGolden>[0], datasetSha256, parsed.length);
 const outputDir = resolve('eval-results');
 await mkdir(outputDir, { recursive: true, mode: 0o700 });
 const output = join(outputDir, `golden-${new Date().toISOString().replace(/[:.]/g, '-')}-${items.length}.json`);
