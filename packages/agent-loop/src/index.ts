@@ -45,6 +45,7 @@ const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 
 const REINSTALL_SOURCE = "panel/common/settings.md";
 const REINSTALL_SEARCH = { query: "重新安裝伺服器 設定 重裝 世界重製 reinstall server settings", limit: 3 };
 const SUPPORT_FLOW_SOURCE = "store/discord.md";
+const DUPLICATE_TICKETS_SOURCE = "store/services/duplicate-tickets.md";
 const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
 const SFTP_SOURCE = "panel/common/sftp.md";
 const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
@@ -67,7 +68,7 @@ function hasReinstallSymptom(prompt: string): boolean {
 
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
-  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|一直|持續|重複).{0,12}(?:斷線|掉線|disconnect)|(?:重裝|重新安裝|reinstall).{0,24}(?:後|之後|after).{0,24}(?:斷線|掉線|disconnect)|(?:等了|等待|等候).{0,12}(?:幾天|多天|數天|days?)/iu.test(text);
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
 }
 
 function hasConnectionSymptom(prompt: string): boolean {
@@ -138,7 +139,9 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt) &&
       !(/重新安裝|reinstall/iu.test(text) && /重啟|重新啟動|再開機|restart/iu.test(text) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(text))) return false;
   if (sources.has(SUPPORT_FLOW_SOURCE) && hasSupportFlowSymptom(prompt) &&
-      !(/售後|after[- ]sales/iu.test(text) && /客服單|ticket/iu.test(text) && /重複|duplicate/iu.test(text))) return false;
+      !(/售後|after[- ]sales/iu.test(text) && /客服單|ticket/iu.test(text))) return false;
+  if (sources.has(DUPLICATE_TICKETS_SOURCE) && hasSupportFlowSymptom(prompt) &&
+      !/重複|重复|duplicate/iu.test(text)) return false;
   if (sources.has("panel/start-server.md") && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
       !(/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(text))) return false;
   return true;
@@ -165,11 +168,11 @@ function repairRequiredTaskDraft(answer: string, prompt: string, evidence: Knowl
     repaired += `\n\n${text} ${citation(match)}`;
   };
   const reinstall = evidence.find(match => match.source === REINSTALL_SOURCE);
-  if (reinstall && hasReinstallSymptom(prompt) &&
-      !(/重新安裝|reinstall/iu.test(normalized) && /重啟|重新啟動|再開機|restart/iu.test(normalized) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized))) {
-    if (!/重新安裝|reinstall/iu.test(normalized)) append("請在設定頁面選擇「重新安裝伺服器」進行重新安裝。", reinstall);
-    if (!/重啟|重新啟動|再開機|restart/iu.test(normalized)) append("完成後請重新啟動伺服器。", reinstall);
-    if (!/世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized)) append("若刪除全部伺服器資料，代表世界已被重置，會建立全新的世界。", reinstall);
+  if (reinstall && hasReinstallSymptom(prompt)) {
+    const positiveReset = /(?:重新安裝|重新安装|reinstall).{0,40}(?:重啟|重新啟動|再開機|restart)/iu.test(normalized);
+    const supportsReset = /重新安裝|重新安装|reinstall/iu.test(reinstall.excerpt) && /重啟|重新啟動|再開機|restart/iu.test(reinstall.excerpt);
+    if (!positiveReset && supportsReset) append("請在設定頁面選擇「重新安裝伺服器」，完成後重新啟動伺服器。", reinstall);
+    if (!/世界.{0,16}(?:重製|重置)|reset.{0,16}world|world.{0,20}reset/iu.test(normalized) && /世界.{0,16}(?:重製|重置)|reset.{0,16}world/iu.test(reinstall.excerpt)) append("刪除全部伺服器資料會重置世界。", reinstall);
   }
   const start = evidence.find(match => match.source === "panel/start-server.md");
   if (start && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
@@ -337,6 +340,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const downgrade = focused?.matches.find(match => match.source === DOWNGRADE_SOURCE);
           const reinstall = reinstallFocused?.matches.find(match => match.source === REINSTALL_SOURCE);
           const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
+          const duplicateTickets = supportFlowFocused?.matches.find(match => match.source === DUPLICATE_TICKETS_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
           const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
@@ -352,7 +356,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          for (const focusedMatch of [downgrade, reinstall, supportFlow, sftp, connection]) {
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, duplicateTickets, sftp, connection]) {
             if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
