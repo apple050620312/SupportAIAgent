@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, hasAccountBlockerCue, retrievalConfidence, createLiveModel } from "@support-ai-agent/agent-loop";
 import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
@@ -42,6 +42,29 @@ describe("hasAccountBlockerCue", () => {
 });
 
 describe("Vercel read-only agent", () => {
+  it("keeps content coverage stable when cited policy lines are blockquoted", () => {
+    const excerpt = "Velocity can run on your host. Paper can run on your own host.";
+    const evidence = [{ excerpt, source: "practice/advanced/velocity.md", startLine: 1, endLine: 3 }] as never;
+    const clean = `${excerpt} Set the configuration and check the result. [practice/advanced/velocity.md:1-3]`;
+    const quoted = `> ${excerpt.split(" ").slice(0, 5).join(" ")}\n> ${excerpt.split(" ").slice(5).join(" ")} Set the configuration and check the result. [practice/advanced/velocity.md:1-3]`;
+    expect(answerCompletenessCheck(clean, "Velocity", evidence)).toBe(true);
+    expect(answerCompletenessCheck(quoted, "Velocity", evidence)).toBe(true);
+  });
+
+  it("requires the downgrade branch only when downgrade evidence is admitted", () => {
+    const excerpt = "Check the connection settings and retry.";
+    const downgrade = [{ excerpt, source: "practice/advanced/version-downgrade.md", startLine: 1, endLine: 12 }] as never;
+    const network = [{ excerpt, source: "debug/connection.md", startLine: 1, endLine: 4 }] as never;
+    const base = `${excerpt} Check the connection and retry. [practice/advanced/version-downgrade.md:1-12]`;
+    expect(answerCompletenessCheck(base, "connection", downgrade)).toBe(false);
+    expect(answerCompletenessCheck(`${base} If downgraded, make a backup and use a new world.`, "connection", downgrade)).toBe(true);
+    expect(answerCompletenessCheck(`${excerpt} Check the connection and retry.`, "connection", network)).toBe(true);
+  });
+
+  it.each(["Check the result.", ""]) ("rejects drafts without enough actionable content: %s", draft => {
+    expect(answerCompletenessCheck(draft, "status", [{ excerpt: "Check the result.", source: "synthetic/a.md", startLine: 1, endLine: 1 }] as never)).toBe(false);
+  });
+
   it("exposes only four matrix T0 reads and cites the exact retrieved KB passage", async () => {
     const { root, harness, request, signal } = await setup();
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });

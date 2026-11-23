@@ -84,13 +84,28 @@ export function retrievalConfidence(query: string, passage: string): number {
 }
 
 /** Rejects drafts that cite evidence but never state an actionable answer. */
+function normalizeCoverageText(value: string): string {
+  return value
+    .split("\n")
+    .map(line => line.replace(/^[ \t]*>[ \t]?/, ""))
+    .join("\n")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+/** Checks content coverage independently from citation formatting. */
 export function answerCompletenessCheck(answer: string, _prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
   const text = answer.trim();
   if (text.length < 80 || !evidence.length) return false;
-  const answerText = text.normalize("NFKC").toLowerCase();
+  const answerText = normalizeCoverageText(text);
   const actionable = /(?:click|select|enter|set|open|check|query|confirm|retry|install|restart|use|connect|設定|選擇|輸入|開啟|檢查|重試|安裝|重啟|連線|請先|需要)/iu.test(text);
-  const citedEvidence = evidence.some(match => answerText.includes(match.excerpt.normalize("NFKC").toLowerCase().slice(0, 24)));
-  return actionable && citedEvidence;
+  const citedEvidence = evidence.some(match => answerText.includes(normalizeCoverageText(match.excerpt).slice(0, 24)));
+  const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
+  const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
+  const downgradeCovered = !admittedDowngrade || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
+  return actionable && citedEvidence && downgradeCovered;
 }
 /** Fetch nearby sections from an admitted article so a procedure cannot lose its next step. */
 export async function coRetrieveCompanions(
@@ -128,7 +143,7 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; citationGateRepair: CitationGateRepair; answerComplete: boolean | null; handoffMarkerPresent: boolean; handoffMarkerOverridden: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; citationGateRepair: CitationGateRepair; answerComplete: boolean | null; contentCoverage: boolean | null; handoffMarkerPresent: boolean; handoffMarkerOverridden: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
     const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
@@ -296,6 +311,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       let reply = "";
       let supportedPartial = "";
       let answerComplete: boolean | null = null;
+      let contentCoverage: boolean | null = null;
       let handoffMarkerPresent = false;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       let citationGateRepair: CitationGateRepair = { attempted: false, repaired: false, before: null, after: null };
@@ -327,7 +343,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             }
           }
         }
-        answerComplete = answerCompletenessCheck(reply, prompt, evidence);
+        contentCoverage = answerCompletenessCheck(reply, prompt, evidence);
+        answerComplete = contentCoverage;
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
         const fitsHandoff = reply.length <= 5800;
         if (!invalidTool && fitsHandoff && citationGate.matched.length && !hasBlockingCitationFailure(citationGate)) {
@@ -345,7 +362,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {
         await session.assertCurrent();
-        return { reply: checkpoint, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, handoffMarkerOverridden: false, admittedEvidence };
+        return { reply: checkpoint, citationGate, citationGateRepair, answerComplete, contentCoverage, handoffMarkerPresent, handoffMarkerOverridden: false, admittedEvidence };
       }
       if (handoff) {
         // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
@@ -364,7 +381,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       signal.throwIfAborted();
       if (reply.length > 6000) throw new Error("Agent reply too large");
       await persistReply(reply);
-      return { reply, citationGate, citationGateRepair, answerComplete, handoffMarkerPresent, handoffMarkerOverridden: handoffMarkerPresent && !handoff, admittedEvidence };
+      return { reply, citationGate, citationGateRepair, answerComplete, contentCoverage, handoffMarkerPresent, handoffMarkerOverridden: handoffMarkerPresent && !handoff, admittedEvidence };
     });
   } };
 }
