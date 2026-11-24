@@ -21,6 +21,7 @@ export interface SectionEdit {
 export function eligibleArticlePath(source: string): boolean {
   return source.length <= 512 && /\.md$/iu.test(source) && !source.includes("\\") && ![...source].some(isControl) &&
     source.split("/").every(part => part && !part.startsWith(".") &&
+      !/^GS-\d+\b/iu.test(part) &&
       !/(?:^|[-_])(?:evals?|golden(?:[-_]?set)?|transcripts?|ticket[-_]?(?:exports?|repl(?:y|ies)))(?:[-_.]|$)/iu.test(part));
 }
 
