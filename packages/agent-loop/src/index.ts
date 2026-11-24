@@ -74,6 +74,9 @@ function hasReinstallSymptom(prompt: string): boolean {
 
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
+  const installer = /(?:模[組组]包.{0,12}安[裝装]|安[裝装]器|modpack installer)/iu.test(text);
+  const incompleteDeployment = /(?:未完成.{0,20}部署|部署.{0,12}(?:失[敗败]|未完成)|(?:failed|incomplete).{0,20}deploy)/iu.test(text);
+  if (installer && incompleteDeployment) return true;
   return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
 }
 

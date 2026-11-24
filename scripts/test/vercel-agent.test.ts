@@ -304,6 +304,26 @@ describe("Vercel read-only agent", () => {
     expect(result.admittedEvidence).toContainEqual({ source: settings.source, startLine: 10, endLine: 12 });
   });
 
+  it("admits both routing policies for an installer that failed to deploy a modpack", async () => {
+    const matches = ["store/discord.md", "store/services/duplicate-tickets.md"].map((source, index) => ({
+      articleRef: `kb:${String(index + 1).repeat(64)}`, source, title: source, heading: "Support",
+      startLine: 1, endLine: 4, excerpt: "請使用售後服務客服單並等待技術人員回覆。"
+    }));
+    const search = vi.fn(({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const,
+      matches: query.includes("綁定 Discord") ? matches.slice(0, 1)
+        : query.includes("重複開客服單") ? matches.slice(1) : []
+    }));
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      mockCall("search_support_knowledge", { query: "模組包" }), mockText("STAFF_HANDOFF")
+    ] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
+    const prompt = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
+    const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
+    expect(result.admittedEvidence.map(match => match.source)).toEqual(expect.arrayContaining(matches.map(match => match.source)));
+  });
+
   it("keeps broad-article passages from the primary search without their focused symptoms", async () => {
     const matches = ([
       ["panel/common/settings.md", "General settings passage."],
