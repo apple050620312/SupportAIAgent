@@ -1,19 +1,20 @@
 # Golden set docs rerun 21
 
-Rerun 21 applied the GS-062 route predicate fix on branch `feat/rerun21-fixes` at commit `9acb12a`. The fix accepts the scoped policy wording `一般支持工单不处理产品售后问题` and its Traditional Chinese equivalent while retaining the existing route, no-speedup, dual-source, and direction checks.
+The clean comparison uses the 13 docs items, the same semantic judge as rerun 20, and a 60-second answer deadline per attempt. Both answering models use sub2api, with OpenAI `text-embedding-3-small` for retrieval. Raw checkpoints stay in the ignored `eval-results/` directory.
 
-The required live rerun could not start. The supplied clean index has digest `6b7b4b6d68e2e0e19f9d6977f6e9c3a6fd23dde28cba54e4283895edfae7bec5`, but the current checkout's 73-file knowledge corpus hashes differently from the corpus used to build that index. The evaluator correctly rejected it as stale before making model calls. The requested fix-4 index digest is `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a`. No rerun-21 outcome counts are claimed.
+| Corpus | Digest |
+|---|---|
+| Clean, 72 articles and 570 passages | `6b7b4b6d68e2e0e19f9d6977f6e9c3a6fd23dde28cba54e4283895edfae7bec5` |
+| Fix 4, expected | `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a` |
 
-## Verification
+The prior finish attempt rebuilt the clean index. On restart, the working settings article matched `clean-settings.md`, the backup `fix4-settings.md` still contained the reset sentence, and the harness validated the rebuilt index against the current corpus. The harness accepted `--resume eval-results/golden-2026-11-24T05-23-38-224Z-13.json` with nine existing rows. The remaining rows run at `d89aeac`.
 
-The GS-062 predicate replay controls pass. Both positive forms pass. Existing-ticket-only guidance, reversed exclusions, unrelated negation, missing no-speedup advice, and missing policy-source admission fail as required. The full repository checks pass with build, typecheck, lint, 418 tests, and 76 mock evaluation checks.
+## Findings from the retained checkpoint
 
-## Rerun and comparison status
+GS-062 delivered correctly on the first attempt. Both policy articles were admitted, completeness and citations passed, all three points were covered, and the staff marker was overridden. The previous rerun's full draft handed off after failing the route distinction check despite covering all three points. The replay controls accept both saved positive drafts and reject existing-ticket-only guidance, reversed exclusions, interchangeable routes, unrelated negation, and missing policy evidence or no-speedup advice.
 
-The 13-item `gpt-6.1-sol` clean run, the Luna comparison arm, GS-140 live admission check, GS-166 live fidelity check, durability samples, and targeted GS-056 fix-4 run remain pending because the compatible clean index is unavailable. Rerun 20 remains the comparison baseline at 6 correct, 3 partial, 3 wrong, and 1 unscored. Its Luna timeout arm delivered partial GS-018 and GS-030 samples, while the standard model delivered a partial GS-030 sample with an additional required point. Those observations do not justify changing the default model.
+GS-049 moved from correct in reruns 19 and 20 to wrong. The draft still advised keeping a backup and explained that end-of-cycle cancellation prevents another invoice. It added retention claims that conflict with the staff resolution. The retention ruling is still open, so the verdict describes agreement with the evaluation reference.
 
-GS-140 still requires a live run admitting both policy articles and explicitly advising the customer to wait for technical staff. GS-166 still requires citation-fidelity replay and owner decisions for destinations and thresholds. No owner rulings were inferred.
+GS-094 moved from correct in all three rerun 20 clean samples to wrong with handoff. Completeness passed, but citations failed with three excerpt mismatches and one line-range mismatch. The handoff draft judge also found that the reinstall instruction was conditional on Forge instead of following the version change directly.
 
-## Durability and attribution
-
-No fresh clean samples were collected. The GS-062 improvement is attributable to the predicate change in replay only. It has not been validated as a live delivery change until a clean-index run completes.
+The live comparison, durability samples, and fix-4 retest are in progress.
