@@ -232,7 +232,7 @@ if (blockers.length) {
           if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
           return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
         });
-        const runner = createVercelTicketRunner({ model, core, verifyDraft, deploymentPolicyFocus, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
+        const runner = createVercelTicketRunner({ model, core, verifyDraft, deploymentPolicyFocus, prefetchSemanticEvidence: true, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
           const score = await semanticSearch.similarity(query, passage);
           semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
           return score;

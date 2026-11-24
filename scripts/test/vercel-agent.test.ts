@@ -411,6 +411,17 @@ describe("Vercel read-only agent", () => {
     expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
   });
 
+  it("uses one drafting call after prefetched knowledge and required own-server status", async () => {
+    const { root, harness, request, signal } = await setup();
+    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_ANSWER)] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.7) };
+    const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
+    expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
+  });
+
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice",

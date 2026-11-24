@@ -254,6 +254,7 @@ export interface AgentRunnerOptions {
   model: LanguageModel;
   verifyDraft: DraftVerifier;
   deploymentPolicyFocus?: boolean;
+  prefetchSemanticEvidence?: boolean;
   draftOnly?: boolean;
   /** Observe spans as they are admitted, including before an eventual timeout. */
   onAdmittedEvidence?: (spans: readonly { source: string; startLine: number; endLine: number }[]) => void;
@@ -457,24 +458,6 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           return result;
         })
       };
-      const agent = new ToolLoopAgent({
-        model: options.model, instructions: SYSTEM_PROMPT, tools, temperature: 0.2, maxRetries: 0,
-        providerOptions: { openai: { store: false } },
-        toolCallConcurrency: 1,
-        prepareStep: ({ stepNumber }) => {
-          const toolName = requiredReads.find(name => !attempted.has(name));
-          if (toolName) return { toolChoice: { type: "tool", toolName } };
-          if (!searched && requiredReads.length) return { toolChoice: { type: "tool", toolName: "search_support_knowledge" } };
-          // The semantic search always uses the original question. Repeating it
-          // cannot fill a gap, so remove it from subsequent model tool choices.
-          if (searched && options.semanticRelevance) {
-            return { activeTools: READ_ONLY_TOOLS.filter(name => name !== "search_support_knowledge" && !attempted.has(name)) };
-          }
-          if (stepNumber === 0) return { toolChoice: "required" };
-          return undefined;
-        },
-        stopWhen: [stepCountIs(10)]
-      });
       let reply = "";
       let supportedPartial = "";
       let answerComplete: boolean | null = null;
@@ -482,11 +465,49 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       let handoffMarkerPresent = false;
       let citationGate: CitationGate = { status: "not_evaluated", grounded: false, matched: [], failures: [] };
       try {
+        const prefetch = options.prefetchSemanticEvidence && options.semanticRelevance && history.length === 0;
+        let content = prompt;
+        if (prefetch) {
+          const execute = (name: ReadTool, input: unknown) => Promise.resolve<unknown>(tools[name]?.execute?.(input, {
+            toolCallId: name, messages: [], context: undefined, abortSignal: signal
+          }));
+          for (const name of requiredReads) await execute(name, {});
+          const query = prompt.slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
+          const found = await execute("search_support_knowledge", { query, limit: 8 }) as {
+            matches?: { label: string; excerpt: string; policyProvenance: string; priority?: string }[];
+          } | undefined;
+          const passages = found?.matches?.map(({ label, excerpt, policyProvenance, priority }) => ({
+            label, excerpt: clean(excerpt), policyProvenance, priority
+          })) ?? [];
+          content = JSON.stringify({ question: prompt, admittedPassages: passages, accountReads });
+          signal.throwIfAborted();
+        }
+        const agent = new ToolLoopAgent({
+          model: options.model,
+          instructions: prefetch
+            ? SYSTEM_PROMPT + "\nSupport Core has already run the knowledge search and applicable account reads for this turn. Read the question, admitted passages and tool results from the input JSON. Draft a concise customer reply using those results."
+            : SYSTEM_PROMPT,
+          tools: prefetch ? {} : tools, temperature: 0.2, maxRetries: 0,
+          providerOptions: { openai: { store: false } },
+          toolCallConcurrency: 1,
+          prepareStep: ({ stepNumber }) => {
+            if (prefetch) return undefined;
+            const toolName = requiredReads.find(name => !attempted.has(name));
+            if (toolName) return { toolChoice: { type: "tool", toolName } };
+            if (!searched && requiredReads.length) return { toolChoice: { type: "tool", toolName: "search_support_knowledge" } };
+            if (searched && options.semanticRelevance) {
+              return { activeTools: READ_ONLY_TOOLS.filter(name => name !== "search_support_knowledge" && !attempted.has(name)) };
+            }
+            if (stepNumber === 0) return { toolChoice: "required" };
+            return undefined;
+          },
+          stopWhen: [stepCountIs(10)]
+        });
         // sub2api may create Responses with store=false regardless of the requested
         // default. Keep every continuation self-contained: the OpenAI provider
         // omits item references when store is false, so no non-persisted rs_* id can
         // leak into the next tool-loop step.
-        const result = await agent.generate({ messages: [...history, { role: "user", content: prompt }], abortSignal: signal });
+        const result = await agent.generate({ messages: [...history, { role: "user", content }], abortSignal: signal });
         reply = clean(result.text).trim();
         const requestedHandoff = /(?:^|\n)STAFF_HANDOFF$/.test(reply);
         handoffMarkerPresent = requestedHandoff;
