@@ -49,6 +49,10 @@ const DUPLICATE_TICKETS_SOURCE = "store/services/duplicate-tickets.md";
 const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket Discord category", limit: 8 };
 const SFTP_SOURCE = "panel/common/sftp.md";
 const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
+const DNS_SOURCE = "debug/googledns.md";
+const ROUTE_SOURCE = "debug/automatic-route-switching.md";
+const DNS_SEARCH = { query: "Google DNS 相較於 ISP 較快取得更新 DNS 記錄 TTL 快取 Minecraft", limit: 8 };
+const ROUTE_SEARCH = { query: "線路故障時會自動切換 請稍等一下再重試連線", limit: 8 };
 const CONNECTION_SOURCE = "debug/connection.md";
 const CONNECTION_SEARCH = { query: "連線測試 無法連線 DNS WARP connection troubleshooting", limit: 3 };
 
@@ -330,7 +334,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
             return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
           };
-          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused, connectionFocused] = await Promise.all([
+          const [result, focused, reinstallFocused, supportFlowFocused, sftpFocused, connectionFocused, dnsFocused, routeFocused] = await Promise.all([
             search(searchInput),
             hasDowngradeSymptom(prompt)
               ? search(DOWNGRADE_SEARCH).catch(() => undefined)
@@ -346,6 +350,12 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
               : undefined,
             hasConnectionSymptom(prompt)
               ? search(CONNECTION_SEARCH).catch(() => undefined)
+              : undefined,
+            /DNS|線路|线路|路由|routing/iu.test(prompt)
+              ? search(DNS_SEARCH).catch(() => undefined)
+              : undefined,
+            /DNS|線路|线路|路由|routing/iu.test(prompt)
+              ? search(ROUTE_SEARCH).catch(() => undefined)
               : undefined
           ]);
           // The symptom licenses one passage from this specific article even
@@ -356,6 +366,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const duplicateTickets = supportFlowFocused?.matches.find(match => match.source === DUPLICATE_TICKETS_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
           const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
+          const dns = dnsFocused?.matches.find(match => match.source === DNS_SOURCE && /(?:較快|更新後)/u.test(match.excerpt));
+          const route = routeFocused?.matches.find(match => match.source === ROUTE_SOURCE);
           // Score against the actual customer's question, not a model-selected/injected query.
           const scored = result.matches.map((match) => ({ match, score: retrievalConfidence(prompt, `${match.title} ${match.heading} ${match.excerpt}`) }));
           // Calibration on the step-3 golden set showed 0.5 rejected every useful
@@ -369,7 +381,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
-          for (const focusedMatch of [downgrade, reinstall, supportFlow, duplicateTickets, sftp, connection]) {
+          for (const focusedMatch of [downgrade, reinstall, supportFlow, duplicateTickets, sftp, dns, route, connection]) {
             if (focusedMatch) admitted = [focusedMatch, ...admitted.filter(match => citation(match) !== citation(focusedMatch))].slice(0, 8);
           }
           // A downgrade passage is admissible only when the customer's prompt
