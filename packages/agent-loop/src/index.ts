@@ -357,10 +357,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             hasConnectionSymptom(prompt)
               ? search(CONNECTION_SEARCH).catch(() => undefined)
               : undefined,
-            /DNS|線路|线路|路由|routing/iu.test(prompt)
+            hasConnectionSymptom(prompt) || /DNS|線路|线路|路由|routing/iu.test(prompt)
               ? search(DNS_SEARCH).catch(() => undefined)
               : undefined,
-            /DNS|線路|线路|路由|routing/iu.test(prompt)
+            hasConnectionSymptom(prompt) || /DNS|線路|线路|路由|routing/iu.test(prompt)
               ? search(ROUTE_SEARCH).catch(() => undefined)
               : undefined
           ]);
