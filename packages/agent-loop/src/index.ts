@@ -246,6 +246,8 @@ export async function coRetrieveCompanions(
 export interface AgentRunnerOptions {
   model: LanguageModel;
   draftOnly?: boolean;
+  /** Observe spans as they are admitted, including before an eventual timeout. */
+  onAdmittedEvidence?: (spans: readonly { source: string; startLine: number; endLine: number }[]) => void;
   /** Host-supplied semantic relevance port; scores the original customer prompt, never model-selected text. */
   semanticRelevance?: { threshold: number; similarity(query: string, passage: KnowledgeSearchResponse["matches"][number]): Promise<number> };
 
@@ -417,6 +419,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             return retrievalConfidence(prompt, `${b.title} ${b.heading} ${b.excerpt}`) - retrievalConfidence(prompt, `${a.title} ${a.heading} ${a.excerpt}`);
           });
           admittedEvidence = admitted.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }));
+          options.onAdmittedEvidence?.(admittedEvidence);
           const unique = new Map([...evidence, ...admitted].map(match => [citation(match), match]));
           evidence = [...unique.values()];
           if (admitted[0]) await persistProgress();
