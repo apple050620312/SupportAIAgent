@@ -46,7 +46,7 @@ const REINSTALL_SOURCE = "panel/common/settings.md";
 const REINSTALL_SEARCH = { query: "重新安裝伺服器 設定 重裝 世界重製 reinstall server settings", limit: 3 };
 const SUPPORT_FLOW_SOURCE = "store/discord.md";
 const DUPLICATE_TICKETS_SOURCE = "store/services/duplicate-tickets.md";
-const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket", limit: 3 };
+const SUPPORT_FLOW_SEARCH = { query: "售後服務 客服單 重複開單 等待回覆 after-sales support ticket Discord category", limit: 8 };
 const SFTP_SOURCE = "panel/common/sftp.md";
 const SFTP_SEARCH = { query: "SFTP 上傳 大檔案 資料夾 壓縮 upload folder", limit: 3 };
 const CONNECTION_SOURCE = "debug/connection.md";
@@ -68,7 +68,7 @@ function hasReinstallSymptom(prompt: string): boolean {
 
 function hasSupportFlowSymptom(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
-  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
+  return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
 }
 
 function hasConnectionSymptom(prompt: string): boolean {
