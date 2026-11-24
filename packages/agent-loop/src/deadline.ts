@@ -1,6 +1,7 @@
 export const ANSWER_LIMIT_MS = 60_000;
 export const DELIVERY_RESERVE_MS = 3_000;
-export const REVIEW_LIMIT_MS = 12_000;
+export const REVIEW_RESERVE_MS = 9_000;
+export const REVIEW_LIMIT_MS = 24_000;
 
 export class TurnTimeout extends Error {
   constructor(readonly stage: "authorization" | "prefetch" | "draft" | "review" | "delivery") {

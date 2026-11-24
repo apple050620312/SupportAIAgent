@@ -791,7 +791,7 @@ describe("Vercel read-only agent", () => {
       } });
       const run = demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
       const draftSignal = await enteredDraft.promise;
-      await vi.advanceTimersByTimeAsync(44_099);
+      await vi.advanceTimersByTimeAsync(47_099);
       expect(draftSignal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
       expect(draftSignal?.aborted).toBe(true);
@@ -821,20 +821,20 @@ describe("Vercel read-only agent", () => {
           return mockCall("search_support_knowledge", { query: "status" });
         }
         drafting.resolve();
-        await new Promise(resolve => setTimeout(resolve, 44_000));
+        await new Promise(resolve => setTimeout(resolve, 47_000));
         return mockText(DEMO_ANSWER);
       } });
       const verifier = vi.fn<DraftVerifier>(async ({ draft, passages }) => {
         expect(draft).toBe(DEMO_ANSWER);
         reviewStarted.resolve();
-        await new Promise(resolve => setTimeout(resolve, 11_900));
+        await new Promise(resolve => setTimeout(resolve, 8_900));
         return { claimsSupported: true, complete: true, references: [passages[0]!.label] };
       });
       const run = demoRunner(harness, root, model, undefined, undefined, verifier).run(request, signal);
       await drafting.promise;
-      await vi.advanceTimersByTimeAsync(44_000);
+      await vi.advanceTimersByTimeAsync(47_000);
       await reviewStarted.promise;
-      await vi.advanceTimersByTimeAsync(11_900);
+      await vi.advanceTimersByTimeAsync(8_900);
       expect(await run).toMatchObject({ reply: DEMO_ANSWER, timedOutStage: null });
       expect(verifier).toHaveBeenCalledTimes(1);
       expect(model.doGenerateCalls).toHaveLength(2);
@@ -857,7 +857,7 @@ describe("Vercel read-only agent", () => {
       const observed = run.catch((error: unknown) => error);
       const reviewSignal = await reviewing.promise;
       if (condition === "slow") {
-        await vi.advanceTimersByTimeAsync(12_000);
+        await vi.advanceTimersByTimeAsync(24_000);
         expect(reviewSignal.aborted).toBe(true);
         expect(await observed).toMatchObject({
           timedOutStage: "review",
