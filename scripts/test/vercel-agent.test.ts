@@ -78,6 +78,17 @@ describe("first-purchase activation notice", () => {
   });
 });
 
+it("adds the qualified DNS update rationale to a cited switch-and-retry reply", () => {
+  const question = "Minecraft 連不上時該怎麼重新連線？";
+  const route = { source: "debug/automatic-route-switching.md", startLine: 1, endLine: 7, excerpt: "線路故障會自動切換，請稍等後重試。" };
+  const dns = { source: "debug/googledns.md", startLine: 1, endLine: 12, excerpt: "與部分 ISP 的預設解析器相比，Google DNS 通常較快取得更新後的 DNS 記錄，時間受 TTL 與 DNS 快取影響。" };
+  const draft = "線路故障會自動切換，請等待並重試。 [debug/automatic-route-switching.md:1-7] 改用 Google DNS。 [debug/googledns.md:1-12]";
+  const repaired = repairRequiredTaskDraft(draft, question, [route, dns] as never);
+  expect(repaired).toContain("相較於部分 ISP 的預設 DNS，Google DNS 通常較快取得更新後的 DNS 記錄，實際時間仍受 TTL 與 DNS 快取等因素影響。 [debug/googledns.md:1-12]");
+  expect(repairRequiredTaskDraft(repaired, question, [route, dns] as never)).toBe(repaired);
+  expect(repairRequiredTaskDraft(draft, question, [route] as never)).toBe(draft);
+});
+
 describe("hasAccountBlockerCue", () => {
   it.each([
     "映像欄位鎖住，我需要 Java 8", "我的帳戶被鎖定", "無法更改映像", "版本不能改",
@@ -341,6 +352,29 @@ describe("Vercel read-only agent", () => {
     const prompt = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
     expect(result.admittedEvidence.map(match => match.source)).toEqual(expect.arrayContaining(matches.map(match => match.source)));
+  });
+
+  it("admits the panel upload and SFTP procedures from the focused transfer search", async () => {
+    const sources = ["practice/install/mod.md", "panel/manage/upload.md", "panel/common/sftp.md"];
+    const excerpts = ["### 上傳模組\n遇到無法上傳的問題，可使用 SFTP。\n### 其他話題", "較小的檔案可從面板上傳。", "大檔案與資料夾使用 SFTP。"];
+    const passages = sources.map((source, index) => ({
+      source, articleRef: `kb:${String(index + 1).repeat(64)}`, title: "Upload", heading: "Transfer",
+      startLine: 1, endLine: index === 0 ? 3 : 1, excerpt: excerpts[index]!
+    }));
+    const search = ({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const, matches: query.includes("SFTP 上傳") ? passages.slice(1) : passages.slice(0, 1)
+    });
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const model = new MockLanguageModelV4({ doGenerate: mockText("若面板無法上傳模組，請改用 SFTP 重試。 [practice/install/mod.md:2-2]") });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.8) };
+    const prompt = "模組上傳失敗，有其他上傳方式嗎？";
+    const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt }, signal);
+    expect(result.admittedEvidence).toEqual(expect.arrayContaining([
+      { source: sources[0], startLine: 2, endLine: 2 },
+      { source: sources[1], startLine: 1, endLine: 1 },
+      { source: sources[2], startLine: 1, endLine: 1 }
+    ]));
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: ["[practice/install/mod.md:2-2]"] });
   });
 
   it("uses a cited wait instruction when an installer draft leaves out the technical staff reply", async () => {

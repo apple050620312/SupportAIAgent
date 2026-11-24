@@ -18,7 +18,7 @@ export { ANSWER_LIMIT_MS, TurnTimeout };
 export { createLiveDraftVerifier, createLiveModel, resolveAnswerModel } from "./model.js";
 
 export const READ_ONLY_TOOLS = ["search_support_knowledge", "get_my_server_status", "get_server_logs", "get_invoice"] as const;
-const DNS_RECOVERY_GUIDANCE = "When the cited Minecraft DNS procedure applies, set Google DNS, flush the cache, verify the resolver with nslookup, then explicitly tell the customer to close and reopen Minecraft and retry the original server address. If DNS was the only issue, say that the original address should normally work again once DNS resolves. When asked about route switching, include the automatic switch, brief wait and retry, and Google's usually faster pickup of updated records. Only include separate host-block checks for a relevant branch, and preserve the confirmation requirement before switching hosts.";
+const DNS_RECOVERY_GUIDANCE = "When the cited Minecraft DNS procedure applies, set Google DNS, flush the cache, verify the resolver with nslookup, then explicitly tell the customer to close and reopen Minecraft and retry the original server address. If DNS was the only issue, the original address should work again once DNS resolves. When both route-switching and Google DNS passages apply, include the automatic switch, brief wait and retry, and why Google DNS helps: it usually obtains updated records sooner than some ISPs' default resolvers, with timing affected by TTL and DNS caches. Keep that comparison and cite it. Include host-block checks only for a relevant branch and preserve the confirmation requirement before switching hosts.";
 const UPLOAD_GUIDANCE = "For a panel upload error, offer a retry over SFTP as a transfer check when documented. The error is an observation and establishes no cause. For an affected mod, check the loader and Minecraft version before choosing and installing a matching file. State the documented small-file versus large-file or folder distinction. When explaining SFTP setup, give Settings, Launch SFTP, the panel password and the password-change path for third-party sign-ins as documented. For a folder transfer, explain how to drag it into the remote pane. Include only steps relevant to the request.";
 const VERSION_CHANGE_GUIDANCE = "For a Minecraft version change, use the documented Minecraft version field in Startup, then open Settings and reinstall regardless of loader when that procedure applies. When relevant and supported, qualify panel backup and download on having the local backup add-on. Leave unrelated Java, backup and world advice out.";
 const MISSING_JAR_GUIDANCE = "For a missing server JAR, keep the documented branches conditional. For an auto-installed core that was deleted, open Other Settings and reinstall. For a manually uploaded core, match the Startup JAR field to the actual filename. Check startup parameters after reinstall only when the file is present and the error persists. Ask for the fresh console error if startup still fails.";
@@ -266,6 +266,14 @@ export function repairRequiredTaskDraft(answer: string, prompt: string, evidence
       ? "開單後，請在同一張工單等待技術人員回覆。"
       : "After opening a ticket, wait for technical staff to reply in that same ticket.", wait);
   }
+  const citesAutomaticSwitch = evidence.some(match => match.source === ROUTE_SOURCE && repaired.includes(citation(match)));
+  if (citesAutomaticSwitch && /google\s*(?:public\s*)?dns/iu.test(normalized) &&
+      !/較快|较快|更快|更早|\b(?:faster|quicker|sooner)\b/iu.test(normalized)) {
+    const dns = evidence.find(match => match.source === DNS_SOURCE && /部分 ISP[^。\n]+較快[^。\n]+更新後的 DNS/u.test(match.excerpt));
+    if (dns) append(/\p{Script=Han}/u.test(prompt)
+      ? "相較於部分 ISP 的預設 DNS，Google DNS 通常較快取得更新後的 DNS 記錄，實際時間仍受 TTL 與 DNS 快取等因素影響。"
+      : "Google DNS usually picks up updated DNS records sooner than some ISPs' default resolvers. Actual timing depends on TTL and DNS caches.", dns);
+  }
   return repaired;
 }
 
@@ -473,7 +481,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
           const duplicateTickets = duplicateFocused?.matches.find(match => match.source === DUPLICATE_TICKETS_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
-          const panelUpload = focusUpload ? result.matches.find(match => match.source === PANEL_UPLOAD_SOURCE) : undefined;
+          const panelUpload = focusUpload ? [result, sftpFocused]
+            .flatMap(search => search?.matches ?? []).find(match => match.source === PANEL_UPLOAD_SOURCE) : undefined;
           const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
           const dns = dnsFocused?.matches.find(match => match.source === DNS_SOURCE && /(?:較快|更新後)/u.test(match.excerpt));
           const route = routeFocused?.matches.find(match => match.source === ROUTE_SOURCE);
@@ -541,8 +550,15 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (prefetch && sftp && !focusDns) {
             const mod = admitted.filter(match => match.source === MOD_INSTALL_SOURCE);
             const compatibility = mod.find(match => /選擇正確的版本/u.test(match.excerpt) && /模組載入器/u.test(match.excerpt));
-            const fallback = mod.find(match => /無法上傳/u.test(match.excerpt) && /SFTP/u.test(match.excerpt));
-            const transfer = [sftp, panelUpload, compatibility, fallback].filter(match => match !== undefined);
+            const fallback = mod.find(match => /無法上傳[^\n]+SFTP/u.test(match.excerpt));
+            const transfer = [sftp, panelUpload, compatibility].filter(match => match !== undefined);
+            if (fallback) {
+              // Keep just the documented fallback from the broad installation section.
+              const lines = fallback.excerpt.split("\n");
+              const offset = lines.findIndex(line => /無法上傳[^\n]+SFTP/u.test(line));
+              const lineNumber = fallback.startLine + offset;
+              transfer.push({ ...fallback, startLine: lineNumber, endLine: lineNumber, excerpt: lines[offset]! });
+            }
             if (transfer.length > 1) admitted = [...new Map(transfer.map(match => [citation(match), match])).values()];
           }
           if (prefetch && supportFlow && duplicateTickets) {
