@@ -66,4 +66,13 @@ GS-140 admitted both policy articles on its only attempt. It asked the customer 
 
 Luna’s GS-166 draft recommended SFTP for large files and folder uploads. It omitted drag-and-drop and destinations by file type. Two excerpt mismatches still caused a handoff.
 
-The durability samples and targeted fix-4 run are in progress.
+## Durability
+
+The full 6.1-sol clean run is sample one. Four additional blocks scheduled the same five items against the clean index. The bar is five correct deliveries with valid citations. Parentheses show attempts.
+
+| Sample | GS-023 | GS-108 | GS-084 | GS-094 | GS-163 |
+|---|---|---|---|---|---|
+| Full clean run | Correct (1) | Partial (1) | Correct (1) | Wrong / handoff (1) | Correct (1) |
+| golden-2026-11-24T06-08-50-711Z-5.json | Partial (3) | Correct (1) | Correct (3) | Correct (3) | Unscored (1) |
+
+The targeted fix-4 run is in progress.
