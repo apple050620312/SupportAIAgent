@@ -1,4 +1,5 @@
 /** Synthetic offline harness. Never import this module from production packages. */
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { TicketScope, TicketSnapshot, SupportAuditEvent } from "@support-ai-agent/contracts";
 import { TicketContextTokens } from "@support-ai-agent/trusted-context";
 import { TicketBridge, sameTicket, type TicketMessenger, type TicketStore } from "@support-ai-agent/ticket-bridge";
@@ -40,10 +41,17 @@ export interface MockSupportHarness {
   readonly snapshots: Map<string, TicketSnapshot>;
   readonly providerCalls: string[];
   readonly sent: { scope: TicketScope; text: string }[];
+  withRequestSignal<T>(signal: AbortSignal | null | undefined, inject: () => Promise<T>): Promise<T>;
   toolsFor(scope: TicketScope): ReturnType<typeof createHostingTools>;
 }
 
 export function createMockSupport(audit?: { record(event: SupportAuditEvent): Promise<void> }, knowledgeProvider: SupportKnowledgeProvider = mockKnowledge, reads?: { invoices: InvoiceProvider; logs: RedactedServerLogProvider; invoiceRef: string }): MockSupportHarness {
+  // Injection has no client socket to notify a handler that is already awaiting an adapter.
+  const requestSignal = new AsyncLocalStorage<AbortSignal>();
+  const knowledge = new SupportKnowledgeService({
+    search: (request, signal) => knowledgeProvider.search(request, requestSignal.getStore() ?? signal),
+    read: (request, signal) => knowledgeProvider.read(request, requestSignal.getStore() ?? signal)
+  });
   const snapshots = new Map<string, TicketSnapshot>([MOCK_SCOPE, MOCK_OTHER_SCOPE].map((scope) => [scope.channelId, { scope, revision: 0, state: "AI_ACTIVE" }]));
   const sent: { scope: TicketScope; text: string }[] = [];
   const receipts = new Set<string>();
@@ -130,7 +138,7 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
   const approvals = new MutationApprovalStore();
   const app = buildApp({ logger: false, readOnly: { selectedResources: { serviceForTicket: (scope) => Promise.resolve(scope.discordUserId === MOCK_SCOPE.discordUserId ? "whmcs-service:1" : "whmcs-service:2"), invoiceForTicket: () => Promise.resolve(reads?.invoiceRef ?? null) }, invocationAudit: { append: () => Promise.resolve() },
     permissions: { grants: () => Promise.resolve(["customer:read", "server:read", "knowledge:read", "ticket:handoff", "server:restart", "server:propose", "server:mutate", ...(reads ? ["invoice:read" as const] : [])]),
-      restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: true }) }, support, tokens, tickets: bridge, knowledge: new SupportKnowledgeService(knowledgeProvider), approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
+      restartGate: () => Promise.resolve({ customerConfirmed: false, autonomousRecovery: true }) }, support, tokens, tickets: bridge, knowledge, approvals, staffApprovalToken: "synthetic-staff-token", ...(audit ? { audit } : {}) } });
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await app.inject({
@@ -151,5 +159,6 @@ export function createMockSupport(audit?: { record(event: SupportAuditEvent): Pr
       }
     }, coreFetch);
   }
-  return { app, bridge, tokens, store, messages, snapshots, providerCalls, sent, toolsFor };
+  return { app, bridge, tokens, store, messages, snapshots, providerCalls, sent, toolsFor,
+    withRequestSignal: (signal, inject) => signal ? requestSignal.run(signal, async () => await inject()) : inject() };
 }

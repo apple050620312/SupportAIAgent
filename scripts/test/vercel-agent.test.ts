@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, renderPassageIds, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
+import { MarkdownKnowledgeProvider } from "../../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
+import { OpenAIEmbeddings, SemanticKnowledgeProvider, corpusDigest } from "../../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, DEMO_PASSAGE, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
 
@@ -183,7 +185,7 @@ describe("Vercel read-only agent", () => {
     const result = await demoRunner(harness, root, model).run(request, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(DEMO_PASSAGE);
-    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
     expect(harness.providerCalls.some((path) => path.endsWith("/power"))).toBe(false);
     const tools = model.doGenerateCalls[0]?.tools ?? [];
@@ -214,8 +216,8 @@ describe("Vercel read-only agent", () => {
     ] });
     const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
-    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 });
-    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }));
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 }, expect.any(AbortSignal));
+    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }), expect.any(AbortSignal));
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
   });
 
@@ -246,9 +248,9 @@ describe("Vercel read-only agent", () => {
     const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
     const content = message?.content[0];
     if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
-    const { matches } = content.output.value as { matches: { label: string }[] };
+    const { matches } = content.output.value as { matches: { source: string }[] };
     expect(matches).toHaveLength(8);
-    expect(matches.filter(match => match.label === cite)).toHaveLength(1);
+    expect(matches.filter(match => match.source === source)).toHaveLength(1);
     expect(result.admittedEvidence).toContainEqual({ source, startLine: 1, endLine: 12 });
     expect(JSON.stringify(content.output.value)).toContain("POSSIBLE_ROOT_CAUSE");
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
@@ -299,7 +301,7 @@ describe("Vercel read-only agent", () => {
     const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
     expect(search).toHaveBeenCalledTimes(2);
-    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 });
+    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 }, expect.any(AbortSignal));
     expect(search.mock.calls.find(([input]) => input.query.includes("reinstall server settings"))?.[0]).toMatchObject({ limit: 3 });
     expect(result.admittedEvidence).toContainEqual({ source: settings.source, startLine: 10, endLine: 12 });
   });
@@ -341,7 +343,7 @@ describe("Vercel read-only agent", () => {
     ] });
     const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run(request, signal);
-    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 });
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 }, expect.any(AbortSignal));
     expect(result.admittedEvidence).toEqual(expect.arrayContaining(matches.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }))));
   });
 
@@ -375,6 +377,28 @@ describe("Vercel read-only agent", () => {
       const gate = await evaluateCitationGate({ question: "What should I do?", draft, evidence }, audit, new AbortController().signal);
       expect(gate).toMatchObject({ status: "failed", failures: [{ reason: "wrong_lines" }] });
       expect(audit).not.toHaveBeenCalled();
+    });
+
+    it("distinguishes a rejected claim from a verifier reference error", async () => {
+      const check = (verify: DraftVerifier) => evaluateCitationGate(
+        { question: "What should I do?", draft: paraphrase, evidence }, verify, new AbortController().signal
+      );
+      const invalid = "[synthetic/recovery.md:1-3]";
+      expect((await check(() => Promise.resolve({ claimsSupported: true, complete: true, references: [invalid] }))).failures)
+        .toEqual([{ citation: invalid, reason: "invalid_verifier_reference" }]);
+      const claim = "verify what you find with the customer";
+      expect((await check(() => Promise.resolve({ claimsSupported: false, complete: true, references: [label], issue: claim }))).failures)
+        .toEqual([{ citation: null, reason: "unsupported_claim", detail: claim }]);
+    });
+
+    it("renders two individual span IDs and rejects an unassigned ID", async () => {
+      const second = "[synthetic/recovery.md:3-4]";
+      const draft = renderPassageIds("Check the state [P1] and confirm the result [P2].", new Map([["[P1]", label], ["[P2]", second]]));
+      expect(draft).toBe("Check the state " + label + " and confirm the result " + second + ".");
+      const result = await evaluateCitationGate(
+        { question: "What should I do?", draft: paraphrase + " [P3]", evidence }, verify(true), new AbortController().signal
+      );
+      expect(result.failures).toContainEqual({ citation: "[P3]", reason: "unknown_citation" });
     });
 
     it("fails closed when the verifier is unavailable", async () => {
@@ -413,13 +437,53 @@ describe("Vercel read-only agent", () => {
 
   it("uses one drafting call after prefetched knowledge and required own-server status", async () => {
     const { root, harness, request, signal } = await setup();
-    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_ANSWER)] });
+    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_PASSAGE + " [P1]")] });
     const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.7) };
     const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(model.doGenerateCalls).toHaveLength(1);
-    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(model.doGenerateCalls[0]?.maxOutputTokens).toBe(3072);
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
+  });
+
+  it.each(["companion", "search embedding", "admission embedding"])("cancels a stalled %s by the prefetch cutoff", async stage => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const started = Promise.withResolvers<AbortSignal>();
+      const stopped = Promise.withResolvers<void>();
+      const stall = (signal?: AbortSignal | null): Promise<never> => new Promise((_resolve, reject) => {
+        if (!signal) return reject(new Error("Cancellation signal missing"));
+        signal.addEventListener("abort", () => { stopped.resolve(); reject(new Error("Canceled")); }, { once: true });
+        started.resolve(signal);
+      });
+      const passages = [{
+        articleRef: "kb:" + "a".repeat(64), source: "synthetic/recovery.md", title: "Recovery", heading: "State",
+        startLine: 1, endLine: 2, excerpt: DEMO_PASSAGE
+      }];
+      const search = () => Promise.resolve({ trust: "reference_only" as const, matches: passages });
+      const embeddings = new OpenAIEmbeddings({ EMBEDDING_PROVIDER: "openai", OPENAI_API_KEY: "synthetic" });
+      vi.stubGlobal("fetch", (_url: unknown, init?: RequestInit) => stall(init?.signal));
+      const semantic = new SemanticKnowledgeProvider(new MarkdownKnowledgeProvider("/unused"), embeddings,
+        { model: embeddings.model, digest: corpusDigest(passages), passages, vectors: [[1]] });
+      const stalledSearch = stage === "search embedding" ? semantic.search.bind(semantic) : search;
+      const read: NonNullable<Parameters<typeof createMockSupport>[1]>["read"] = (_input, signal) =>
+        stage === "companion" ? stall(signal) : Promise.resolve(null);
+      const similarity = stage === "admission embedding" ? semantic.similarity.bind(semantic) : () => Promise.resolve(0.8);
+      const { root, harness, request, signal } = await setup({ search: stalledSearch, read });
+      const model = new MockLanguageModelV4({ doGenerate: mockText(DEMO_ANSWER) });
+      const turn = demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity }, undefined, true).run(request, signal);
+      const phaseSignal = await started.promise;
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(await turn).toMatchObject({ timedOutStage: "prefetch" });
+      await stopped.promise;
+      expect(phaseSignal.aborted).toBe(true);
+      expect(model.doGenerateCalls).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
   });
 
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {
@@ -712,28 +776,107 @@ describe("Vercel read-only agent", () => {
     expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("synthetic power error");
   });
 
-  it("returns the persisted backend status if drafting reaches the internal deadline", async () => {
-    const { root, harness, request, signal } = await setup();
-    const deadline = new AbortController();
-    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-    const clock = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => ms === 60_000 ? deadline.signal : realTimeout(ms));
-    const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
-    const model = new MockLanguageModelV4({ doGenerate: () => {
-      const next = reads.shift();
-      if (next) return Promise.resolve(next);
-      deadline.abort();
-      return Promise.reject(new Error("draft interrupted"));
-    } });
+  it("hands off a stalled draft while the backend status and capsule are current", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
     try {
-      const result = await demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      const { root, harness, request, signal } = await setup();
+      const enteredDraft = Promise.withResolvers<AbortSignal | undefined>();
+      const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
+      const model = new MockLanguageModelV4({ doGenerate: ({ abortSignal }) => {
+        const next = reads.shift();
+        if (next) return Promise.resolve(next);
+        enteredDraft.resolve(abortSignal);
+        return new Promise(() => {});
+      } });
+      const run = demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      const draftSignal = await enteredDraft.promise;
+      await vi.advanceTimersByTimeAsync(47_099);
+      expect(draftSignal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(draftSignal?.aborted).toBe(true);
+      const result = await run;
+      expect(result.timedOutStage).toBe("draft");
       expect(result.reply).toContain("Backend server status: running.");
-      expect(result.reply).toContain("I could not verify a complete answer.");
+      expect(result.reply).toContain("I've handed this to support staff.");
       const [file] = await readdir(root);
       expect(JSON.parse(await readFile(join(root, file!), "utf8"))).toEqual([
         { role: "user", content: "My server status" }, { role: "assistant", content: result.reply }
       ]);
-      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
-    } finally { clock.mockRestore(); }
+      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("passes a late finished draft and evidence to one bounded review before expiry", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const { root, harness, request, signal } = await setup();
+      const drafting = Promise.withResolvers<void>();
+      const reviewStarted = Promise.withResolvers<void>();
+      let searched = false;
+      const model = new MockLanguageModelV4({ doGenerate: async () => {
+        if (!searched) {
+          searched = true;
+          return mockCall("search_support_knowledge", { query: "status" });
+        }
+        drafting.resolve();
+        await new Promise(resolve => setTimeout(resolve, 47_000));
+        return mockText(DEMO_ANSWER);
+      } });
+      const verifier = vi.fn<DraftVerifier>(async ({ draft, passages }) => {
+        expect(draft).toBe(DEMO_ANSWER);
+        reviewStarted.resolve();
+        await new Promise(resolve => setTimeout(resolve, 8_900));
+        return { claimsSupported: true, complete: true, references: [passages[0]!.label] };
+      });
+      const run = demoRunner(harness, root, model, undefined, undefined, verifier).run(request, signal);
+      await drafting.promise;
+      await vi.advanceTimersByTimeAsync(47_000);
+      await reviewStarted.promise;
+      await vi.advanceTimersByTimeAsync(8_900);
+      expect(await run).toMatchObject({ reply: DEMO_ANSWER, timedOutStage: null });
+      expect(verifier).toHaveBeenCalledTimes(1);
+      expect(model.doGenerateCalls).toHaveLength(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(["slow", "canceled", "expired", "superseded"])("handles a %s review without leaking a draft", async condition => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const { root, harness, request } = await setup();
+      const outer = new AbortController();
+      const reviewing = Promise.withResolvers<AbortSignal>();
+      const accepted = Promise.withResolvers<Awaited<ReturnType<DraftVerifier>>>();
+      const verifier: DraftVerifier = (_input, signal) => {
+        reviewing.resolve(signal);
+        return accepted.promise;
+      };
+      const run = demoRunner(harness, root, createDemoModel(), undefined, undefined, verifier).run(request, outer.signal);
+      const observed = run.catch((error: unknown) => error);
+      const reviewSignal = await reviewing.promise;
+      if (condition === "slow") {
+        await vi.advanceTimersByTimeAsync(24_000);
+        expect(reviewSignal.aborted).toBe(true);
+        expect(await observed).toMatchObject({
+          timedOutStage: "review",
+          reply: "I don't know; I don't have enough verified information. I've handed this to support staff.",
+          citationGate: { failures: [{ reason: "verification_unavailable" }] }
+        });
+        return;
+      }
+      if (condition === "canceled") outer.abort();
+      if (condition === "expired") vi.setSystemTime(60_000);
+      if (condition === "superseded") {
+        await harness.bridge.waitForCustomer(MOCK_SCOPE);
+        await harness.bridge.customerMessage(MOCK_SCOPE);
+      }
+      accepted.resolve({ claimsSupported: true, complete: true, references: ["[synthetic/recovery.md:1-2]"] });
+      expect(await observed).toBeInstanceOf(Error);
+      expect(await readdir(root)).toEqual([]);
+      expect(harness.sent).toEqual([]);
+    } finally { vi.useRealTimers(); }
   });
 
   it("uses Chinese for a Chinese customer when refusing", async () => {
@@ -786,5 +929,11 @@ describe("support routing coverage", () => {
   it("keeps existing-ticket-only guidance incomplete", () => {
     const answer = base + "請先在原本的客服單補充伺服器名稱、斷線的時間、畫面上的訊息及重裝之後的狀況，方便客服在同一張單繼續確認。";
     expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(false);
+  });
+
+  it("accepts the saved installer routing phrasing", () => {
+    const installer = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
+    const phrasing = "這是產品／服務問題，應由「售後服務」類別處理；一般支援單不處理產品售後問題。若你已在同一問題的售後單，請在原單等技術人員；重複開單不會加快處理。";
+    expect(answerCompletenessCheck(base + phrasing, installer, evidence)).toBe(true);
   });
 });

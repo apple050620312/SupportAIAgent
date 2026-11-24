@@ -32,6 +32,10 @@ export class TicketContextTokens {
   }
 
   verify(token: string): TicketScope {
+    return this.verifyContext(token).scope;
+  }
+
+  verifyContext(token: string): { scope: TicketScope; expiresAtMs: number } {
     try {
       if (token.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)) throw new Error();
       const [encoded, signature] = token.split(".");
@@ -47,7 +51,7 @@ export class TicketContextTokens {
       const now = this.now();
       if (parsed.issuedAt > now || parsed.expiresAt <= now || parsed.expiresAt !== parsed.issuedAt + 60 ||
           !Object.values(parsed.scope).every(isCanonicalDiscordSnowflake)) throw new Error();
-      return { ...parsed.scope };
+      return { scope: { ...parsed.scope }, expiresAtMs: parsed.expiresAt * 1000 };
     } catch { throw new InvalidTicketContextError(); }
   }
 }

@@ -109,8 +109,10 @@ export class MarkdownKnowledgeProvider implements SupportKnowledgeProvider {
     }));
   }
 
-  async search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> {
+  async search(request: KnowledgeSearchRequest, signal?: AbortSignal): Promise<KnowledgeSearchResponse> {
+    signal?.throwIfAborted();
     const index = await this.current();
+    signal?.throwIfAborted();
     const query = normalized(request.query.trim());
     const queryTerms = terms(query);
     const scored = index.chunks.map((chunk) => {
@@ -133,8 +135,10 @@ export class MarkdownKnowledgeProvider implements SupportKnowledgeProvider {
     })) };
   }
 
-  async read(request: KnowledgeReadRequest): Promise<KnowledgeReadResponse | null> {
+  async read(request: KnowledgeReadRequest, signal?: AbortSignal): Promise<KnowledgeReadResponse | null> {
+    signal?.throwIfAborted();
     const index = await this.current();
+    signal?.throwIfAborted();
     const article = index.articles.get(request.articleRef);
     const start = (request.startLine ?? 1) - 1;
     if (!article || start >= article.lines.length) return null;

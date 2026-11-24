@@ -5,6 +5,7 @@ import type { TicketScope } from "@support-ai-agent/contracts";
 /** Supplied only by the authenticated host. Never derive selection or scope from model/chat input. */
 export interface TrustedAgentSession {
   scope: TicketScope;
+  expiresAtMs: number;
   selectedServiceRef: string | null;
   assertCurrent(): Promise<void>;
 }
@@ -20,6 +21,7 @@ export class SupportCoreClient {
     }
   }
   async call(path: string, body: unknown, schema: TSchema, token: string, session: TrustedAgentSession, signal: AbortSignal): Promise<unknown> {
+    signal.throwIfAborted();
     await session.assertCurrent();
     signal.throwIfAborted();
     try {
@@ -48,6 +50,9 @@ export class SupportCoreClient {
       if (path !== "v1/me/handoff") await session.assertCurrent();
       signal.throwIfAborted();
       return result;
-    } catch { throw new Error("Support Core request denied or unavailable"); }
+    } catch {
+      signal.throwIfAborted();
+      throw new Error("Support Core request denied or unavailable");
+    }
   }
 }

@@ -190,14 +190,14 @@ export function registerReadOnlyRoutes(app: FastifyInstance, delivery: ReadOnlyD
   }, async (request) => {
     context(request);
     if (!delivery.knowledge) throw new UpstreamUnavailableError("Support knowledge");
-    return delivery.knowledge.search(request.body);
+    return delivery.knowledge.search(request.body, request.signal);
   });
   app.post<{ Body: KnowledgeReadRequest }>("/v1/me/knowledge/read", {
     schema: { body: KnowledgeReadRequestSchema, querystring: noQuery, response: { 200: KnowledgeReadResponseSchema, ...errors } }
   }, async (request) => {
     context(request);
     if (!delivery.knowledge) throw new UpstreamUnavailableError("Support knowledge");
-    return delivery.knowledge.read(request.body);
+    return delivery.knowledge.read(request.body, request.signal);
   });
   app.get("/v1/me/identity", { schema: { querystring: noQuery, response: { 200: Type.Object({ linked: Type.Literal(true) }), ...errors } } },
     async (request) => { await delivery.support.resolveCustomer(context(request).actor); return { linked: true }; });

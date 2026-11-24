@@ -70,15 +70,18 @@ async function main() {
       verifyDraft: createLiveDraftVerifier(environment),
       model: runnerModel, draftOnly: true, history: new FileHistoryStore(resolve(shadowRoot, "history")),
       core: new SupportCoreClient(`http://127.0.0.1:${setup.port}/`),
-      authenticate({ sessionId, ticketToken }) {
-        const scope = setup.tokens.verify(ticketToken);
+      async authenticate({ sessionId, ticketToken }) {
+        const { scope, expiresAtMs } = setup.tokens.verifyContext(ticketToken);
         if (scope.guildId !== setup.guildId || scope.channelId !== sessionId ||
             (setup.channelIds.size > 0 && !setup.channelIds.has(scope.channelId))) throw new TicketBridgeError();
+        const initial = await bridge.read(scope);
+        if (initial?.state !== "AI_ACTIVE") throw new TicketBridgeError();
         const assertCurrent = async () => {
           setup.tokens.verify(ticketToken);
-          if ((await bridge.read(scope))?.state !== "AI_ACTIVE") throw new TicketBridgeError();
+          const current = await bridge.read(scope);
+          if (current?.state !== "AI_ACTIVE" || current.revision !== initial.revision) throw new TicketBridgeError();
         };
-        return assertCurrent().then(() => ({ scope, selectedServiceRef: null, assertCurrent }));
+        return { scope, expiresAtMs, selectedServiceRef: null, assertCurrent };
       }
     });
     const tickets = new DiscordTicketSupport(reader, adapter, bridge, runner, setup.staff, audit, {

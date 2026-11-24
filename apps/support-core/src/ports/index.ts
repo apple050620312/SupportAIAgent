@@ -17,8 +17,8 @@ import type { KnowledgeSearchRequest, KnowledgeSearchResponse, KnowledgeReadRequ
 
 /** Operator-reviewed shared documentation only; never customer records or authority. */
 export interface SupportKnowledgeProvider {
-  search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse>;
-  read(request: KnowledgeReadRequest): Promise<KnowledgeReadResponse | null>;
+  search(request: KnowledgeSearchRequest, signal?: AbortSignal): Promise<KnowledgeSearchResponse>;
+  read(request: KnowledgeReadRequest, signal?: AbortSignal): Promise<KnowledgeReadResponse | null>;
 }
 
 export interface SupportAuditRecorder {
