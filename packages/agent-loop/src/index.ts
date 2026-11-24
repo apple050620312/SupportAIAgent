@@ -493,9 +493,13 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (prefetch && focusDns && !focusSupportPolicy && !downgrade && dns && route &&
               !/基[岩巖]版|bedrock|hytale|palworld|\bvps\b|\bwarp\b|\bmtr\b/iu.test(prompt)) {
             const recovery = admitted.find(match => match.source === CONNECTION_SOURCE && /flushdns/iu.test(match.excerpt));
-            if (recovery) admitted = [recovery, dns, route, ...admitted.filter(match =>
-              match.source === CONNECTION_SOURCE && /fast-line\.tw|已嘗試過的 Google DNS/u.test(match.excerpt) &&
-              citation(match) !== citation(recovery))];
+            if (recovery) {
+              const alternatePathRequested = /封[鎖锁]|防火[牆墙]|替代位[址置]|fast-line\.tw|udp\.cfh\.tw|\b(?:block(?:ed)?|firewall|alternate host)\b/iu.test(prompt);
+              const alternate = alternatePathRequested ? admitted.filter(match =>
+                match.source === CONNECTION_SOURCE && /fast-line\.tw|已嘗試過的 Google DNS/u.test(match.excerpt) &&
+                citation(match) !== citation(recovery)) : [];
+              admitted = [recovery, dns, route, ...alternate];
+            }
           }
           if (prefetch && sftp && !focusDns) {
             const upload = admitted.filter(match => [SFTP_SOURCE, "panel/manage/upload.md", "practice/install/mod.md"].includes(match.source));
@@ -573,10 +577,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           });
         }
         const guidance = [
-          focusDns && "For DNS recovery give the documented cache flush, Google DNS, and rejoin at the original address once DNS works. Say it should normally connect if DNS was the only issue. Explain automatic route switching and why Google DNS can receive the updated record sooner when applicable. For this route and DNS procedure, omit unrelated host tests. If advising a host switch, preserve the documented requirement to confirm a block first.",
+          focusDns && "Use the documented DNS order. Set Google DNS, flush the cache, and verify the resolver with nslookup where the cited procedure calls for it. Say to rejoin at the original address when DNS works, conditional on DNS being the sole issue. When relevant, explain the automatic route switch, brief wait and retry, and why Google DNS may receive the updated record sooner. Keep host-block checks for questions about a block and preserve the confirmation requirement before switching hosts.",
           focusSupportPolicy && "Direct product issues to the after-sales category. If they have a ticket for this issue, tell them to wait there for technical staff because another ticket will not speed things up. If opening the first one, give the documented Discord prerequisite. If asked about general support, explain that it handles other kinds of enquiries.",
           installerDeployment && "For an incomplete deployment report, ask technical staff to check the specific installer stages and index entries the customer named. Use the documented ticket route and wait advice. Leave live verification to staff.",
-          hasSftpSymptom(prompt) && "For a panel upload error, first distinguish a possible upload connection problem from an unverified mod issue. Use the documented SFTP fallback as the connection check. Discuss compatibility afterward. For folder transfers, give the documented connection steps and explain where to drag the folder in the SFTP client without naming a server path.",
+          hasSftpSymptom(prompt) && "For a panel upload error, start with the possible transfer connection problem. Use a retry over SFTP when the evidence documents that fallback. Then give the supported loader and Minecraft version checks. Treat file names as reported observations and omit undocumented rename tests or restrictions. For folder transfers, give the documented SFTP connection steps and explain how to drag the folder into the remote pane. Defer any requested threshold or file-type destination to staff.",
           "For a Minecraft version change apply the version in Startup before reinstalling in Settings, across the applicable loaders. For a missing server JAR, give documented reinstall guidance and request a fresh console error if it still fails."
         ].filter(Boolean).join("\n");
         const agent = new ToolLoopAgent({
