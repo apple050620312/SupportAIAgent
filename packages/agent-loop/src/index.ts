@@ -19,7 +19,7 @@ export { createLiveDraftVerifier, createLiveModel, resolveAnswerModel } from "./
 
 export const READ_ONLY_TOOLS = ["search_support_knowledge", "get_my_server_status", "get_server_logs", "get_invoice"] as const;
 const DNS_RECOVERY_GUIDANCE = "When the cited Minecraft DNS procedure applies, set Google DNS, flush the cache, verify the resolver with nslookup, then explicitly tell the customer to close and reopen Minecraft and retry the original server address. If DNS was the only issue, the original address should work again once DNS resolves. When both route-switching and Google DNS passages apply, include the automatic switch, brief wait and retry, and why Google DNS helps: it usually obtains updated records sooner than some ISPs' default resolvers, with timing affected by TTL and DNS caches. Keep that comparison and cite it. Include host-block checks only for a relevant branch and preserve the confirmation requirement before switching hosts.";
-const UPLOAD_GUIDANCE = "For a panel upload error, offer a retry over SFTP as a transfer check when documented. The error is an observation and establishes no cause. For an affected mod, check the loader and Minecraft version before choosing and installing a matching file. State the documented small-file versus large-file or folder distinction. When explaining SFTP setup, give Settings, Launch SFTP, the panel password and the password-change path for third-party sign-ins as documented. For a folder transfer, explain how to drag it into the remote pane. Include only steps relevant to the request.";
+const UPLOAD_GUIDANCE = "For a panel upload error, offer a retry over SFTP as a transfer check when documented. The error is an observation and establishes no cause. For an affected mod, check the loader and Minecraft version before choosing and installing a matching file. State the documented small-file versus large-file or folder distinction. For SFTP setup, include the client prerequisite, Settings → Launch SFTP, the first-connection prompts, the panel password and the documented password-change path for third-party sign-ins. For a folder transfer, explain how to drag it into the remote pane.";
 const VERSION_CHANGE_GUIDANCE = "For a Minecraft version change, use the documented Minecraft version field in Startup, then open Settings and reinstall regardless of loader when that procedure applies. When relevant and supported, qualify panel backup and download on having the local backup add-on. Leave unrelated Java, backup and world advice out.";
 const MISSING_JAR_GUIDANCE = "For a missing server JAR, keep the documented branches conditional. For an auto-installed core that was deleted, open Other Settings and reinstall. For a manually uploaded core, match the Startup JAR field to the actual filename. Check startup parameters after reinstall only when the file is present and the error persists. Ask for the fresh console error if startup still fails.";
 const TICKET_GUIDANCE = "For this product issue, explicitly say to use the after-sales ticket category instead of general support, citing the routing policy. Scope that distinction to the reported issue. If a ticket is already open for it, say to wait for technical staff to reply in that same ticket and that duplicate tickets do not speed up handling. For opening the first ticket, include the documented Discord prerequisite.";
@@ -481,6 +481,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           const supportFlow = supportFlowFocused?.matches.find(match => match.source === SUPPORT_FLOW_SOURCE);
           const duplicateTickets = duplicateFocused?.matches.find(match => match.source === DUPLICATE_TICKETS_SOURCE);
           const sftp = sftpFocused?.matches.find(match => match.source === SFTP_SOURCE);
+          let sftpProcedure = sftp;
           const panelUpload = focusUpload ? [result, sftpFocused]
             .flatMap(search => search?.matches ?? []).find(match => match.source === PANEL_UPLOAD_SOURCE) : undefined;
           const connection = connectionFocused?.matches.find(match => match.source === CONNECTION_SOURCE);
@@ -515,7 +516,21 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
               hasIncompleteInstallerDeployment(match.excerpt));
           }
           if (admitted.length) {
-            const companions = await coRetrieveCompanions(admitted, request => read("v1/me/knowledge/read", request, KnowledgeReadResponseSchema, signal));
+            const companions = await coRetrieveCompanions(admitted, async request => {
+              const page = await read("v1/me/knowledge/read", request, KnowledgeReadResponseSchema, signal);
+              if (sftp && request.articleRef === sftp.articleRef && Value.Check(KnowledgeReadResponseSchema, page) &&
+                  page.articleRef === sftp.articleRef && page.source === sftp.source &&
+                  page.startLine <= sftp.startLine && page.endLine >= sftp.endLine) {
+                // The search excerpt can end before the sign-in steps within this span.
+                const excerpt = page.content.split("\n").slice(sftp.startLine - page.startLine, sftp.endLine - page.startLine + 1).join("\n");
+                if (excerpt.startsWith(sftp.excerpt)) sftpProcedure = { ...sftp, excerpt };
+              }
+              return page;
+            });
+            const fullSftp = sftpProcedure;
+            if (fullSftp && fullSftp !== sftp) {
+              admitted = admitted.map(match => citation(match) === citation(fullSftp) ? fullSftp : match);
+            }
             if (prefetch) {
               const seedLabels = new Set(admitted.map(citation));
               const nearby = companions.filter(match => !seedLabels.has(citation(match)) && concisePassage(match.excerpt).includes("\n"));
@@ -551,7 +566,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             const mod = admitted.filter(match => match.source === MOD_INSTALL_SOURCE);
             const compatibility = mod.find(match => /選擇正確的版本/u.test(match.excerpt) && /模組載入器/u.test(match.excerpt));
             const fallback = mod.find(match => /無法上傳[^\n]+SFTP/u.test(match.excerpt));
-            const transfer = [sftp, panelUpload, compatibility].filter(match => match !== undefined);
+            const transfer = [sftpProcedure, panelUpload, compatibility].filter(match => match !== undefined);
             if (fallback) {
               // Keep just the documented fallback from the broad installation section.
               const lines = fallback.excerpt.split("\n");

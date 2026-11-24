@@ -354,27 +354,38 @@ describe("Vercel read-only agent", () => {
     expect(result.admittedEvidence.map(match => match.source)).toEqual(expect.arrayContaining(matches.map(match => match.source)));
   });
 
-  it("admits the panel upload and SFTP procedures from the focused transfer search", async () => {
+  it("admits focused transfer procedures and verifies the SFTP setup from the full read", async () => {
     const sources = ["practice/install/mod.md", "panel/manage/upload.md", "panel/common/sftp.md"];
     const excerpts = ["### 上傳模組\n遇到無法上傳的問題，可使用 SFTP。\n### 其他話題", "較小的檔案可從面板上傳。", "大檔案與資料夾使用 SFTP。"];
     const passages = sources.map((source, index) => ({
       source, articleRef: `kb:${String(index + 1).repeat(64)}`, title: "Upload", heading: "Transfer",
-      startLine: 1, endLine: index === 0 ? 3 : 1, excerpt: excerpts[index]!
+      startLine: 1, endLine: index === 1 ? 1 : 3, excerpt: excerpts[index]!
     }));
     const search = ({ query }: { query: string }) => Promise.resolve({
       trust: "reference_only" as const, matches: query.includes("SFTP 上傳") ? passages.slice(1) : passages.slice(0, 1)
     });
-    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
-    const model = new MockLanguageModelV4({ doGenerate: mockText("若面板無法上傳模組，請改用 SFTP 重試。 [practice/install/mod.md:2-2]") });
+    const sftp = passages[2]!;
+    const knowledgeRead = vi.fn(({ articleRef }: { articleRef: string }) => Promise.resolve(articleRef === sftp.articleRef ? {
+      trust: "reference_only" as const, articleRef, source: sftp.source, title: sftp.title, startLine: 1, endLine: 3, totalLines: 3,
+      content: `${sftp.excerpt}\n請用面板登入密碼。\n如果是第三方登入，先在客戶中心變更密碼。`
+    } : null));
+    const { root, harness, request, signal } = await setup({ search, read: knowledgeRead });
+    const draft = "若面板無法上傳模組，請改用 SFTP 重試。 [practice/install/mod.md:2-2] 請用面板登入密碼。 [panel/common/sftp.md:1-3]";
+    const model = new MockLanguageModelV4({ doGenerate: mockText(draft) });
     const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.8) };
     const prompt = "模組上傳失敗，有其他上傳方式嗎？";
-    const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt }, signal);
+    const verify: DraftVerifier = input => Promise.resolve({
+      claimsSupported: input.passages.some(passage => passage.excerpt.includes("第三方登入")),
+      complete: true, references: input.passages.map(passage => passage.label)
+    });
+    const result = await demoRunner(harness, root, model, undefined, relevance, verify, true).run({ ...request, prompt }, signal);
     expect(result.admittedEvidence).toEqual(expect.arrayContaining([
       { source: sources[0], startLine: 2, endLine: 2 },
       { source: sources[1], startLine: 1, endLine: 1 },
-      { source: sources[2], startLine: 1, endLine: 1 }
+      { source: sources[2], startLine: 1, endLine: 3 }
     ]));
-    expect(result.citationGate).toMatchObject({ status: "passed", matched: ["[practice/install/mod.md:2-2]"] });
+    expect(knowledgeRead.mock.calls.filter(([window]) => window.articleRef === sftp.articleRef)).toHaveLength(1);
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: ["[practice/install/mod.md:2-2]", "[panel/common/sftp.md:1-3]"] });
   });
 
   it("uses a cited wait instruction when an installer draft leaves out the technical staff reply", async () => {
