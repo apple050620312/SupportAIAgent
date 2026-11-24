@@ -35,8 +35,10 @@ AGENT_LIVE_MODEL=1 pnpm demo:vercel
 ```
 
 Set `MODEL_PROVIDER=sub2api` (the default) with `SUB2API_API_KEY`, or
-`MODEL_PROVIDER=openai` with `OPENAI_API_KEY` for the official API. Both use
-`gpt-6.1-sol` through the OpenAI-compatible Responses API. Hosting, ticket storage
+`MODEL_PROVIDER=openai` with `OPENAI_API_KEY` for the official API. `MODEL_ID`
+defaults to `gpt-6-luna` through the OpenAI-compatible Responses API. Luna requests
+Fast tier and `max` reasoning. An explicit provider rejection of the effort tries
+the remaining supported values in descending order. Hosting, ticket storage
 and Discord remain synthetic. The sub2api path is live-tested by the golden eval;
 the official chat path remains construction-tested only; step 9 uses official OpenAI for embeddings only.
 

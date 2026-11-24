@@ -402,6 +402,15 @@ describe("Vercel read-only agent", () => {
     expect(JSON.stringify(model.doGenerateCalls)).not.toContain("previousResponseId");
   });
 
+  it("hands off a request for live installer state even if a policy draft is supported", async () => {
+    const { root, harness, request, signal } = await setup();
+    const prompt = "Can you check the modpack installer current status?";
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ answerComplete: true, citationGate: { status: "passed" } });
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {
     const { root, harness, request, signal } = await setup(undefined, {
       invoiceRef: "synthetic-invoice",
@@ -524,7 +533,7 @@ describe("Vercel read-only agent", () => {
   });
 
   it("requires every documented step before deciding whether the unknown needs staff", () => {
-    expect(SYSTEM_PROMPT).toMatch(/Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off/);
+    expect(SYSTEM_PROMPT).toContain("Explain the prerequisites, panel screen and field, actions, and verification in source order");
     expect(SYSTEM_PROMPT).toContain("Never ask staff to confirm a step the KB already documents");
     expect(SYSTEM_PROMPT).toContain("If the procedure answers the request, state the remaining uncertainty without handing off");
   });

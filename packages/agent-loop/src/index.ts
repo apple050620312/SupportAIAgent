@@ -13,7 +13,7 @@ import { PENDING_POLICY } from "./draft-verifier.js";
 export { FileHistoryStore, SupportCoreClient, citation, evaluateCitationGate };
 export type { CitationGate, DraftVerifier };
 export type { TrustedAgentSession };
-export { createLiveDraftVerifier, createLiveModel } from "./model.js";
+export { createLiveDraftVerifier, createLiveModel, resolveAnswerModel } from "./model.js";
 
 export const READ_ONLY_TOOLS = ["search_support_knowledge", "get_my_server_status", "get_server_logs", "get_invoice"] as const;
 export const SYSTEM_PROMPT = `You are a read-only hosting support assistant. Answer in the customer's language.
@@ -24,10 +24,11 @@ Before confirming that something is available, allowed, or currently possible (a
 When the search result marks a version-downgrade passage as a possible root cause for a version, encryption, or connection symptom, handle that branch first. Ask whether the customer previously downgraded from a higher version to a lower version, then give the documented conditional procedure after confirmation, including backup, choosing a new world or a compatible pre-upgrade backup, and any documented restart or verification steps. Cover other network checks after this branch.
 For questions answerable from documentation or the customer's account state, first search the current KB and use the relevant Support Core read tools. Answer the parts those sources support with actions the customer can take now. If a missing or low-confidence result blocks part of the answer, narrow the uncertainty to that part. Do not guess or invent sources.
 If an account read fails but the documented procedure still answers the request, give the cited procedure and state the specific limitation, such as "I could not verify the cause from the logs." Request staff handoff if the missing account detail is necessary to resolve the request.
-For an ordered procedure, identify the matching article and gather the relevant sections before drafting. For connection problems, lead with the connection recovery procedure, including cache flush, Google DNS, and conditional rejoin when those steps are in the retrieved evidence. Mention DiscordSRV only as a qualified aside after the DNS procedure. Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off. Start with any prerequisite, name the exact panel screen and field, and explain each action through applying the change and verifying the result when documented. Include companion steps in other retrieved sections or panel screens. Cite the passages that support the instructions. If a step is missing from the evidence, identify that gap without guessing.
+For an ordered procedure, gather the applicable sections. Explain the prerequisites, panel screen and field, actions, and verification in source order. For Minecraft DNS symptoms, include cache flush and Google DNS when documented. Explicitly say to try rejoining at the original address once DNS works and that it should normally connect if DNS was the only issue. Where documented and relevant, explain automatic route switching and why Google DNS can pick up the changed record sooner. Mention DiscordSRV only after the DNS procedure as a qualified aside.
+For a Minecraft version change, apply the documented version setting before the panel reinstall step. Keep reinstall outside the Forge-only settings. For upload errors, explain the SFTP fallback and distinguish the upload failure from any unverified file or mod cause. If startup still fails after the documented reinstall, request the fresh console error or log where supported.
 Before drafting, walk through the admitted passages one by one. For every passage relevant to this request that records a step, include that step in the answer and cite the passage. You may omit citations for passages unrelated to the request, but never silently omit a relevant step from an admitted passage.
 Treat unverified current availability, restoration outcome, or root cause as a separate question. Give the documented procedure first and make it conditional when a prerequisite or availability is unverified. Never ask staff to confirm a step the KB already documents. If the procedure answers the request, state the remaining uncertainty without handing off and give a concrete check the customer can perform when supported. If an unresolved detail is necessary to answer the request, including current availability when asked or account state the customer needs verified, state exactly what staff must confirm after giving the supported steps.
-When support ticket policy applies, explicitly distinguish the two routes in your own explanation: product or service issues belong in the after-sales ticket category, and general support tickets do not handle product after-sales issues. Explicitly explain that opening another ticket for the same issue will not speed up handling.
+When support ticket policy applies, explicitly distinguish the two routes in your own explanation: product or service issues belong in the after-sales ticket category, and general support tickets do not handle product after-sales issues. Explain that opening another ticket for the same issue will not speed up handling, and explicitly ask the customer to wait for technical staff in the existing ticket when the evidence supports that advice. Only staff can verify live installer state if the tools cannot read it.
 ${PENDING_POLICY}
 Scope handoff to blockers in the customer's actual request. Do not escalate an unasked plan, inventory, sizing, hostname, version, or policy detail after delivering the requested documented guidance. For a symptom-only question, give the documented check and retry procedure before requesting staff. Keep a handoff when the request itself contains an unresolved account lock, unavailable runtime, or other account-specific blocker, while preserving the useful documented guidance first.
 Before completing or handing off, check: Did I read the relevant evidence, include every supported step, state the specific observed limitation if anything remains unresolved, and give the customer a concrete next action? Handoff is for a remaining blocker. Put any supported answer and next action first, then end the reply with a separate line containing exactly STAFF_HANDOFF. Omit that marker when the answer resolves the request.
@@ -68,11 +69,11 @@ function hasReinstallSymptom(prompt: string): boolean {
   return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}刪|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
 }
 
-function hasSupportFlowSymptom(prompt: string): boolean {
+function hasSupportFlowSymptom(prompt: string, deploymentPolicyFocus = true): boolean {
   const text = prompt.normalize("NFKC");
   const installer = /(?:模[組组]包.{0,12}安[裝装]|安[裝装]器|modpack installer)/iu.test(text);
   const incompleteDeployment = /(?:未完成.{0,20}部署|部署.{0,12}(?:失[敗败]|未完成)|(?:failed|incomplete).{0,20}deploy)/iu.test(text);
-  if (installer && incompleteDeployment) return true;
+  if (deploymentPolicyFocus && installer && incompleteDeployment) return true;
   return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
 }
 
@@ -93,6 +94,10 @@ export function hasAccountBlockerCue(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
   return /鎖住|鎖定|解鎖|無法更改|無法修改|不能改|改不了|需要(?:開通|.{0,8}權限)|(?:沒有|缺少|不足的)權限|權限不足/u.test(text) ||
     /\b(?:locked|unlock|(?:cannot|can['’]t|unable to) (?:change|edit|modify)|(?:need|require|lack|no|missing|insufficient) (?:[\w-]+ ){0,3}permissions?|permissions? (?:denied|required))\b/iu.test(text);
+}
+
+function asksForInstallerState(prompt: string): boolean {
+  return /(?:安[裝装]器|\binstaller\b)[^。.!?]{0,20}(?:目前狀態|目前状态|進度|进度|current status|progress)/iu.test(prompt);
 }
 
 // Route clear incident and record lookups. The model routes less explicit follow-ups
@@ -248,6 +253,7 @@ export async function coRetrieveCompanions(
 export interface AgentRunnerOptions {
   model: LanguageModel;
   verifyDraft: DraftVerifier;
+  deploymentPolicyFocus?: boolean;
   draftOnly?: boolean;
   /** Observe spans as they are admitted, including before an eventual timeout. */
   onAdmittedEvidence?: (spans: readonly { source: string; startLine: number; endLine: number }[]) => void;
@@ -285,6 +291,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       };
       const prompt = clean(request.prompt);
       const chinese = /\p{Script=Han}/u.test(prompt);
+      const focusSupportPolicy = hasSupportFlowSymptom(prompt, options.deploymentPolicyFocus);
       const persistReply = (reply: string) => save([...history, { role: "user", content: prompt }, { role: "assistant", content: reply }]);
       const persistProgress = async (match = evidence[0]) => {
         await session.assertCurrent();
@@ -321,7 +328,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           });
           results.set(key, pending);
           const result = await pending;
-          if (!search) accountReads[name] = JSON.parse(clean(JSON.stringify(result)));
+          if (!search) accountReads[name] = JSON.parse(JSON.stringify(result, (_key, value: unknown) => typeof value === "string" ? clean(value) : value));
           return result;
         }
       });
@@ -353,10 +360,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             hasReinstallSymptom(prompt)
               ? search(REINSTALL_SEARCH).catch(() => undefined)
               : undefined,
-            hasSupportFlowSymptom(prompt)
+            focusSupportPolicy
               ? search(SUPPORT_FLOW_SEARCH).catch(() => undefined)
               : undefined,
-            hasSupportFlowSymptom(prompt)
+            focusSupportPolicy
               ? search(DUPLICATE_TICKETS_SEARCH).catch(() => undefined)
               : undefined,
             hasSftpSymptom(prompt)
@@ -505,7 +512,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         // or the missing account state is required to answer the question.
         const failedEssentialRead = failedRequiredRead && essentialAccountState;
         const markerRequiresHandoff = requestedHandoff && (failedEssentialRead || hasAccountBlockerCue(prompt));
-        handoff ||= !acceptable || markerRequiresHandoff || (failedEssentialRead && !fitsHandoff);
+        handoff ||= !acceptable || asksForInstallerState(prompt) || markerRequiresHandoff || (failedEssentialRead && !fitsHandoff);
       } catch { handoff = true; }
       outerSignal.throwIfAborted();
       if (deadline.aborted && checkpoint) {

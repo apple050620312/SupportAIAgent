@@ -5,7 +5,7 @@ import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { wrapLanguageModel } from 'ai';
 import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
-import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type CitationGate } from '@support-ai-agent/agent-loop';
+import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, resolveAnswerModel, SupportCoreClient, type CitationGate, type DraftVerifier } from '@support-ai-agent/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
@@ -17,12 +17,19 @@ import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 type EventLog = { attempt: number; kind: 'tool' | 'gate' | 'judge' | 'diagnostic'; name: string; status: string; detail?: string };
 type Span = { source: string; startLine: number; endLine: number };
 type ModelFailure = { name: string; status: number | null };
+type AnswerCall = {
+  elapsedMs: number; promptBytes: number; inputTokens: number | null;
+  requestedTier: string | null; responseTier: string | null;
+  requestedEffort: string | null; responseEffort: string | null;
+};
 type AttemptTrace = {
   attempt: number;
   startedAt: string;
   endedAt: string;
   latencyMs: number;
   modelCallsMs: number[];
+  answerCalls: AnswerCall[];
+  verificationMs: number | null;
   modelFailures: ModelFailure[];
   toolCounts: Record<string, number>;
   retrievedEvidence: Span[];
@@ -43,8 +50,15 @@ type GoldenCheckpoint = Record<string, unknown> & {
   results: GoldenResult[];
 };
 
+type ResponsesSettings = { service_tier?: unknown; reasoning?: { effort?: unknown } };
+const observedTier = (value: unknown) => typeof value === 'string' && ['fast', 'priority', 'default', 'auto', 'flex', 'ultrafast', 'scale'].includes(value) ? value : null;
+const observedEffort = (value: unknown) => typeof value === 'string' && ['max', 'xhigh', 'high', 'medium', 'low', 'none', 'minimal'].includes(value) ? value : null;
+
 // No environment files are loaded, and provider exceptions are never serialized.
-const { values: args } = parseArgs({ options: { limit: { type: 'string' }, resume: { type: 'string' }, ids: { type: 'string' } } });
+const { values: args } = parseArgs({ options: {
+  limit: { type: 'string' }, resume: { type: 'string' }, ids: { type: 'string' },
+  'expect-index': { type: 'string' }, 'without-deployment-trigger': { type: 'boolean' }
+} });
 if ((args.limit !== undefined && (!/^[1-9]\d*$/.test(args.limit) || !Number.isSafeInteger(Number(args.limit)))) ||
     (args.ids !== undefined && !args.ids.split(',').every(id => /^GS-\d+$/.test(id)))) {
   throw new Error('Usage: pnpm eval:golden [--limit N] [--ids GS-001,GS-002] [--resume <result-file>]');
@@ -72,8 +86,9 @@ await mkdir(outputDir, { recursive: true, mode: 0o700 });
 const output = args.resume !== undefined ? resolve(args.resume) : join(outputDir, `golden-${new Date().toISOString().replace(/[:.]/g, '-')}-${items.length}.json`);
 const provider = (process.env.MODEL_PROVIDER ?? 'sub2api').toLowerCase();
 const endpoint = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://sub2api.coffeehost.net/v1';
-const modelId = process.env.MODEL_ID || process.env.AGENT_LIVE_MODEL_ID || 'gpt-6.1-sol';
-const metadata = { model: modelId, provider, endpoint, datasetSha256, answerabilityManifestSha256: createHash('sha256').update(manifestSource).digest('hex'), selected: items.length, ...(args.ids !== undefined || checkpoint?.selectedIds ? { selectedIds: items.map(item => item.id) } : {}), total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: { primary: 'semantic', judgeModel, judgeEndpoint, rubricVersion, lexical: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring' }, trueResolution7d: null };
+const answerModel = resolveAnswerModel();
+const deploymentPolicyFocus = !args['without-deployment-trigger'];
+const metadata = { model: answerModel.modelId, requestedReasoningEffort: answerModel.reasoningEffort, requestedServiceTier: answerModel.serviceTier, deploymentPolicyFocus, provider, endpoint, datasetSha256, answerabilityManifestSha256: createHash('sha256').update(manifestSource).digest('hex'), selected: items.length, ...(args.ids !== undefined || checkpoint?.selectedIds ? { selectedIds: items.map(item => item.id) } : {}), total: parsed.length, temperature: 0.2, stepCap: 10, hosting: 'synthetic; not live customer state', scoring: { primary: 'semantic', judgeModel, judgeEndpoint, rubricVersion, lexical: 'NFKC lowercase punctuation/whitespace-stripped whole-point substring' }, trueResolution7d: null };
 async function writeCheckpoint(report: object) {
   const temporary = `${output}.${randomUUID()}.tmp`;
   try {
@@ -101,6 +116,10 @@ if (blockers.length) {
 } else {
   const semanticSearch = process.env.EMBEDDING_PROVIDER === 'openai'
     ? await SemanticKnowledgeProvider.load(knowledge, new OpenAIEmbeddings(), resolve(process.env.KB_INDEX_PATH || '.kb-index/passages.json')) : undefined;
+  const expectedIndex = args['expect-index'];
+  if (expectedIndex !== undefined && (!/^[a-f0-9]{8,64}$/u.test(expectedIndex) || !semanticSearch?.index.digest.startsWith(expectedIndex))) {
+    throw new Error('Eval index digest does not match the requested corpus');
+  }
   const retrieval = semanticSearch ? { provider: 'openai', model: semanticSearch.index.model, threshold: 0.4, hybrid: 'cosine + 0.02/(lexical rank + 1)', digest: semanticSearch.index.digest } : { provider: 'lexical' };
   Object.assign(metadata, { retrieval });
   if (checkpoint && (
@@ -115,7 +134,7 @@ if (blockers.length) {
   const previousElapsedMs = checkpoint?.elapsedMs ?? results.reduce((total, row) => total + row.latencyMs, 0);
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
-  const verifyDraft = createLiveDraftVerifier({ ...process.env, AGENT_LIVE_MODEL: '1' });
+  const liveVerifier = createLiveDraftVerifier({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
   try {
     for (const [index, item] of items.entries()) {
@@ -138,23 +157,42 @@ if (blockers.length) {
       const eventLog: EventLog[] = [];
       const attemptTraces: AttemptTrace[] = [];
       let modelCallsMs: number[] = [];
+      let answerCalls: AnswerCall[] = [];
+      let verificationMs: number | null = null;
       const scrub = (text: string) => [process.env.SUB2API_API_KEY, process.env.OPENAI_API_KEY].reduce<string>((value, secret) => secret ? value.split(secret).join('[REDACTED]') : value, text);
       const spans = (rows: readonly Span[]) => [...new Map(rows.map(({ source, startLine, endLine }) =>
         [JSON.stringify([source, startLine, endLine]), { source: scrub(source), startLine, endLine }]
       )).values()];
-      const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate }) => {
+      const recordModelFailure = (error: unknown) => {
+        const providerError = error as { name?: unknown; statusCode?: unknown } | null;
+        const storeContinuation = /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(error instanceof Error ? error.message : '');
+        const name = String(providerError?.name);
+        modelFailures.push({ name: storeContinuation ? 'StoreContinuationError' : ['AI_APICallError', 'AbortError', 'TimeoutError', 'AI_NoOutputGeneratedError'].includes(name) ? name : 'OtherModelError', status: typeof providerError?.statusCode === 'number' ? providerError.statusCode : null });
+      };
+      const verifyDraft: DraftVerifier = async (input, signal) => {
+        const start = performance.now();
+        try { return await liveVerifier(input, signal); }
+        catch (error) { recordModelFailure(error); throw error; }
+        finally { verificationMs = Math.round(performance.now() - start); }
+      };
+      const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate, params }) => {
         steps++;
         let result;
         const startedAt = performance.now();
         const callTimes = modelCallsMs;
+        const callStats = answerCalls;
         try { result = await doGenerate(); }
-        catch (error) {
-          const e = error as { name?: unknown; statusCode?: unknown };
-          const storeContinuation = /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(error instanceof Error ? error.message : '');
-          modelFailures.push({ name: storeContinuation ? 'StoreContinuationError' : ['AI_APICallError', 'AbortError', 'TimeoutError', 'AI_NoOutputGeneratedError'].includes(String(e.name)) ? String(e.name) : 'OtherModelError', status: typeof e.statusCode === 'number' ? e.statusCode : null });
-          throw error;
-        } finally {
-          callTimes.push(Math.round(performance.now() - startedAt));
+        catch (error) { recordModelFailure(error); throw error; }
+        finally {
+          const elapsedMs = Math.round(performance.now() - startedAt);
+          const request = result?.request?.body as ResponsesSettings | undefined;
+          const response = result?.response?.body as ResponsesSettings | undefined;
+          callTimes.push(elapsedMs);
+          callStats.push({
+            elapsedMs, promptBytes: Buffer.byteLength(JSON.stringify(params.prompt)), inputTokens: result?.usage.inputTokens.total ?? null,
+            requestedTier: observedTier(request?.service_tier), responseTier: observedTier(response?.service_tier ?? result?.providerMetadata?.openai?.serviceTier),
+            requestedEffort: observedEffort(request?.reasoning?.effort), responseEffort: observedEffort(response?.reasoning?.effort)
+          });
         }
         finishReasons.push(result.finishReason.unified);
         drafts.push(result.content.filter(c => c.type === 'text').map(c => c.text).join(''));
@@ -167,6 +205,8 @@ if (blockers.length) {
         const observedAdmissions: Span[] = [];
         const toolCounts: Record<string, number> = {};
         modelCallsMs = [];
+        answerCalls = [];
+        verificationMs = null;
         admittedEvidence = [];
         let answerComplete: boolean | null = null;
         let currentContentCoverage: boolean | null = null;
@@ -192,7 +232,7 @@ if (blockers.length) {
           if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
           return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
         });
-        const runner = createVercelTicketRunner({ model, core, verifyDraft, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
+        const runner = createVercelTicketRunner({ model, core, verifyDraft, deploymentPolicyFocus, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
           const score = await semanticSearch.similarity(query, passage);
           semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
           return score;
@@ -229,14 +269,14 @@ if (blockers.length) {
         transientFailure ||= retryableModelFailure;
         // The runner can turn a provider error into a lifecycle handoff. Score
         // that as an unavailable answer when generation never reached the gate.
-        if (attemptFailures.length && citationGateAttempts.at(-1)?.status !== 'passed' &&
-            (!citationGateAttempts.at(-1) || citationGateAttempts.at(-1)?.status === 'not_evaluated')) {
+        if (attemptFailures.length && (!citationGate || citationGate.status === 'not_evaluated' ||
+            citationGate.failures.some(failure => failure.reason === 'verification_unavailable'))) {
           error = true;
         }
         const attemptEnd = Date.now();
         attemptTraces.push({
           attempt: attempts, startedAt: new Date(attemptStart).toISOString(), endedAt: new Date(attemptEnd).toISOString(),
-          latencyMs: attemptEnd - attemptStart, modelCallsMs: [...modelCallsMs],
+          latencyMs: attemptEnd - attemptStart, modelCallsMs: [...modelCallsMs], answerCalls, verificationMs,
           modelFailures: modelFailures.slice(failuresBeforeAttempt), toolCounts,
           retrievedEvidence: spans(evidence), admittedEvidence: spans(observedAdmissions),
           drafts: drafts.slice(draftsBeforeAttempt).map(scrub), answer: scrub(answer),
@@ -283,7 +323,17 @@ if (blockers.length) {
       overall: lexicalSummary(results),
       perCategory: Object.fromEntries(categories.map(category => [category, lexicalSummary(results.filter(r => r.category === category))])),
     };
-    const report = { ...metadata, kbStats, status: semanticSummary.unscored > 0 ? 'running' : 'completed', elapsedMs: previousElapsedMs + Date.now() - started, semanticSummary, byAnswerability: summarizeAnswerability(results), perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
+    const calls = results.flatMap(row => row.attemptTraces?.flatMap(attempt => attempt.answerCalls) ?? []);
+    const count = (key: keyof Pick<AnswerCall, 'requestedTier' | 'responseTier' | 'requestedEffort' | 'responseEffort'>) => {
+      const counts: Record<string, number> = {};
+      for (const call of calls) {
+        const label = call[key] ?? 'unknown';
+        counts[label] = (counts[label] ?? 0) + 1;
+      }
+      return counts;
+    };
+    const answerSettings = { requestedTiers: count('requestedTier'), responseTiers: count('responseTier'), requestedEfforts: count('requestedEffort'), responseEfforts: count('responseEffort') };
+    const report = { ...metadata, kbStats, status: semanticSummary.unscored > 0 ? 'running' : 'completed', elapsedMs: previousElapsedMs + Date.now() - started, answerSettings, semanticSummary, byAnswerability: summarizeAnswerability(results), perCategory, lexicalDiagnostic, averageSteps: results.reduce((n, r) => n + r.steps, 0) / results.length, cost: null, results };
     await writeCheckpoint(report);
     console.log(JSON.stringify({ ...report, results: undefined, output }, null, 2));
     if (semanticSummary.unscored > 0) process.exitCode = 1;
