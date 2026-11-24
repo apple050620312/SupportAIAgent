@@ -241,8 +241,10 @@ if (blockers.length) {
           toolCounts[path] = (toolCounts[path] ?? 0) + 1;
           const body = typeof init?.body === 'string' ? init.body : undefined;
           if (path.endsWith('/knowledge/read') && body) readWindows[body] = (readWindows[body] ?? 0) + 1;
-          const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)),
-            ...(body === undefined ? {} : { payload: body }), ...(init?.signal ? { signal: init.signal } : {}) });
+          const response = await harness.withRequestSignal(init?.signal, () => harness.app.inject({
+            method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)),
+            ...(body === undefined ? {} : { payload: body }), ...(init?.signal ? { signal: init.signal } : {})
+          }));
           if (response.statusCode >= 400) toolErrors.push(`${path}:HTTP_${response.statusCode}`);
           eventLog.push({ attempt: attempts, kind: 'tool', name: path, status: response.statusCode >= 400 ? 'error' : 'ok', ...(response.statusCode >= 400 ? { detail: `HTTP_${response.statusCode}` } : {}) });
           if (path.endsWith('/handoff') && response.statusCode < 400) handedOff = true;

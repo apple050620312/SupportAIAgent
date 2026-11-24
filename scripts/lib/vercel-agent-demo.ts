@@ -26,12 +26,12 @@ const mockVerifier: DraftVerifier = ({ draft, passages }) => Promise.resolve({
 export function demoRunner(harness: ReturnType<typeof createMockSupport>, historyRoot: string, model: LanguageModel = createDemoModel(), selection?: string, semanticRelevance?: Parameters<typeof createVercelTicketRunner>[0]["semanticRelevance"], verifyDraft = mockVerifier, prefetchSemanticEvidence = false) {
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
-    const response = await harness.app.inject({
+    const response = await harness.withRequestSignal(init?.signal, () => harness.app.inject({
       method: init?.method === "POST" ? "POST" : "GET", url: parsed.pathname,
       headers: Object.fromEntries(new Headers(init?.headers)),
       ...(typeof init?.body === "string" ? { payload: init.body } : {}),
       ...(init?.signal ? { signal: init.signal } : {})
-    });
+    }));
     return new Response(response.body, { status: response.statusCode, headers: { "content-type": "application/json" } });
   };
   return createVercelTicketRunner({ model, verifyDraft, prefetchSemanticEvidence, ...(semanticRelevance ? { semanticRelevance } : {}), core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
