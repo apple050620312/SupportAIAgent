@@ -3,7 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createDraftVerifier } from "./draft-verifier.js";
 
 const LUNA = "gpt-6-luna";
-const efforts = ["max", "xhigh", "high", "medium", "low", "none"] as const;
+const efforts = ["max", "xhigh", "high", "medium", "low"] as const;
 
 export function resolveAnswerModel(env: NodeJS.ProcessEnv = process.env) {
   const modelId = env.MODEL_ID || env.AGENT_LIVE_MODEL_ID || LUNA;

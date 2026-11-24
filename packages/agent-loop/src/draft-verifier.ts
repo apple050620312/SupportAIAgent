@@ -26,7 +26,7 @@ export function createDraftVerifier(model: LanguageModel): DraftVerifier {
   return async (input, signal) => {
     const result = await generateText({
       model, instructions: REVIEW_INSTRUCTIONS, prompt: JSON.stringify(input), output: Output.object({ schema }),
-      abortSignal: signal, maxRetries: 0, maxOutputTokens: 900, providerOptions: { openai: { store: false, reasoningEffort: "none" } }
+      abortSignal: signal, maxRetries: 0, maxOutputTokens: 900, providerOptions: { openai: { store: false, reasoningEffort: "low" } }
     });
     if (result.finishReason !== "stop") throw new Error("Incomplete draft review");
     return result.output;
