@@ -19,4 +19,38 @@ GS-094 moved from correct in all three rerun 20 clean samples to wrong with hand
 
 The new deployment trigger matches the exact GS-140 input and does not match GS-049 or GS-094. The predicate change acts inside route completeness, but GS-049 delivered and GS-094 already passed completeness. Neither change explains the observed failure paths. The drafts differ from rerun 20, and the evidence does not isolate generation and judge variance.
 
-Build, typecheck, lint, 419 script tests, 56 Support Core tests, and 76 mock eval checks passed. The live comparison, durability samples, and fix-4 retest are in progress.
+Build, typecheck, lint, 419 script tests, 56 Support Core tests, and 76 mock eval checks passed. 
+
+## Clean results
+
+All 13 standard-model rows were saved. The harness keeps its status as `running` and exits 1 when any row is unscored. The pass standard was unmet.
+
+| Run | Correct | Partial | Wrong | Unscored | Handoffs |
+|---|---:|---:|---:|---:|---:|
+| Rerun 20 6.1-sol | 6 | 3 | 3 | 1 | 3 |
+| Rerun 21 6.1-sol | 5 | 2 | 4 | 2 | 3 |
+
+| Item | Rerun 20 6.1-sol | Rerun 21 6.1-sol | Rerun 21 Luna |
+|---|---|---|---|
+| GS-018 | Unscored | Correct | Pending |
+| GS-023 | Correct | Correct | Pending |
+| GS-030 | Partial | Unscored | Pending |
+| GS-049 | Correct | Wrong | Pending |
+| GS-053 | Partial | Partial | Pending |
+| GS-056 | Wrong / handoff | Wrong / handoff | Pending |
+| GS-062 | Wrong / handoff | Correct | Pending |
+| GS-084 | Correct | Correct | Pending |
+| GS-094 | Correct | Wrong / handoff | Pending |
+| GS-108 | Correct | Partial | Pending |
+| GS-140 | Partial | Unscored | Pending |
+| GS-163 | Correct | Correct | Pending |
+| GS-166 | Wrong / handoff | Wrong / handoff | Pending |
+
+
+## GS-140 routing and GS-166 citation fidelity
+
+GS-140 admitted `store/discord.md` and `store/services/duplicate-tickets.md` on all three 6.1-sol attempts. Each timed out before reaching the gates. Admission worked live. The explicit wait-for-staff advice and delivery still need verification.
+
+GS-166 admitted the upload and SFTP articles and handed off after two excerpt mismatches with zero exact citation matches. The draft judge also found missing destination-by-file-type guidance and a threshold that conflicted with the staff reference. The two mismatches show the gate rejected those citations. They do not establish a gate defect. Destinations and the panel threshold remain owner decisions. Retention and restoration for GS-049/GS-053 and section 5 of the conventions report also remain open.
+
+The Luna comparison, durability samples, and targeted fix-4 run are in progress.
