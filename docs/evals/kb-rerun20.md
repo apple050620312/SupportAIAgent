@@ -16,3 +16,5 @@ The owner rulings remain open on GS-049/GS-053 retention and restoration, GS-166
 ## Routing verification
 
 The first routing block saved both rows in `golden-2026-11-24T04-02-03-003Z-2.json`. GS-062 admitted both policy sources on the first repeat. All three attempts timed out before the gate. Each made three searches, eight article reads, one status read and one log read. The two model calls took 6.36 + 51.97 s, 6.05 + 53.56 s and 5.10 + 54.48 s. No completed answer or staff marker was recorded. GS-140 delivered in 46.1 s, scored partial and overrode its staff marker. Neither policy source was admitted, so this does not meet the routing verification criteria.
+
+The second block saved GS-062 in `golden-2026-11-24T04-06-27-536Z-2.json`. It delivered on the first attempt in 36.2 s with both policy articles admitted, citation and completeness gates passed, and all three semantic points covered. The draft explicitly says product incidents go to after-sales, general support does not handle them, and duplicate tickets do not speed up processing. The runner recorded and overrode a staff marker after the synthetic log read returned 404.
