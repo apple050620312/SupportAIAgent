@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, renderPassageIds, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, DEMO_PASSAGE, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
@@ -183,7 +183,7 @@ describe("Vercel read-only agent", () => {
     const result = await demoRunner(harness, root, model).run(request, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(DEMO_PASSAGE);
-    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
     expect(harness.providerCalls.some((path) => path.endsWith("/power"))).toBe(false);
     const tools = model.doGenerateCalls[0]?.tools ?? [];
@@ -246,9 +246,9 @@ describe("Vercel read-only agent", () => {
     const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
     const content = message?.content[0];
     if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
-    const { matches } = content.output.value as { matches: { label: string }[] };
+    const { matches } = content.output.value as { matches: { source: string }[] };
     expect(matches).toHaveLength(8);
-    expect(matches.filter(match => match.label === cite)).toHaveLength(1);
+    expect(matches.filter(match => match.source === source)).toHaveLength(1);
     expect(result.admittedEvidence).toContainEqual({ source, startLine: 1, endLine: 12 });
     expect(JSON.stringify(content.output.value)).toContain("POSSIBLE_ROOT_CAUSE");
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
@@ -377,6 +377,28 @@ describe("Vercel read-only agent", () => {
       expect(audit).not.toHaveBeenCalled();
     });
 
+    it("distinguishes a rejected claim from a verifier reference error", async () => {
+      const check = (verify: DraftVerifier) => evaluateCitationGate(
+        { question: "What should I do?", draft: paraphrase, evidence }, verify, new AbortController().signal
+      );
+      const invalid = "[synthetic/recovery.md:1-3]";
+      expect((await check(() => Promise.resolve({ claimsSupported: true, complete: true, references: [invalid] }))).failures)
+        .toEqual([{ citation: invalid, reason: "invalid_verifier_reference" }]);
+      const claim = "verify what you find with the customer";
+      expect((await check(() => Promise.resolve({ claimsSupported: false, complete: true, references: [label], issue: claim }))).failures)
+        .toEqual([{ citation: null, reason: "unsupported_claim", detail: claim }]);
+    });
+
+    it("renders two individual span IDs and rejects an unassigned ID", async () => {
+      const second = "[synthetic/recovery.md:3-4]";
+      const draft = renderPassageIds("Check the state [P1] and confirm the result [P2].", new Map([["[P1]", label], ["[P2]", second]]));
+      expect(draft).toBe("Check the state " + label + " and confirm the result " + second + ".");
+      const result = await evaluateCitationGate(
+        { question: "What should I do?", draft: paraphrase + " [P3]", evidence }, verify(true), new AbortController().signal
+      );
+      expect(result.failures).toContainEqual({ citation: "[P3]", reason: "unknown_citation" });
+    });
+
     it("fails closed when the verifier is unavailable", async () => {
       const gate = await evaluateCitationGate({ question: "What should I do?", draft: paraphrase, evidence }, () => Promise.reject(new Error("unavailable")), new AbortController().signal);
       expect(gate).toMatchObject({ status: "failed", grounded: false, failures: [{ reason: "verification_unavailable" }] });
@@ -413,12 +435,12 @@ describe("Vercel read-only agent", () => {
 
   it("uses one drafting call after prefetched knowledge and required own-server status", async () => {
     const { root, harness, request, signal } = await setup();
-    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_ANSWER)] });
+    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_PASSAGE + " [P1]")] });
     const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.7) };
     const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(model.doGenerateCalls).toHaveLength(1);
-    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
   });
 
@@ -865,5 +887,11 @@ describe("support routing coverage", () => {
   it("keeps existing-ticket-only guidance incomplete", () => {
     const answer = base + "請先在原本的客服單補充伺服器名稱、斷線的時間、畫面上的訊息及重裝之後的狀況，方便客服在同一張單繼續確認。";
     expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(false);
+  });
+
+  it("accepts the saved installer routing phrasing", () => {
+    const installer = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
+    const phrasing = "這是產品／服務問題，應由「售後服務」類別處理；一般支援單不處理產品售後問題。若你已在同一問題的售後單，請在原單等技術人員；重複開單不會加快處理。";
+    expect(answerCompletenessCheck(base + phrasing, installer, evidence)).toBe(true);
   });
 });
