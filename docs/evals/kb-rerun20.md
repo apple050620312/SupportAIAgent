@@ -13,6 +13,28 @@ Build, typecheck, lint, 474 tests and 76 mock eval checks passed before the live
 
 The owner rulings remain open on GS-049/GS-053 retention and restoration, GS-166 SFTP destinations and panel threshold, and section 5 of the conventions report.
 
+## Final clean results
+
+The 13 clean items yielded **6 correct, 3 partial, 3 wrong and 1 unscored**. Rerun 19 yielded 4 correct, 3 partial, 3 wrong and 3 unscored. Scored handoffs rose from two to three (GS-056, GS-062 and GS-166). The pass standard was unmet. The harness saved all rows and the final summary in `golden-2026-11-24T04-40-33-409Z-13.json`. Its status remains `running` because GS-018 exhausted its retries unscored.
+
+| Item | Rerun 19 clean → rerun 20 clean | Answer attempts |
+|---|---|---|
+| GS-018 | Unscored → Unscored | 60.2 s timeout / 60.0 s timeout / 60.0 s timeout |
+| GS-023 | Partial / delivered → Correct / delivered | 45.5 s |
+| GS-030 | Unscored → Partial / delivered | 58.8 s |
+| GS-049 | Correct / delivered → Correct / delivered | 35.8 s |
+| GS-053 | Partial / delivered → Partial / delivered | 35.9 s |
+| GS-056 | Wrong / handoff → Wrong / handoff | 26.6 s |
+| GS-062 | Wrong / handoff → Wrong / handoff | 31.7 s |
+| GS-084 | Correct / delivered → Correct / delivered | 29.6 s |
+| GS-094 | Partial / delivered → Correct / delivered | 58.3 s |
+| GS-108 | Correct / delivered → Correct / delivered | 39.6 s |
+| GS-140 | Wrong / delivered → Partial / delivered | 41.2 s |
+| GS-163 | Correct / delivered → Correct / delivered | 34.0 s |
+| GS-166 | Unscored → Wrong / handoff | 36.8 s |
+
+GS-030 also delivered a partial answer on the standard loop in the full run, at 58.8 s with 28 admissions and the same tool counts as its targeted baseline. Its model calls took 4.74 + 51.63 s. That completion shows variability on the standard model under the same deadline. GS-166 reached citation checks this time. Two excerpt mismatches triggered a handoff. The draft judge still found the destination-by-file-type point missing. GS-140 improved to partial but still admitted neither policy article and did not explicitly advise waiting for technical staff. GS-084, GS-094, GS-108 and GS-163 scored correct in all three clean samples in this round.
+
 ## Routing verification
 
 The first routing block saved both rows in `golden-2026-11-24T04-02-03-003Z-2.json`. GS-062 admitted both policy sources on the first repeat. All three attempts timed out before the gate. Each made three searches, eight article reads, one status read and one log read. The two model calls took 6.36 + 51.97 s, 6.05 + 53.56 s and 5.10 + 54.48 s. No completed answer or staff marker was recorded. GS-140 delivered in 46.1 s, scored partial and overrode its staff marker. Neither policy source was admitted, so this does not meet the routing verification criteria.
