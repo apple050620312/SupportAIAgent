@@ -5,7 +5,7 @@ import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { wrapLanguageModel } from 'ai';
 import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
-import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type CitationGate, type CitationGateRepair } from '@support-ai-agent/agent-loop';
+import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type CitationGate } from '@support-ai-agent/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
@@ -34,7 +34,7 @@ type AttemptTrace = {
   answerComplete: boolean | null;
   semanticVerdict: SemanticResult['verdict'];
 };
-type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; attemptTraces?: AttemptTrace[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; citationGateRepair?: CitationGateRepair | null; answerCompletenessAttempts?: (boolean | null)[]; contentCoverage?: boolean | null; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; handoffMarkerOverridden?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
+type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; attemptTraces?: AttemptTrace[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: { name: string; status: number | null }[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; answerCompletenessAttempts?: (boolean | null)[]; contentCoverage?: boolean | null; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; handoffMarkerOverridden?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
 type GoldenCheckpoint = Record<string, unknown> & {
   status: string;
   selected: number;
@@ -115,6 +115,7 @@ if (blockers.length) {
   const previousElapsedMs = checkpoint?.elapsedMs ?? results.reduce((total, row) => total + row.latencyMs, 0);
   const started = Date.now();
   const baseModel = createLiveModel({ ...process.env, AGENT_LIVE_MODEL: '1' });
+  const verifyDraft = createLiveDraftVerifier({ ...process.env, AGENT_LIVE_MODEL: '1' });
   if (typeof baseModel === 'string') throw new Error('Expected explicit provider model');
   try {
     for (const [index, item] of items.entries()) {
@@ -128,7 +129,6 @@ if (blockers.length) {
       const drafts: string[] = [];
       const answerCompletenessAttempts: (boolean | null)[] = [];
       let finalContentCoverage: boolean | null = null;
-      let citationGateRepair: CitationGateRepair | null = null;
       const citationGateAttempts: (CitationGate | null)[] = [];
       const semanticScores: { source: string; startLine: number; score: number }[] = [];
       const evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[] = [];
@@ -171,7 +171,6 @@ if (blockers.length) {
         let answerComplete: boolean | null = null;
         let currentContentCoverage: boolean | null = null;
         let citationGate: CitationGate | null = null;
-        citationGateRepair = null;
         answer = '';
         handedOff = false;
         handoffMarkerPresent = false;
@@ -193,7 +192,7 @@ if (blockers.length) {
           if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
           return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
         });
-        const runner = createVercelTicketRunner({ model, core, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
+        const runner = createVercelTicketRunner({ model, core, verifyDraft, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
           const score = await semanticSearch.similarity(query, passage);
           semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
           return score;
@@ -208,7 +207,7 @@ if (blockers.length) {
         } });
         try {
           const result = await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal);
-          ({ reply: answer, citationGate, citationGateRepair, answerComplete, contentCoverage: currentContentCoverage, admittedEvidence, handoffMarkerPresent, handoffMarkerOverridden } = result);
+          ({ reply: answer, citationGate, answerComplete, contentCoverage: currentContentCoverage, admittedEvidence, handoffMarkerPresent, handoffMarkerOverridden } = result);
           eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarker', status: handoffMarkerPresent ? 'present' : 'absent' });
           if (handoffMarkerPresent) eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarkerDecision', status: handoffMarkerOverridden ? 'overridden' : 'retained' });
         } catch (caught) {
@@ -249,7 +248,7 @@ if (blockers.length) {
           await new Promise(resolve => setTimeout(resolve, attempts * delay));
         }
       } while (transientFailure && attempts < 3);
-      const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
+      const hasGateEvidence = citationGateAttempts.at(-1)?.claimSupport === true;
       const judge = async (reference: typeof item, delivered: string) => {
         eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'started' });
         try {
@@ -272,7 +271,7 @@ if (blockers.length) {
       const referenceConflict = reconcileReference(`${item.staff_resolution} ${item.expected_points.join(' ')}`, handoffContentVerdict && 'judgment' in handoffContentVerdict ? handoffContentVerdict.judgment?.reason ?? '' : semantic && 'judgment' in semantic ? semantic.judgment?.reason ?? '' : '', evidence);
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), attemptTraces, handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
         citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", currentPolicyCoverage: answerCompletenessAttempts.at(-1) === true && evidence.length > 0, ungroundedDelivery: !error && !handedOff && !hasGateEvidence,
-        citationGateAttempts, citationGateRepair, answerCompletenessAttempts, contentCoverage: finalContentCoverage, handoffMarkerPresent, handoffMarkerOverridden, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), admittedEvidence: admittedEvidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine })), semanticSupport: 'not assessed', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
+        citationGateAttempts, answerCompletenessAttempts, contentCoverage: finalContentCoverage, handoffMarkerPresent, handoffMarkerOverridden, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), admittedEvidence: admittedEvidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine })), semanticSupport: hasGateEvidence ? 'supported' : 'not verified', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
       console.log(`${item.id}: ${error ? 'error' : handedOff ? 'handoff' : 'answer'} (${steps} steps)`);
     }

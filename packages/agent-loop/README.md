@@ -59,12 +59,12 @@ the official chat path remains construction-tested only; step 9 uses official Op
   is active. This is a single-host interim store, without DB/Redis/queue.
 - Require fresh KB retrieval each turn. The default offline lexical gate accepts passages
   with at least 0.2 lexical query coverage, or the best returned passage at
-  0.1 (English tokens / Chinese bigrams), and a final answer containing an exact
-  returned excerpt plus `[source:start-end]`. The system prompt explicitly requires copying a whole excerpt verbatim (including Markdown/line breaks), and each admitted match includes a ready-to-copy `requiredQuote`. The optional semantic mode below replaces lexical admission. Missing/irrelevant retrieval,
-  invalid tools, provider failure, missing citations or step exhaustion hands
-  off. This conservative heuristic is not calibrated confidence or a semantic
-  proof that every sentence is supported. Account-only requests also require KB
-  evidence in this first version. The prompt requests the customer's language;
+  0.1 (English tokens / Chinese bigrams). The optional semantic mode below replaces lexical admission.
+  The draft must use exact `[source:start-end]` labels for admitted ranges and can paraphrase the evidence.
+  A separate `gpt-6.1-sol` review checks that all material claims have support in the cited passages or verified account reads,
+  and that applicable steps and qualifications are present. Review runs inside the same turn deadline.
+  Missing or irrelevant evidence, invalid tools, failed review, missing citations or step exhaustion lead to staff handoff.
+  Account-only requests also require KB evidence. The prompt requests the customer's language.
   deterministic handoff text supports Chinese (Han detected) and English.
 - Retain the existing synthetic harness defaults for baseline tests. Optional
   synthetic invoice/log ports let the new tests verify successful reads and

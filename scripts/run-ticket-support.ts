@@ -6,7 +6,7 @@ import {
   LegacyTicketAdapter, legacyMongooseReader, installLegacyMutationGuard, TicketBridge,
   DiscordTicketSupport, attachTicketSupportEvents, TicketBridgeError
 } from "@support-ai-agent/ticket-bridge";
-import { createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from "@support-ai-agent/agent-loop";
+import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, SupportCoreClient } from "@support-ai-agent/agent-loop";
 import { createShadowVerdictRecorder } from "./lib/shadow-verdict-log.js";
 import { openDiscordShadowThread } from "./lib/discord-shadow.js";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
@@ -67,6 +67,7 @@ async function main() {
     const audit = setup.auditChannelId ? privateDiscordAudit(await client.channels.fetch(setup.auditChannelId),
       setup.guildId, setup.auditChannelId, setup.staff, client.user?.id ?? "", (code) => console.error(code)) : undefined;
     const runner = createVercelTicketRunner({
+      verifyDraft: createLiveDraftVerifier(environment),
       model: runnerModel, draftOnly: true, history: new FileHistoryStore(resolve(shadowRoot, "history")),
       core: new SupportCoreClient(`http://127.0.0.1:${setup.port}/`),
       authenticate({ sessionId, ticketToken }) {
