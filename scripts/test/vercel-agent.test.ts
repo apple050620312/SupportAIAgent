@@ -61,6 +61,23 @@ describe("reinstall task coverage", () => {
   });
 });
 
+describe("first-purchase activation notice", () => {
+  const question = "購買伺服器後如何啟動？";
+  const source = "panel/start-server.md";
+  const start = { source, startLine: 15, endLine: 18, excerpt: "登入後切換至控制台，點擊啟動。" };
+  const notice = { source, startLine: 1, endLine: 14, excerpt: "首次購買時，服務開通後會收到控制面板帳號建立通知。" };
+  const reply = "登入後切換至控制台，點擊啟動。 [panel/start-server.md:15-18]";
+
+  it("adds the first-purchase notice only from the passage documenting it", () => {
+    expect(repairRequiredTaskDraft(reply, question, [start] as never)).toBe(reply);
+    const evidence = [start, notice] as never;
+    const repaired = repairRequiredTaskDraft(reply, question, evidence);
+    expect(repaired).toContain("若是首次購買，請等服務開通後收到控制面板帳號建立通知，再依通知設定帳號。 [panel/start-server.md:1-14]");
+    expect(answerCompletenessCheck(repaired, question, evidence)).toBe(true);
+    expect(repairRequiredTaskDraft(repaired, question, evidence)).toBe(repaired);
+  });
+});
+
 describe("hasAccountBlockerCue", () => {
   it.each([
     "映像欄位鎖住，我需要 Java 8", "我的帳戶被鎖定", "無法更改映像", "版本不能改",
