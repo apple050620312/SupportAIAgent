@@ -5,7 +5,7 @@ The clean comparison uses the 13 docs items, the same semantic judge as rerun 20
 | Corpus | Digest |
 |---|---|
 | Clean, 72 articles and 570 passages | `6b7b4b6d68e2e0e19f9d6977f6e9c3a6fd23dde28cba54e4283895edfae7bec5` |
-| Fix 4, expected | `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a` |
+| Fix 4, rebuilt and verified | `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a` |
 
 The prior finish attempt rebuilt the clean index. On restart, the working settings article matched `clean-settings.md`, the backup `fix4-settings.md` still contained the reset sentence, and the harness validated the rebuilt index against the current corpus. The harness accepted `--resume eval-results/golden-2026-11-24T05-23-38-224Z-13.json` with nine existing rows. The missing rows run at `d89aeac`. Resume skips saved rows with a verdict and retries saved unscored rows. It preserved eight scored rows and retried GS-030, which remained unscored after three timeouts.
 
@@ -78,4 +78,8 @@ The full 6.1-sol clean run is sample one. Four additional blocks scheduled the s
 | golden-2026-11-24T06-27-51-707Z-5.json | Partial (1) | Correct (1) | Correct (1) | Correct (1) | Correct (1) |
 | golden-2026-11-24T06-32-12-971Z-5.json | Partial (1) | Correct (1) | Correct (1) | Correct (1) | Correct (1) |
 
-The targeted fix-4 run is in progress.
+## Fix-4 corpus check
+
+After the clean samples, the settings article was restored from `~/workspace/fix4-settings.md` and checked for the reset sentence. The semantic index was rebuilt with official OpenAI embeddings and installed after its digest matched `04003b9b`. Both the corpus and index are left in the fix-4 state.
+
+The clean GS-056 row handed off. The fix-4 GS-056 result in `golden-2026-11-24T06-36-06-854Z-1.json` was Correct, 1 attempt(s), 2 exact matches and 0 citation failures.
