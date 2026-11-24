@@ -343,6 +343,36 @@ describe("Vercel read-only agent", () => {
     expect(result.admittedEvidence.map(match => match.source)).toEqual(expect.arrayContaining(matches.map(match => match.source)));
   });
 
+  it("uses a cited wait instruction when an installer draft leaves out the technical staff reply", async () => {
+    const prompt = "The modpack installer failed to deploy. Can staff check the deployment and package index?";
+    const routing = {
+      articleRef: `kb:${"a".repeat(64)}`, source: "store/discord.md", title: "Discord", heading: "After-sales category",
+      startLine: 1, endLine: 4, excerpt: "Link Discord for the customer role to open an after-sales ticket for a product issue."
+    };
+    const wait = {
+      articleRef: `kb:${"b".repeat(64)}`, source: "store/services/duplicate-tickets.md", title: "Ticket policy", heading: "Wait for support",
+      startLine: 5, endLine: 9, excerpt: "Wait for technical staff to reply after opening a ticket. Duplicate tickets will not speed up handling."
+    };
+    const search = ({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const,
+      matches: query.includes("綁定 Discord") ? [routing] : query.includes("重複開客服單") ? [wait] : []
+    });
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const draft = "For this product issue, open an after-sales ticket once you link Discord and get the customer role. [store/discord.md:1-4] " +
+      "Ask technical staff to check the installer deployment and package index. Duplicate tickets will not speed up handling. [store/services/duplicate-tickets.md:5-9]";
+    const model = new MockLanguageModelV4({ doGenerate: mockText(draft) });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
+    const verify: DraftVerifier = input => Promise.resolve({
+      claimsSupported: true, complete: input.draft.includes("wait for technical staff to reply in that same ticket"),
+      references: input.passages.map(passage => passage.label)
+    });
+    expect(answerCompletenessCheck(draft, prompt, [routing, wait])).toBe(false);
+    const result = await demoRunner(harness, root, model, undefined, relevance, verify, true).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ answerComplete: true, citationGate: { status: "passed" } });
+    expect(result.reply).toContain("wait for technical staff to reply in that same ticket. [store/services/duplicate-tickets.md:5-9]");
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
+
   it("keeps broad-article passages from the primary search without their focused symptoms", async () => {
     const matches = ([
       ["panel/common/settings.md", "General settings passage."],
