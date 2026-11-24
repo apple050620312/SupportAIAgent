@@ -7,10 +7,16 @@ import type {
 } from "@support-ai-agent/contracts";
 import type { SupportKnowledgeProvider } from "../ports/index.js";
 
+export interface KnowledgeArticle {
+  readonly articleRef: string;
+  readonly source: string;
+  readonly content: string;
+}
+
 export class KnowledgeIndexError extends Error {
   constructor() { super("Support knowledge could not be indexed; check the configured folder and documented limits locally"); }
 }
-interface Article { articleRef: string; source: string; title: string; lines: string[]; }
+interface Article extends KnowledgeArticle { title: string; lines: string[]; }
 interface Chunk { article: Article; heading: string; startLine: number; endLine: number; text: string; terms: Map<string, number>; }
 interface Index { articles: Map<string, Article>; chunks: Chunk[]; frequency: Map<string, number>; averageLength: number; bytes: number; }
 export interface KnowledgeLimits {
@@ -99,6 +105,10 @@ export class MarkdownKnowledgeProvider implements SupportKnowledgeProvider {
   async stats(): Promise<{ articles: number; chunks: number; bytes: number }> {
     const index = await this.current();
     return { articles: index.articles.size, chunks: index.chunks.length, bytes: index.bytes };
+  }
+
+  async articles(): Promise<KnowledgeArticle[]> {
+    return [...(await this.current()).articles.values()].map(({ articleRef, source, content }) => ({ articleRef, source, content }));
   }
 
   /** Canonical bounded excerpts for reproducible offline embedding indexes. */
@@ -205,14 +215,16 @@ export class MarkdownKnowledgeProvider implements SupportKnowledgeProvider {
           if (length > this.#limits.maxFileBytes || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) throw new KnowledgeIndexError();
           bytes += length;
           if (bytes > this.#limits.maxTotalBytes) throw new KnowledgeIndexError();
-          content = new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, length)).replace(/\r\n?/g, "\n");
+          content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer.subarray(0, length));
         } finally { await handle.close(); }
         if (content.includes("\0")) throw new KnowledgeIndexError();
         if (!content.trim()) continue;
-        const lines = content.split("\n");
+        const normalizedContent = content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+        if (!normalizedContent.trim()) continue;
+        const lines = normalizedContent.split("\n");
         if (lines.length > 20_000 || lines.some((line) => line.length > MAX_LINE_CHARS)) throw new KnowledgeIndexError();
-        const articleRef = `kb:${createHash("sha256").update(source).update("\0").update(content).digest("hex")}`;
-        const article = { articleRef, source, title: lines.map(heading).find((value) => value !== undefined) ?? entry.name.slice(0, 256), lines };
+        const articleRef = `kb:${createHash("sha256").update(source).update("\0").update(normalizedContent).digest("hex")}`;
+        const article = { articleRef, source, content, title: lines.map(heading).find((value) => value !== undefined) ?? entry.name.slice(0, 256), lines };
         articles.set(articleRef, article); chunks.push(...chunksFor(article));
         if (articles.size > this.#limits.maxFiles || chunks.length > 40_000) throw new KnowledgeIndexError();
       }

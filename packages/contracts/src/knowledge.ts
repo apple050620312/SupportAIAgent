@@ -12,20 +12,25 @@ export const KnowledgeReadRequestSchema = Type.Object({
 }, { additionalProperties: false });
 
 const source = Type.String({ minLength: 1, maxLength: 512 });
+const teachingDate = Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
 export const KnowledgeSearchResponseSchema = Type.Object({
   trust: Type.Literal("reference_only"),
   matches: Type.Array(Type.Object({
     articleRef: KnowledgeArticleRefSchema, source,
     title: Type.String({ maxLength: 256 }), heading: Type.String({ maxLength: 256 }),
     startLine: Type.Integer({ minimum: 1 }), endLine: Type.Integer({ minimum: 1 }),
-    excerpt: Type.String({ maxLength: 800 })
+    excerpt: Type.String({ maxLength: 800 }),
+    teachingDate: Type.Optional(teachingDate)
   }, { additionalProperties: false }), { maxItems: 8 })
 }, { additionalProperties: false });
 export const KnowledgeReadResponseSchema = Type.Object({
   trust: Type.Literal("reference_only"), articleRef: KnowledgeArticleRefSchema, source,
   title: Type.String({ maxLength: 256 }), content: Type.String({ maxLength: 24_000 }),
   startLine: Type.Integer({ minimum: 1 }), endLine: Type.Integer({ minimum: 1 }),
-  totalLines: Type.Integer({ minimum: 1 }), nextLine: Type.Optional(Type.Integer({ minimum: 1 }))
+  totalLines: Type.Integer({ minimum: 1 }), nextLine: Type.Optional(Type.Integer({ minimum: 1 })),
+  teachings: Type.Optional(Type.Array(Type.Object({
+    teachingDate, startLine: Type.Integer({ minimum: 1 }), endLine: Type.Integer({ minimum: 1 })
+  }, { additionalProperties: false }), { maxItems: 120 }))
 }, { additionalProperties: false });
 export type KnowledgeSearchRequest = Static<typeof KnowledgeSearchRequestSchema>;
 export type KnowledgeSearchResponse = Static<typeof KnowledgeSearchResponseSchema>;

@@ -15,6 +15,7 @@
     "demo:mock": "corepack pnpm build && node --import tsx scripts/demo-mock-support.ts",
     "probe:read-only": "corepack pnpm build && node --env-file-if-exists=.env.support-probe --import tsx scripts/probe-read-only-support.ts",
     "start:ticket-support": "corepack pnpm build && node --env-file-if-exists=.env.ticket-support --import tsx scripts/run-ticket-support.ts",
+    "start:discord-management": "corepack pnpm build && node --import tsx scripts/run-discord-management.ts",
     "eval:mock": "corepack pnpm build && vitest run scripts/test/support-flow.test.ts scripts/test/support-security.test.ts scripts/test/read-only-providers.test.ts scripts/test/support-knowledge-flow.test.ts",
     "characterize:get-client-id": "node --env-file-if-exists=.env.characterization --import tsx scripts/characterize-get-client-id.ts",
     "knowledge:check": "corepack pnpm build && node --env-file-if-exists=.env.ticket-support --import tsx scripts/check-support-knowledge.ts",
@@ -39,6 +40,7 @@
     "typescript-eslint": "^8.44.1",
     "vitest": "^3.2.4",
     "@support-ai-agent/agent-loop": "workspace:*",
-    "ai": "7.0.172"
+    "ai": "7.0.172",
+    "discord.js": "14.28.1"
   }
 }

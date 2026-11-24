@@ -15,5 +15,6 @@ knowledge/
 eval-results/
 
 .kb-index/
+.teachable/
 
 /.ticket-shadow/

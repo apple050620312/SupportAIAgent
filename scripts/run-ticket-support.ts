@@ -12,7 +12,10 @@ import { openDiscordShadowThread } from "./lib/discord-shadow.js";
 import { buildApp } from "../apps/support-core/dist/src/app.js";
 import { prepareTicketSupport, shadowAutoAdmissionEnabled, TicketSupportSetupError } from "./lib/ticket-support-setup.js";
 import { privateDiscordAudit } from "./lib/discord-support-audit.js";
-import { MarkdownKnowledgeProvider } from "../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
+import { FileTeachingCorpus, PublishedKnowledgeProvider } from "../apps/support-core/dist/src/adapters/file-teaching-corpus.js";
+import { OpenAIEmbeddings } from "../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js";
+import { FileWorkflowJournal } from "../apps/support-core/dist/src/adapters/teaching-files.js";
+import type { ProposalRecord } from "../apps/support-core/dist/src/services/teaching-service.js";
 import { SupportKnowledgeService } from "../apps/support-core/dist/src/services/support-knowledge-service.js";
 
 /** Manual launcher. Never imported by tests or default dev/start. */
@@ -31,9 +34,11 @@ async function main() {
     appendFile(resolve(shadowRoot, file), JSON.stringify(entry) + "\n", { mode: 0o600 });
   const runnerModel = createLiveModel(environment);
   // Load only reviewed local documentation before importing the live baseline.
-  const knowledgeProvider = new MarkdownKnowledgeProvider(setup.knowledgeRoot);
+  const corpus = new FileTeachingCorpus(setup.knowledgeRoot, resolve(environment.KB_INDEX_PATH || ".kb-index/passages.json"),
+    environment.EMBEDDING_PROVIDER === "openai" ? new OpenAIEmbeddings(environment) : undefined);
+  const knowledgeProvider = new PublishedKnowledgeProvider(corpus, new FileWorkflowJournal<ProposalRecord>(setup.knowledgeRoot, "teaching"));
   try {
-    if (!(await knowledgeProvider.stats()).articles) throw new Error();
+    if (!(await (await knowledgeProvider.current()).lexical.stats()).articles) throw new Error();
   } catch { throw new TicketSupportSetupError("Support knowledge is unavailable; run knowledge:check before starting the bot"); }
   const knowledge = new SupportKnowledgeService(knowledgeProvider);
   if (!isAbsolute(setup.root)) throw new TicketSupportSetupError("TICKET_BOT_ROOT must be an absolute extracted baseline directory");

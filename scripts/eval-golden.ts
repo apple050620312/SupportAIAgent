@@ -8,6 +8,9 @@ import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
 import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, resolveAnswerModel, SupportCoreClient, TurnTimeout, type CitationGate, type DraftVerifier } from '@support-ai-agent/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
+import { FileTeachingCorpus } from '../apps/support-core/dist/src/adapters/file-teaching-corpus.js';
+import { FileWorkflowJournal } from '../apps/support-core/dist/src/adapters/teaching-files.js';
+import type { ProposalRecord } from '../apps/support-core/dist/src/services/teaching-service.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from './lib/golden-eval.js';
 import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type SemanticResult, type HandoffContentVerdict, type JudgeRoute, type ReferenceConflict } from './lib/semantic-judge.js';
@@ -65,7 +68,7 @@ type ResponsesSettings = { model?: unknown; service_tier?: unknown; reasoning?: 
 const { values: args } = parseArgs({ options: {
   limit: { type: 'string' }, resume: { type: 'string' }, ids: { type: 'string' },
   'expect-index': { type: 'string' }, 'without-deployment-trigger': { type: 'boolean' },
-  'gs030-max-control': { type: 'boolean' }
+  'gs030-max-control': { type: 'boolean' }, 'published-teachings': { type: 'boolean' }
 } });
 if ((args.limit !== undefined && (!/^[1-9]\d*$/.test(args.limit) || !Number.isSafeInteger(Number(args.limit)))) ||
     (args.ids !== undefined && !args.ids.split(',').every(id => /^GS-\d+$/.test(id)))) {
@@ -116,7 +119,13 @@ if (process.env.GOLDEN_LIVE_MODEL !== '1') blockers.push('GOLDEN_LIVE_MODEL=1 re
 if (!((provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.SUB2API_API_KEY) || '').trim()) blockers.push(`${provider === 'openai' ? 'OPENAI_API_KEY' : 'SUB2API_API_KEY'} absent`);
 const judgeKey = process.env.SUB2API_API_KEY?.trim();
 if (!judgeKey && provider === 'openai') blockers.push('SUB2API_API_KEY absent for semantic judge');
-const knowledge = new MarkdownKnowledgeProvider(supportKnowledgeRoot(process.env));
+const knowledgeRoot = supportKnowledgeRoot(process.env);
+const embeddings = process.env.EMBEDDING_PROVIDER === 'openai' && process.env.OPENAI_API_KEY ? new OpenAIEmbeddings() : undefined;
+const indexPath = resolve(process.env.KB_INDEX_PATH || '.kb-index/passages.json');
+const published = args['published-teachings']
+  ? await new FileTeachingCorpus(knowledgeRoot, indexPath, embeddings).open(await new FileWorkflowJournal<ProposalRecord>(knowledgeRoot, 'teaching').read())
+  : undefined;
+const knowledge = published?.lexical ?? new MarkdownKnowledgeProvider(knowledgeRoot);
 let kbStats;
 try { kbStats = await knowledge.stats(); if (!kbStats.articles) blockers.push('Reviewed KB has no articles'); }
 catch { blockers.push('Reviewed KB absent or unreadable; supply SUPPORT_KNOWLEDGE_ROOT'); }
@@ -125,8 +134,8 @@ if (blockers.length) {
   console.log(JSON.stringify({ status: 'blocked', blockers, output }));
   process.exitCode = 1;
 } else {
-  const semanticSearch = process.env.EMBEDDING_PROVIDER === 'openai'
-    ? await SemanticKnowledgeProvider.load(knowledge, new OpenAIEmbeddings(), resolve(process.env.KB_INDEX_PATH || '.kb-index/passages.json')) : undefined;
+  const semanticSearch = published?.semantic ?? (process.env.EMBEDDING_PROVIDER === 'openai'
+    ? await SemanticKnowledgeProvider.load(knowledge, new OpenAIEmbeddings(), indexPath) : undefined);
   const expectedIndex = args['expect-index'];
   if (expectedIndex !== undefined && (!/^[a-f0-9]{8,64}$/u.test(expectedIndex) || !semanticSearch?.index.digest.startsWith(expectedIndex))) {
     throw new Error('Eval index digest does not match the requested corpus');
@@ -266,7 +275,7 @@ if (blockers.length) {
         evidence.length = 0;
         semanticScores.length = 0;
         transientFailure = false;
-        const harness = createMockSupport(undefined, semanticSearch ?? knowledge);
+        const harness = createMockSupport(undefined, published?.provider ?? semanticSearch ?? knowledge);
         const core = new SupportCoreClient('https://synthetic-core.example.invalid/', async (url, init) => {
           const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
           toolCounts[path] = (toolCounts[path] ?? 0) + 1;
