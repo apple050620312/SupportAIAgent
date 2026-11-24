@@ -442,7 +442,7 @@ describe("Vercel read-only agent", () => {
     const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(model.doGenerateCalls).toHaveLength(1);
-    expect(model.doGenerateCalls[0]?.maxOutputTokens).toBe(4096);
+    expect(model.doGenerateCalls[0]?.maxOutputTokens).toBe(3072);
     expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
   });
