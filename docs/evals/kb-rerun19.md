@@ -7,7 +7,7 @@ The run uses `gpt-6.1-sol` through sub2api, OpenAI `text-embedding-3-small` for 
 | Clean docs group and retrieval controls | `6b7b4b6d68e2e0e19f9d6977f6e9c3a6fd23dde28cba54e4283895edfae7bec5` |
 | GS-056 with fix 4 | `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a` |
 
-Each index was loaded with its matching settings article. The clean and fix-4 corpora have 72 articles and 570 passages each. Fix 4 changes the settings article's restart and world-reset coverage. Raw checkpoints stay local with the de-identified dataset outside the repository.
+Each index was loaded with its matching settings article. The clean and fix-4 corpora have 72 articles and 570 passages each. Fix 4 changes the settings article's restart and world-reset coverage. Raw checkpoints are stored in the gitignored `eval-results/` directory. The de-identified dataset stays outside the repository.
 
 The smoke test on the clean index ran GS-062 before the coverage change. Checkpoint `golden-2026-11-24T03-09-16-808Z-1.json` recorded a 37.3-second attempt, with model calls of 5.9 and 27.9 seconds, three searches, eight article reads, one status read, one log read, 18 retrieved spans and 30 admitted spans. The citation gate passed and the judge scored it partial. The trace records admission during the tool loop, so a subsequent timeout can retain admission evidence even without a final answer. The model call timings are client-observed and include provider waiting.
 
@@ -16,6 +16,36 @@ The coverage gate now requires both policy sources, after-sales routing, explici
 The first batch overlapped the isolation matrix, repeat blocks and full run. It encountered HTTP 429 responses in addition to answer timeouts. Some terminal provider errors reached the harness as lifecycle handoffs. The harness now retries HTTP 429 with backoff and scores provider failures without a completed gate as unscored. The revised run uses lower concurrency. Earlier samples are reported separately, with terminal provider failures identified from their traces.
 
 The owner still needs to reconcile retention and restoration for GS-049 and GS-053, settle the GS-166 SFTP destination and panel upload threshold, and review section 5 of the conventions report.
+
+## Final clean results
+
+The 13 clean items yielded **4 correct, 3 partial, 3 wrong and 3 unscored**, versus **4 correct, 2 partial, 2 wrong and 5 unscored** in [rerun 18](kb-rerun18.md). Scored handoffs rose from one to two (GS-056 and GS-062). The checkpoint also flags GS-166 as a handoff after an agent error before the gate was evaluated. It counts among the unscored items. The restart left the checkpoint status as `running`, with all 13 result rows saved.
+
+Unscored items fell from five to three. GS-049, GS-053 and GS-108 returned to scored delivery in the retry-enabled run. Each finished on its first attempt in the final clean checkpoint, although earlier repeat blocks needed retries. GS-018 and GS-030 still timed out on all three final attempts.
+
+| Item | Rerun 18 clean → rerun 19 clean | Final answer attempts |
+|---|---|---|
+| GS-018 | Unscored → unscored | Three timeouts |
+| GS-023 | Correct / delivered → partial / delivered | 59.4 s |
+| GS-030 | Unscored → unscored | Three timeouts |
+| GS-049 | Unscored → correct / delivered | 52.4 s |
+| GS-053 | Unscored → partial / delivered | 42.2 s |
+| GS-056 | Wrong / handoff → wrong / handoff | 49.0 s |
+| GS-062 | Partial / delivered → wrong / handoff | 51.7 s |
+| GS-084 | Correct / delivered → correct / delivered | 14.8 s |
+| GS-094 | Correct / delivered → partial / delivered | Timeout, then 50.7 s |
+| GS-108 | Unscored → correct / delivered | 42.8 s |
+| GS-140 | Partial / delivered → wrong / delivered | 32.5 s |
+| GS-163 | Correct / delivered → correct / delivered | 40.8 s |
+| GS-166 | Wrong / delivered → unscored / agent error | 48.1 s |
+
+| Sample | Local checkpoint | Result |
+|---|---|---|
+| Final clean | `golden-2026-11-24T03-21-46-627Z-13.json` | 13 items, clean index `6b7b4b6d68e2` |
+| Final controls | `golden-2026-11-24T03-30-32-959Z-2.json` | GS-062 wrong / handoff (57.3 s), GS-140 partial / delivered (30.6 s) |
+| Final fix 4 | `golden-2026-11-24T03-30-32-959Z-1.json` | GS-056 correct / delivered (19.9 s) |
+
+GS-062 failed the completeness gate and handed off in both live final samples. The offline replay acceptance did not translate into a delivered answer. Across the three earlier clean repeats GS-056 handed off because the restart and reset evidence was missing. The fix-4 repeat that reached a completed gate delivered, as did the separate final fix-4 sample.
 
 ## Prompt and retrieval isolation
 
