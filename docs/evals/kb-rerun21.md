@@ -78,8 +78,10 @@ The full 6.1-sol clean run is sample one. Four additional blocks scheduled the s
 | golden-2026-11-24T06-27-51-707Z-5.json | Partial (1) | Correct (1) | Correct (1) | Correct (1) | Correct (1) |
 | golden-2026-11-24T06-32-12-971Z-5.json | Partial (1) | Correct (1) | Correct (1) | Correct (1) | Correct (1) |
 
+GS-084 met the five-delivery bar, with passing citations on every sample. GS-023 finished 2/5, with three partial answers. GS-108, GS-094, and GS-163 finished 4/5 each. GS-094 passed all four repeats after the full-run handoff.
+
 ## Fix-4 corpus check
 
 After the clean samples, the settings article was restored from `~/workspace/fix4-settings.md` and checked for the reset sentence. The semantic index was rebuilt with official OpenAI embeddings and installed after its digest matched `04003b9b`. Both the corpus and index are left in the fix-4 state.
 
-The clean GS-056 row handed off. The fix-4 GS-056 result in `golden-2026-11-24T06-36-06-854Z-1.json` was Correct, 1 attempt(s), 2 exact matches and 0 citation failures.
+The clean GS-056 row handed off. The fix-4 GS-056 result in `golden-2026-11-24T06-36-06-854Z-1.json` delivered correctly on the first attempt, with two exact citation matches and no citation failures. The judge credited both the restart and world-reset points.
