@@ -12,3 +12,7 @@ The timeout comparison uses the standard loop, the standard loop with `MODEL_ID=
 Build, typecheck, lint, 474 tests and 76 mock eval checks passed before the live runs. The existing-ticket-only completeness negative control passed.
 
 The owner rulings remain open on GS-049/GS-053 retention and restoration, GS-166 SFTP destinations and panel threshold, and section 5 of the conventions report.
+
+## Routing verification
+
+The first routing block saved both rows in `golden-2026-11-24T04-02-03-003Z-2.json`. GS-062 admitted both policy sources on the first repeat. All three attempts timed out before the gate. Each made three searches, eight article reads, one status read and one log read. The two model calls took 6.36 + 51.97 s, 6.05 + 53.56 s and 5.10 + 54.48 s. No completed answer or staff marker was recorded. GS-140 delivered in 46.1 s, scored partial and overrode its staff marker. Neither policy source was admitted, so this does not meet the routing verification criteria.
