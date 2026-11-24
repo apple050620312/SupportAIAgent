@@ -29,3 +29,24 @@ The scratch matrix held the clean corpus, model and judge fixed. The old-prompt 
 | New / new | Timeout at 60.6 s, then HTTP 429 at 30.9 s | Three timeouts, approximately 60 s each |
 
 With four search calls per completed search step, the new retrieval admitted `debug/automatic-route-switching.md:1-7` and `debug/googledns.md:1-12` on both items. With two search calls, the old retrieval did not admit those spans. The spans reached the model before the generation failures. No scratch cell delivered GS-023's flush, Google DNS and conditional rejoin together with exact citations. No cell delivered GS-030's automatic failover and qualified DNS rationale. The admission effect is isolated in this matrix. Option A's contribution to rerun 18's GS-023 delivery remains unresolved because neither new-prompt cell reached the gate.
+
+## Targeted repeats
+
+The three columns pair the clean blocks with the corresponding no-focus and fix-4 runs started in the same batch. Times are seconds per answer attempt, excluding judge time and retry backoff. T marks a model timeout, R marks HTTP 429 and E marks an agent error. Terminal provider failures are shown as unscored.
+
+| Item and configuration | Block 1 | Block 2 | Block 3 |
+|---|---|---|---|
+| GS-018 | unscored (64.9 T / 30.8 R) | unscored (64.8 T / 60.0 T / 60.0 T) | unscored (35.8 R) |
+| GS-030 focused | unscored (55.7 R) | unscored (60.0 T / 60.0 T / 60.0 T) | unscored (30.4 R) |
+| GS-030 no focus | unscored (35.8 R) | unscored (55.7 R) | unscored (62.5 T / 60.0 T / 60.0 T) |
+| GS-049 | correct / delivered (57.2) | correct / delivered (60.0 T / 60.0 T / 53.2) | correct / delivered (54.7) |
+| GS-053 | partial / delivered (29.5) | partial / delivered (31.7) | partial / delivered (60.0 T / 60.0 T / 52.1) |
+| GS-108 | unscored (60.0 T / 60.0 T / 60.0 T) | unscored / error (60.0 T / 60.0 T / 59.2 E) | partial / delivered (60.0 T / 60.0 T / 43.0) |
+| GS-056 clean | wrong / handoff (55.4) | wrong / handoff (60.0 T / 60.0 T / 46.9) | wrong / handoff (31.9) |
+| GS-056 fix 4 | unscored (35.1 R) | correct / delivered (62.5 T / 54.5) | unscored (35.8 R) |
+
+GS-030 had at least one timeout in one of three runs in each arm. The exact 95% binomial interval for 1/3 is approximately 0.8% to 90.6% in either arm, with overlapping run times and provider rate limiting. The runs overlapped, so the interval is descriptive and assumes independence that this batch cannot establish. The no-focus arm still hit the deadline with one search per attempt. Focused searches account for the new admitted spans, while the timeout comparison leaves the effect on latency unresolved.
+
+GS-018 and GS-108 reproduced their timeouts. GS-049 and GS-053 each delivered in all three blocks, with timeouts before successful retries in one block each. Those verdicts are relative to the existing retention references. GS-056 withheld unsupported restart and reset claims in all three clean repeats. The fix-4 repeat that reached a completed gate delivered both claims. The other two finished with rate limits, leaving one pair with two scored outcomes. The difference is consistent with the added evidence and the samples cannot estimate a reliable corpus effect size.
+
+Build, typecheck, lint, 474 tests and 76 mock eval checks passed.
