@@ -24,3 +24,5 @@ GS-140 scored partial on the second routing block as well, delivering in 31.5 s 
 ## Timeout arms
 
 The standard loop with `gpt-6.1-sol` timed out on all three attempts for each item in `golden-2026-11-24T04-08-26-494Z-2.json`. GS-018 admitted 17 spans on each attempt with one search, eight article reads, one status read and one log read. GS-030 admitted 28 spans with four searches and the same reads. Model calls took 58.25–59.72 s per attempt. No completed answer reached the gate.
+
+The `gpt-6-luna` arm (`golden-2026-11-24T04-15-04-193Z-2.json`) delivered partial answers for both items. GS-018 timed out twice, then delivered at 58.4 s with the same admission count and only search and article reads. GS-030 timed out once, then delivered at 49.0 s with the same admission and tool counts as the baseline. The three model calls on that attempt took 3.80 + 15.99 + 28.88 s. This is a completion improvement for these samples. Provider waiting and inference remain indistinguishable.
