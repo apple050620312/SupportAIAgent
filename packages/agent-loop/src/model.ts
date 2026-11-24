@@ -4,6 +4,7 @@ import { createDraftVerifier } from "./draft-verifier.js";
 
 const LUNA = "gpt-6-luna";
 const efforts = ["max", "xhigh", "high", "medium", "low"] as const;
+type PinnedEffort = "max" | "medium";
 
 export function resolveAnswerModel(env: NodeJS.ProcessEnv = process.env) {
   const modelId = env.MODEL_ID || env.AGENT_LIVE_MODEL_ID || LUNA;
@@ -17,14 +18,15 @@ function isEffortRejection(error: unknown): boolean {
     && /unsupported|not supported|invalid|must be one of|supported values/iu.test(details);
 }
 
-export function lunaAnswerOptions(): LanguageModelMiddleware {
+export function lunaAnswerOptions(pinnedEffort?: PinnedEffort): LanguageModelMiddleware {
   let accepted = 0;
   return {
     specificationVersion: "v4",
     transformParams: ({ params }) => Promise.resolve({ ...params, providerOptions: {
-      ...params.providerOptions, openai: { ...params.providerOptions?.openai, serviceTier: "fast", reasoningEffort: efforts[accepted]! }
+      ...params.providerOptions, openai: { ...params.providerOptions?.openai, serviceTier: "fast", reasoningEffort: pinnedEffort ?? efforts[accepted]! }
     } }),
     async wrapGenerate({ model, params }) {
+      if (pinnedEffort) return model.doGenerate(params);
       for (let candidate = accepted; ; candidate++) {
         try {
           return await model.doGenerate({ ...params, providerOptions: {
@@ -39,14 +41,20 @@ export function lunaAnswerOptions(): LanguageModelMiddleware {
   };
 }
 
-export function createLiveModel(env: NodeJS.ProcessEnv = process.env): LanguageModel {
+export function createLiveModel(env: NodeJS.ProcessEnv = process.env, options: {
+  pinnedEffort?: PinnedEffort;
+  middleware?: LanguageModelMiddleware;
+} = {}): LanguageModel {
   const config = resolveAnswerModel(env);
   const model = liveProvider(env).responses(config.modelId);
-  return config.serviceTier ? wrapLanguageModel({ model, middleware: lunaAnswerOptions() }) : model;
+  const middleware = config.serviceTier ? [lunaAnswerOptions(options.pinnedEffort)] : [];
+  if (options.middleware) middleware.push(options.middleware);
+  return wrapLanguageModel({ model, middleware });
 }
 
-export function createLiveDraftVerifier(env: NodeJS.ProcessEnv = process.env) {
-  return createDraftVerifier(liveProvider(env).responses("gpt-6.1-sol"));
+export function createLiveDraftVerifier(env: NodeJS.ProcessEnv = process.env, middleware?: LanguageModelMiddleware) {
+  const model = liveProvider(env).responses("gpt-6.1-sol");
+  return createDraftVerifier(middleware ? wrapLanguageModel({ model, middleware }) : model);
 }
 
 function liveProvider(env: NodeJS.ProcessEnv) {

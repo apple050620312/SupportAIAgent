@@ -26,4 +26,18 @@ describe("Luna answering model", () => {
       { reasoningEffort: "xhigh", serviceTier: "fast", store: false },
     ]);
   });
+
+  it("keeps a measured medium run pinned when the provider rejects the effort", async () => {
+    const rejection = new APICallError({
+      url: "https://synthetic.example.invalid/responses", requestBodyValues: {}, statusCode: 400,
+      message: "Unsupported reasoning.effort value medium"
+    });
+    const core = new MockLanguageModelV4({ doGenerate: () => Promise.reject(rejection) });
+    const model = wrapLanguageModel({ model: core, middleware: lunaAnswerOptions("medium") });
+
+    await expect(generateText({ model, prompt: "test", maxRetries: 0 })).rejects.toThrow(rejection);
+    expect(core.doGenerateCalls.map(call => call.providerOptions?.openai)).toEqual([
+      { reasoningEffort: "medium", serviceTier: "fast" },
+    ]);
+  });
 });
