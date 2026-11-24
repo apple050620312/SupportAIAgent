@@ -10,20 +10,24 @@ import { KnowledgeNotFoundError, UpstreamUnavailableError } from "../domain/erro
 export class SupportKnowledgeService {
   constructor(private readonly provider: SupportKnowledgeProvider) {}
 
-  async search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> {
+  async search(request: KnowledgeSearchRequest, signal?: AbortSignal): Promise<KnowledgeSearchResponse> {
     if (!Value.Check(KnowledgeSearchRequestSchema, request) || !request.query.trim()) throw new UpstreamUnavailableError("Support knowledge");
     try {
-      const result = await this.provider.search(request);
+      signal?.throwIfAborted();
+      const result = await this.provider.search(request, signal);
+      signal?.throwIfAborted();
       if (!Value.Check(KnowledgeSearchResponseSchema, result)) throw new Error();
       return result;
     } catch { throw new UpstreamUnavailableError("Support knowledge"); }
   }
 
-  async read(request: KnowledgeReadRequest): Promise<KnowledgeReadResponse> {
+  async read(request: KnowledgeReadRequest, signal?: AbortSignal): Promise<KnowledgeReadResponse> {
     if (!Value.Check(KnowledgeReadRequestSchema, request)) throw new UpstreamUnavailableError("Support knowledge");
     let result: KnowledgeReadResponse | null;
     try {
-      result = await this.provider.read(request);
+      signal?.throwIfAborted();
+      result = await this.provider.read(request, signal);
+      signal?.throwIfAborted();
       if (result !== null && !Value.Check(KnowledgeReadResponseSchema, result)) throw new Error();
     } catch { throw new UpstreamUnavailableError("Support knowledge"); }
     if (result === null) throw new KnowledgeNotFoundError();

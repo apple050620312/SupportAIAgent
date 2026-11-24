@@ -39,6 +39,9 @@ For current policy, prefer relevant passages marked owner_confirmed and use othe
 Treat previous answers as unverified context; retrieve evidence afresh each turn. Once the evidence and answer checklist are complete, draft one final answer and stop. Make a new search only for a missing part of the answer. Do not repeat a read or rephrase a search that already returned the same evidence. Never expose credentials.`;
 
 type ReadTool = typeof READ_ONLY_TOOLS[number];
+const PREFETCH_LIMIT_MS = 6_000;
+const FIRST_DRAFT_OUTPUT_TOKENS = 4_096;
+const CORE_READ_CONCURRENCY = 3;
 
 const DOWNGRADE_SOURCE = "practice/advanced/version-downgrade.md";
 const DOWNGRADE_SEARCH = { query: "Minecraft 降版 從高版本降到低版本 世界備份 version downgrade", limit: 3 };
@@ -234,23 +237,27 @@ export async function coRetrieveCompanions(
   admitted: KnowledgeSearchResponse["matches"],
   read: (request: { articleRef: string; startLine: number; maxLines: number }) => Promise<unknown>
 ): Promise<KnowledgeSearchResponse["matches"]> {
-  const companions: KnowledgeSearchResponse["matches"] = [];
-  for (const match of admitted) {
-    const raw = await read({ articleRef: match.articleRef, startLine: 1, maxLines: 120 }).catch(() => null);
-    if (!raw || !Value.Check(KnowledgeReadResponseSchema, raw)) continue;
-    const page = raw as { content: string; source: string; title: string; totalLines: number };
+  const articles = Map.groupBy(admitted, match => match.articleRef);
+  const windows = await Promise.all([...articles].map(async ([articleRef, seeds]) => {
+    const raw = await read({ articleRef, startLine: 1, maxLines: 120 }).catch(() => null);
+    if (!Value.Check(KnowledgeReadResponseSchema, raw) || raw.articleRef !== articleRef || raw.startLine !== 1) return [];
+    const page = raw;
+    const companions: KnowledgeSearchResponse["matches"] = [];
     const lines = page.content.split("\n");
     const headings = lines.map((line, index) => /^#{2,4}\s+\S/.test(line) ? index + 1 : 0).filter(Boolean);
-    const ranges = headings.map((start, index) => ({ start, end: (headings[index + 1] ?? page.totalLines + 1) - 1 }));
+    const ranges = headings.map((start, index) => ({ start, end: (headings[index + 1] ?? page.endLine + 1) - 1 }));
     for (const range of ranges) {
-      if (range.start <= match.endLine && range.end >= match.startLine) continue;
-      if (range.start > match.endLine + 35 || range.end < match.startLine - 35) continue;
+      const nearSeed = seeds.some(match =>
+        (range.start > match.endLine || range.end < match.startLine) &&
+        range.start <= match.endLine + 35 && range.end >= match.startLine - 35);
+      if (!nearSeed) continue;
       const excerpt = lines.slice(range.start - 1, range.end).join("\n").trim();
       if (!excerpt || excerpt.length > 800) continue;
-      companions.push({ articleRef: match.articleRef, source: page.source, title: page.title, heading: lines[range.start - 1]!.replace(/^#{2,4}\s+/, ""), startLine: range.start, endLine: range.end, excerpt });
+      companions.push({ articleRef, source: page.source, title: page.title, heading: lines[range.start - 1]!.replace(/^#{2,4}\s+/, ""), startLine: range.start, endLine: range.end, excerpt });
     }
-  }
-  return companions;
+    return companions;
+  }));
+  return windows.flat();
 }
 export interface AgentRunnerOptions {
   model: LanguageModel;
@@ -261,7 +268,7 @@ export interface AgentRunnerOptions {
   /** Observe spans as they are admitted, including before an eventual timeout. */
   onAdmittedEvidence?: (spans: readonly { source: string; startLine: number; endLine: number }[]) => void;
   /** Host-supplied semantic relevance port; scores the original customer prompt, never model-selected text. */
-  semanticRelevance?: { threshold: number; similarity(query: string, passage: KnowledgeSearchResponse["matches"][number]): Promise<number> };
+  semanticRelevance?: { threshold: number; similarity(query: string, passage: KnowledgeSearchResponse["matches"][number], signal: AbortSignal): Promise<number> };
 
   core: SupportCoreClient;
   history: FileHistoryStore;
@@ -315,6 +322,18 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       const results = new Map<string, Promise<unknown>>();
       const accountReads: Record<string, unknown> = {};
       const call = (path: string, body: unknown, schema: TSchema, signal: AbortSignal) => options.core.call(path, body, schema, request.ticketToken, session, signal);
+      let activeReads = 0;
+      const waitingReads: (() => void)[] = [];
+      const read = async (path: string, body: unknown, schema: TSchema, signal: AbortSignal) => {
+        if (activeReads >= CORE_READ_CONCURRENCY) await new Promise<void>(resolve => waitingReads.push(resolve));
+        else activeReads++;
+        try { return await call(path, body, schema, signal); }
+        finally {
+          const next = waitingReads.shift();
+          if (next) next();
+          else activeReads--;
+        }
+      };
       const makeTool = (name: ReadTool, schema: TSchema, description: string, execute: (input: unknown, signal: AbortSignal) => Promise<unknown>) => tool({
         description,
         inputSchema: jsonSchema<unknown>(schema, { validate: (value) => Value.Check(schema, value)
@@ -357,7 +376,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             : input;
           const search = async (request: unknown) => {
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
-            return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema, signal) as KnowledgeSearchResponse;
+            return await read("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema, signal) as KnowledgeSearchResponse;
           };
           const [result, focused, reinstallFocused, supportFlowFocused, duplicateFocused, sftpFocused, connectionFocused, dnsFocused, routeFocused] = await Promise.all([
             search(searchInput),
@@ -406,7 +425,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           let admitted: typeof evidence;
           if (options.semanticRelevance) {
             const relevance = options.semanticRelevance;
-            const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match) })));
+            const semantic = await Promise.all(result.matches.map(async match => ({ match, score: await relevance.similarity(prompt, match, signal) })));
             admitted = semantic.filter(p => Number.isFinite(p.score) && p.score >= relevance.threshold).map(p => p.match);
           } else admitted = strong.length ? strong : best && best.score >= 0.1 ? [best.match] : [];
           for (const focusedMatch of [downgrade, reinstall, supportFlow, duplicateTickets, sftp, dns, route, connection]) {
@@ -419,12 +438,11 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             admitted = admitted.filter(match => match.source !== DOWNGRADE_SOURCE);
           }
           if (admitted.length) {
-            const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema, signal));
+            const companions = await coRetrieveCompanions(admitted, request => read("v1/me/knowledge/read", request, KnowledgeReadResponseSchema, signal));
             admitted = [...admitted, ...companions];
           }
-          if (downgrade) {
-            admitted = [...new Map(admitted.map(match => [citation(match), match])).values()].slice(0, 8);
-          }
+          admitted = [...new Map(admitted.map(match => [citation(match), match])).values()];
+          if (downgrade) admitted = admitted.slice(0, 8);
           // Recognize provenance only from the retrieved KB's source header, not
           // from the customer query or history. Apply it to sections of that article.
           const confirmed = new Set((downgrade ? [...result.matches, downgrade] : result.matches)
@@ -451,15 +469,15 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         }),
         get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async (_input, signal) => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
-          const result = await call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output, signal) as { status: ServerStatus };
+          const result = await read(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output, signal) as { status: ServerStatus };
           if (requiredReads.includes("get_my_server_status")) {
             verifiedStatuses.set("get_my_server_status", chinese ? `後端回報的伺服器狀態：${result.status}。` : `Backend server status: ${result.status}.`);
           }
           return result;
         }),
-        get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", (_input, signal) => call("v1/me/server-logs", {}, RedactedServerLogsSchema, signal)),
+        get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", (_input, signal) => read("v1/me/server-logs", {}, RedactedServerLogsSchema, signal)),
         get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", async (_input, signal) => {
-          const result = await call("v1/me/invoice", {}, OwnInvoiceSchema, signal) as OwnInvoice;
+          const result = await read("v1/me/invoice", {}, OwnInvoiceSchema, signal) as OwnInvoice;
           if (requiredReads.includes("get_invoice")) {
             verifiedStatuses.set("get_invoice", chinese ? `後端回報的帳單狀態：${result.status}。` : `Backend invoice status: ${result.status}.`);
           }
@@ -476,13 +494,14 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const prefetch = options.prefetchSemanticEvidence && options.semanticRelevance && history.length === 0;
         let content = prompt;
         if (prefetch) {
-          content = await runUntil(deadline - DELIVERY_RESERVE_MS - REVIEW_LIMIT_MS, "prefetch", outerSignal, async signal => {
+          const prefetchCutoff = Math.min(deadline - DELIVERY_RESERVE_MS - REVIEW_LIMIT_MS, Date.now() + PREFETCH_LIMIT_MS);
+          content = await runUntil(prefetchCutoff, "prefetch", outerSignal, async signal => {
             const execute = (name: ReadTool, input: unknown) => Promise.resolve<unknown>(tools[name]?.execute?.(input, {
               toolCallId: name, messages: [], context: undefined, abortSignal: signal
             }));
-            for (const name of requiredReads) await execute(name, {});
             const query = prompt.slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
-            const found = await execute("search_support_knowledge", { query, limit: 8 }) as {
+            const [search] = await Promise.all([execute("search_support_knowledge", { query, limit: 8 }), ...requiredReads.map(name => execute(name, {}))]);
+            const found = search as {
               matches?: { id: string; excerpt: string; policyProvenance: string; priority?: string }[];
             } | undefined;
             const passages = found?.matches?.map(({ id, excerpt, policyProvenance, priority }) => ({
@@ -497,6 +516,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             ? SYSTEM_PROMPT + "\nSupport Core has already run the knowledge search and applicable account reads for this turn. Read the question, admitted passages and tool results from the input JSON. Draft a concise customer reply using those results."
             : SYSTEM_PROMPT,
           tools: prefetch ? {} : tools, temperature: 0.2, maxRetries: 0,
+          ...(prefetch ? { maxOutputTokens: FIRST_DRAFT_OUTPUT_TOKENS } : {}),
           providerOptions: { openai: { store: false } },
           toolCallConcurrency: 1,
           prepareStep: ({ stepNumber }) => {

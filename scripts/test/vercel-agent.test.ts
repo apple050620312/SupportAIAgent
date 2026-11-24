@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, renderPassageIds, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
+import { MarkdownKnowledgeProvider } from "../../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js";
+import { OpenAIEmbeddings, SemanticKnowledgeProvider, corpusDigest } from "../../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
 import { createDemoModel, DEMO_ANSWER, DEMO_PASSAGE, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
 
@@ -214,8 +216,8 @@ describe("Vercel read-only agent", () => {
     ] });
     const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
-    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 });
-    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }));
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: prompt, limit: 8 }, expect.any(AbortSignal));
+    expect(relevance.similarity).toHaveBeenCalledWith(prompt, expect.objectContaining({ source }), expect.any(AbortSignal));
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
   });
 
@@ -299,7 +301,7 @@ describe("Vercel read-only agent", () => {
     const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
     expect(search).toHaveBeenCalledTimes(2);
-    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 });
+    expect(search).toHaveBeenCalledWith({ query: prompt, limit: 8 }, expect.any(AbortSignal));
     expect(search.mock.calls.find(([input]) => input.query.includes("reinstall server settings"))?.[0]).toMatchObject({ limit: 3 });
     expect(result.admittedEvidence).toContainEqual({ source: settings.source, startLine: 10, endLine: 12 });
   });
@@ -341,7 +343,7 @@ describe("Vercel read-only agent", () => {
     ] });
     const relevance = { threshold: 0.4, similarity: vi.fn(() => Promise.resolve(0.7)) };
     const result = await demoRunner(harness, root, model, undefined, relevance).run(request, signal);
-    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 });
+    expect(search).toHaveBeenCalledExactlyOnceWith({ query: "status", limit: 8 }, expect.any(AbortSignal));
     expect(result.admittedEvidence).toEqual(expect.arrayContaining(matches.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }))));
   });
 
@@ -440,8 +442,48 @@ describe("Vercel read-only agent", () => {
     const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
     expect(model.doGenerateCalls).toHaveLength(1);
+    expect(model.doGenerateCalls[0]?.maxOutputTokens).toBe(4096);
     expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[P1]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
+  });
+
+  it.each(["companion", "search embedding", "admission embedding"])("cancels a stalled %s by the prefetch cutoff", async stage => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const started = Promise.withResolvers<AbortSignal>();
+      const stopped = Promise.withResolvers<void>();
+      const stall = (signal?: AbortSignal | null): Promise<never> => new Promise((_resolve, reject) => {
+        if (!signal) return reject(new Error("Cancellation signal missing"));
+        signal.addEventListener("abort", () => { stopped.resolve(); reject(new Error("Canceled")); }, { once: true });
+        started.resolve(signal);
+      });
+      const passages = [{
+        articleRef: "kb:" + "a".repeat(64), source: "synthetic/recovery.md", title: "Recovery", heading: "State",
+        startLine: 1, endLine: 2, excerpt: DEMO_PASSAGE
+      }];
+      const search = () => Promise.resolve({ trust: "reference_only" as const, matches: passages });
+      const embeddings = new OpenAIEmbeddings({ EMBEDDING_PROVIDER: "openai", OPENAI_API_KEY: "synthetic" });
+      vi.stubGlobal("fetch", (_url: unknown, init?: RequestInit) => stall(init?.signal));
+      const semantic = new SemanticKnowledgeProvider(new MarkdownKnowledgeProvider("/unused"), embeddings,
+        { model: embeddings.model, digest: corpusDigest(passages), passages, vectors: [[1]] });
+      const stalledSearch = stage === "search embedding" ? semantic.search.bind(semantic) : search;
+      const read: NonNullable<Parameters<typeof createMockSupport>[1]>["read"] = (_input, signal) =>
+        stage === "companion" ? stall(signal) : Promise.resolve(null);
+      const similarity = stage === "admission embedding" ? semantic.similarity.bind(semantic) : () => Promise.resolve(0.8);
+      const { root, harness, request, signal } = await setup({ search: stalledSearch, read });
+      const model = new MockLanguageModelV4({ doGenerate: mockText(DEMO_ANSWER) });
+      const turn = demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity }, undefined, true).run(request, signal);
+      const phaseSignal = await started.promise;
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(await turn).toMatchObject({ timedOutStage: "prefetch" });
+      await stopped.promise;
+      expect(phaseSignal.aborted).toBe(true);
+      expect(model.doGenerateCalls).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
   });
 
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {

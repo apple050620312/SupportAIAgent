@@ -19,6 +19,9 @@ type Span = { source: string; startLine: number; endLine: number };
 type ModelFailure = { name: string; status: number | null };
 type AnswerCall = {
   elapsedMs: number; promptBytes: number; inputTokens: number | null;
+  outputTokens: number | null; textTokens: number | null; reasoningTokens: number | null;
+  outputLimit: number | null; finishReason: string | null;
+  clientRequestId: string | null; responseRequestId: string | null;
   requestedTier: string | null; responseTier: string | null;
   requestedEffort: string | null; responseEffort: string | null;
 };
@@ -33,6 +36,7 @@ type AttemptTrace = {
   timedOutStage: TurnTimeout['stage'] | null;
   modelFailures: ModelFailure[];
   toolCounts: Record<string, number>;
+  readWindows: Record<string, number>;
   retrievedEvidence: Span[];
   admittedEvidence: Span[];
   drafts: string[];
@@ -54,6 +58,7 @@ type GoldenCheckpoint = Record<string, unknown> & {
 type ResponsesSettings = { service_tier?: unknown; reasoning?: { effort?: unknown } };
 const observedTier = (value: unknown) => typeof value === 'string' && ['fast', 'priority', 'default', 'auto', 'flex', 'ultrafast', 'scale'].includes(value) ? value : null;
 const observedEffort = (value: unknown) => typeof value === 'string' && ['max', 'xhigh', 'high', 'medium', 'low', 'none', 'minimal'].includes(value) ? value : null;
+const requestId = (value: string | undefined) => value && /^[a-z0-9_-]{8,128}$/iu.test(value) ? value : null;
 
 // No environment files are loaded, and provider exceptions are never serialized.
 const { values: args } = parseArgs({ options: {
@@ -176,7 +181,9 @@ if (blockers.length) {
         catch (error) { recordModelFailure(error); throw error; }
         finally { verificationMs = Math.round(performance.now() - start); }
       };
-      const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4', wrapGenerate: async ({ doGenerate, params }) => {
+      const model = wrapLanguageModel({ model: baseModel, middleware: { specificationVersion: 'v4',
+        transformParams: ({ params }) => Promise.resolve({ ...params, headers: { ...params.headers, 'x-client-request-id': randomUUID() } }),
+        wrapGenerate: async ({ doGenerate, params }) => {
         steps++;
         let result;
         const startedAt = performance.now();
@@ -191,6 +198,10 @@ if (blockers.length) {
           callTimes.push(elapsedMs);
           callStats.push({
             elapsedMs, promptBytes: Buffer.byteLength(JSON.stringify(params.prompt)), inputTokens: result?.usage.inputTokens.total ?? null,
+            outputTokens: result?.usage.outputTokens.total ?? null, textTokens: result?.usage.outputTokens.text ?? null,
+            reasoningTokens: result?.usage.outputTokens.reasoning ?? null, outputLimit: params.maxOutputTokens ?? null,
+            finishReason: result?.finishReason.unified ?? null, clientRequestId: requestId(params.headers?.['x-client-request-id']),
+            responseRequestId: requestId(result?.response?.headers?.['x-request-id']),
             requestedTier: observedTier(request?.service_tier), responseTier: observedTier(response?.service_tier ?? result?.providerMetadata?.openai?.serviceTier),
             requestedEffort: observedEffort(request?.reasoning?.effort), responseEffort: observedEffort(response?.reasoning?.effort)
           });
@@ -205,6 +216,7 @@ if (blockers.length) {
         const draftsBeforeAttempt = drafts.length;
         const observedAdmissions: Span[] = [];
         const toolCounts: Record<string, number> = {};
+        const readWindows: Record<string, number> = {};
         modelCallsMs = [];
         answerCalls = [];
         verificationMs = null;
@@ -227,15 +239,18 @@ if (blockers.length) {
         const core = new SupportCoreClient('https://synthetic-core.example.invalid/', async (url, init) => {
           const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).pathname;
           toolCounts[path] = (toolCounts[path] ?? 0) + 1;
-          const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)), ...(typeof init?.body === 'string' ? { payload: init.body } : {}) });
+          const body = typeof init?.body === 'string' ? init.body : undefined;
+          if (path.endsWith('/knowledge/read') && body) readWindows[body] = (readWindows[body] ?? 0) + 1;
+          const response = await harness.app.inject({ method: init?.method === 'POST' ? 'POST' : 'GET', url: path, headers: Object.fromEntries(new Headers(init?.headers)),
+            ...(body === undefined ? {} : { payload: body }), ...(init?.signal ? { signal: init.signal } : {}) });
           if (response.statusCode >= 400) toolErrors.push(`${path}:HTTP_${response.statusCode}`);
           eventLog.push({ attempt: attempts, kind: 'tool', name: path, status: response.statusCode >= 400 ? 'error' : 'ok', ...(response.statusCode >= 400 ? { detail: `HTTP_${response.statusCode}` } : {}) });
           if (path.endsWith('/handoff') && response.statusCode < 400) handedOff = true;
           if (path.endsWith('/knowledge/search') && response.statusCode < 400) evidence.push(...((JSON.parse(response.body) as KnowledgeSearchResponse).matches ?? []));
           return new Response(response.body, { status: response.statusCode, headers: { 'content-type': 'application/json' } });
         });
-        const runner = createVercelTicketRunner({ model, core, verifyDraft, deploymentPolicyFocus, prefetchSemanticEvidence: true, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage) => {
-          const score = await semanticSearch.similarity(query, passage);
+        const runner = createVercelTicketRunner({ model, core, verifyDraft, deploymentPolicyFocus, prefetchSemanticEvidence: true, onAdmittedEvidence: rows => observedAdmissions.push(...rows), ...(semanticSearch ? { semanticRelevance: { threshold: 0.4, similarity: async (query, passage, signal) => {
+          const score = await semanticSearch.similarity(query, passage, signal);
           semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
           return score;
         } } } : {}), history: new FileHistoryStore(join(history, item.id, String(attempts))), authenticate: async ({ sessionId, ticketToken }) => {
@@ -285,7 +300,7 @@ if (blockers.length) {
         attemptTraces.push({
           attempt: attempts, startedAt: new Date(attemptStart).toISOString(), endedAt: new Date(attemptEnd).toISOString(),
           latencyMs: attemptEnd - attemptStart, modelCallsMs: [...modelCallsMs], answerCalls, verificationMs, timedOutStage,
-          modelFailures: modelFailures.slice(failuresBeforeAttempt), toolCounts,
+          modelFailures: modelFailures.slice(failuresBeforeAttempt), toolCounts, readWindows,
           retrievedEvidence: spans(evidence), admittedEvidence: spans(observedAdmissions),
           drafts: drafts.slice(draftsBeforeAttempt).map(scrub), answer: scrub(answer),
           delivery: error ? 'error' : handedOff ? 'handoff' : 'answer',
