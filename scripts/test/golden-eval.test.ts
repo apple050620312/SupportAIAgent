@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from '../lib/golden-eval.js';
-import { scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type Verdict } from "../lib/semantic-judge.js";
+import { judgeModel, parseJudgment, requestJudgment, scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type Verdict } from "../lib/semantic-judge.js";
 import { answerabilityForItem, classifyGolden } from '../lib/golden-answerability.js';
 const item: GoldenItem = { id: 'test', category: 'test', customer_problem: 'question', conversation: [{ role: 'customer', text: 'question' }, { role: 'customer', text: 'context' }, { role: 'staff', text: 'SECRET SOLUTION' }, { role: 'customer', text: 'later' }], expected_points: ['ＡＢＣ。', '第二點'], staff_resolution: 'reference', outcome: 'resolved' };
 describe('golden measurement', () => {
@@ -36,6 +36,30 @@ describe('golden measurement', () => {
 });
 
 describe('semantic measurement', () => {
+  it('correlates the unchanged judge request with the raw response route', async () => {
+    const verdict = { verdict: 'correct', points: ['covered', 'covered'], reason: 'Both points are covered.' };
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      if (typeof init.body !== 'string') throw new Error('Expected a JSON request body');
+      expect(JSON.parse(init.body)).toMatchObject({ model: judgeModel, temperature: 0.1, store: false });
+      return Promise.resolve(Response.json({
+        model: 'gpt-6.2-sol', service_tier: 'default', reasoning: { effort: 'medium' },
+        output: [{ content: [{ type: 'output_text', text: JSON.stringify(verdict) }] }]
+      }, { headers: { 'x-request-id': 'synthetic-upstream-id', 'x-client-request-id': 'synthetic-gateway-id' } }));
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const route = vi.fn();
+      const body = await requestJudgment(item, 'answer', 'synthetic-key', route);
+      const clientRequestId = new Headers(fetch.mock.calls[0]?.[1].headers).get('x-client-request-id');
+      expect(clientRequestId).toMatch(/^[a-f0-9-]{36}$/u);
+      expect(route).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        status: 200, clientRequestId, responseRequestId: 'synthetic-upstream-id', responseClientRequestId: 'synthetic-gateway-id',
+        requestedModel: judgeModel, responseModel: 'gpt-6.2-sol', responseTier: 'default', responseEffort: 'medium'
+      }));
+      expect(parseJudgment(body, 2)).toEqual(verdict);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it('credits a judged paraphrase while retaining the strict lexical diagnostic', async () => {
     const answer = 'a paraphrase';
     const semantic = await scoreSemantic(item, { answer, handedOff: false, error: false }, () => Promise.resolve({

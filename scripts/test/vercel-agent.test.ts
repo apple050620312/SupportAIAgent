@@ -61,6 +61,34 @@ describe("reinstall task coverage", () => {
   });
 });
 
+describe("first-purchase activation notice", () => {
+  const question = "購買伺服器後如何啟動？";
+  const source = "panel/start-server.md";
+  const start = { source, startLine: 15, endLine: 18, excerpt: "登入後切換至控制台，點擊啟動。" };
+  const notice = { source, startLine: 1, endLine: 14, excerpt: "首次購買時，服務開通後會收到控制面板帳號建立通知。" };
+  const reply = "登入後切換至控制台，點擊啟動。 [panel/start-server.md:15-18]";
+
+  it("adds the first-purchase notice only from the passage documenting it", () => {
+    expect(repairRequiredTaskDraft(reply, question, [start] as never)).toBe(reply);
+    const evidence = [start, notice] as never;
+    const repaired = repairRequiredTaskDraft(reply, question, evidence);
+    expect(repaired).toContain("若是首次購買，請等服務開通後收到控制面板帳號建立通知，再依通知設定帳號。 [panel/start-server.md:1-14]");
+    expect(answerCompletenessCheck(repaired, question, evidence)).toBe(true);
+    expect(repairRequiredTaskDraft(repaired, question, evidence)).toBe(repaired);
+  });
+});
+
+it("adds the qualified DNS update rationale to a cited switch-and-retry reply", () => {
+  const question = "Minecraft 連不上時該怎麼重新連線？";
+  const route = { source: "debug/automatic-route-switching.md", startLine: 1, endLine: 7, excerpt: "線路故障會自動切換，請稍等後重試。" };
+  const dns = { source: "debug/googledns.md", startLine: 1, endLine: 12, excerpt: "與部分 ISP 的預設解析器相比，Google DNS 通常較快取得更新後的 DNS 記錄，時間受 TTL 與 DNS 快取影響。" };
+  const draft = "線路故障會自動切換，請等待並重試。 [debug/automatic-route-switching.md:1-7] 改用 Google DNS。 [debug/googledns.md:1-12]";
+  const repaired = repairRequiredTaskDraft(draft, question, [route, dns] as never);
+  expect(repaired).toContain("相較於部分 ISP 的預設 DNS，Google DNS 通常較快取得更新後的 DNS 記錄，實際時間仍受 TTL 與 DNS 快取等因素影響。 [debug/googledns.md:1-12]");
+  expect(repairRequiredTaskDraft(repaired, question, [route, dns] as never)).toBe(repaired);
+  expect(repairRequiredTaskDraft(draft, question, [route] as never)).toBe(draft);
+});
+
 describe("hasAccountBlockerCue", () => {
   it.each([
     "映像欄位鎖住，我需要 Java 8", "我的帳戶被鎖定", "無法更改映像", "版本不能改",
@@ -324,6 +352,70 @@ describe("Vercel read-only agent", () => {
     const prompt = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
     const result = await demoRunner(harness, root, model, undefined, relevance).run({ ...request, prompt }, signal);
     expect(result.admittedEvidence.map(match => match.source)).toEqual(expect.arrayContaining(matches.map(match => match.source)));
+  });
+
+  it("admits focused transfer procedures and verifies the SFTP setup from the full read", async () => {
+    const sources = ["practice/install/mod.md", "panel/manage/upload.md", "panel/common/sftp.md"];
+    const excerpts = ["### 上傳模組\n遇到無法上傳的問題，可使用 SFTP。\n### 其他話題", "較小的檔案可從面板上傳。", "大檔案與資料夾使用 SFTP。"];
+    const passages = sources.map((source, index) => ({
+      source, articleRef: `kb:${String(index + 1).repeat(64)}`, title: "Upload", heading: "Transfer",
+      startLine: 1, endLine: index === 1 ? 1 : 3, excerpt: excerpts[index]!
+    }));
+    const search = ({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const, matches: query.includes("SFTP 上傳") ? passages.slice(1) : passages.slice(0, 1)
+    });
+    const sftp = passages[2]!;
+    const knowledgeRead = vi.fn(({ articleRef }: { articleRef: string }) => Promise.resolve(articleRef === sftp.articleRef ? {
+      trust: "reference_only" as const, articleRef, source: sftp.source, title: sftp.title, startLine: 1, endLine: 3, totalLines: 3,
+      content: `${sftp.excerpt}\n請用面板登入密碼。\n如果是第三方登入，先在客戶中心變更密碼。`
+    } : null));
+    const { root, harness, request, signal } = await setup({ search, read: knowledgeRead });
+    const draft = "若面板無法上傳模組，請改用 SFTP 重試。 [practice/install/mod.md:2-2] 請用面板登入密碼。 [panel/common/sftp.md:1-3]";
+    const model = new MockLanguageModelV4({ doGenerate: mockText(draft) });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.8) };
+    const prompt = "模組上傳失敗，有其他上傳方式嗎？";
+    const verify: DraftVerifier = input => Promise.resolve({
+      claimsSupported: input.passages.some(passage => passage.excerpt.includes("第三方登入")),
+      complete: true, references: input.passages.map(passage => passage.label)
+    });
+    const result = await demoRunner(harness, root, model, undefined, relevance, verify, true).run({ ...request, prompt }, signal);
+    expect(result.admittedEvidence).toEqual(expect.arrayContaining([
+      { source: sources[0], startLine: 2, endLine: 2 },
+      { source: sources[1], startLine: 1, endLine: 1 },
+      { source: sources[2], startLine: 1, endLine: 3 }
+    ]));
+    expect(knowledgeRead.mock.calls.filter(([window]) => window.articleRef === sftp.articleRef)).toHaveLength(1);
+    expect(result.citationGate).toMatchObject({ status: "passed", matched: ["[practice/install/mod.md:2-2]", "[panel/common/sftp.md:1-3]"] });
+  });
+
+  it("uses a cited wait instruction when an installer draft leaves out the technical staff reply", async () => {
+    const prompt = "The modpack installer failed to deploy. Can staff check the deployment and package index?";
+    const routing = {
+      articleRef: `kb:${"a".repeat(64)}`, source: "store/discord.md", title: "Discord", heading: "After-sales category",
+      startLine: 1, endLine: 4, excerpt: "Link Discord for the customer role to open an after-sales ticket for a product issue."
+    };
+    const wait = {
+      articleRef: `kb:${"b".repeat(64)}`, source: "store/services/duplicate-tickets.md", title: "Ticket policy", heading: "Wait for support",
+      startLine: 5, endLine: 9, excerpt: "Wait for technical staff to reply after opening a ticket. Duplicate tickets will not speed up handling."
+    };
+    const search = ({ query }: { query: string }) => Promise.resolve({
+      trust: "reference_only" as const,
+      matches: query.includes("綁定 Discord") ? [routing] : query.includes("重複開客服單") ? [wait] : []
+    });
+    const { root, harness, request, signal } = await setup({ search, read: () => Promise.resolve(null) });
+    const draft = "For this product issue, open an after-sales ticket once you link Discord and get the customer role. [store/discord.md:1-4] " +
+      "Ask technical staff to check the installer deployment and package index. Duplicate tickets will not speed up handling. [store/services/duplicate-tickets.md:5-9]";
+    const model = new MockLanguageModelV4({ doGenerate: mockText(draft) });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0) };
+    const verify: DraftVerifier = input => Promise.resolve({
+      claimsSupported: true, complete: input.draft.includes("wait for technical staff to reply in that same ticket"),
+      references: input.passages.map(passage => passage.label)
+    });
+    expect(answerCompletenessCheck(draft, prompt, [routing, wait])).toBe(false);
+    const result = await demoRunner(harness, root, model, undefined, relevance, verify, true).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ answerComplete: true, citationGate: { status: "passed" } });
+    expect(result.reply).toContain("wait for technical staff to reply in that same ticket. [store/services/duplicate-tickets.md:5-9]");
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 
   it("keeps broad-article passages from the primary search without their focused symptoms", async () => {

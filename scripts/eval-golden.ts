@@ -10,7 +10,7 @@ import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapter
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
 import { inputFor, score, selectGoldenItems, summarize, type GoldenItem } from './lib/golden-eval.js';
-import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type SemanticResult, type HandoffContentVerdict, type ReferenceConflict } from './lib/semantic-judge.js';
+import { judgeModel, judgeEndpoint, rubricVersion, requestJudgment, parseJudgment, scoreSemantic, scoreHandoffContent, reconcileReference, summarizeSemantic, type SemanticResult, type HandoffContentVerdict, type JudgeRoute, type ReferenceConflict } from './lib/semantic-judge.js';
 import { answerabilityForItem, classifyGolden, summarizeAnswerability, type Answerability } from './lib/golden-answerability.js';
 import { supportKnowledgeRoot } from './lib/knowledge-setup.js';
 import { observedEffort, observedModel, observedTier, providerFailure, requestId, type ModelFailure } from './lib/golden-provider-trace.js';
@@ -18,10 +18,10 @@ import { observedEffort, observedModel, observedTier, providerFailure, requestId
 type EventLog = { attempt: number; kind: 'tool' | 'gate' | 'judge' | 'diagnostic'; name: string; status: string; detail?: string };
 type Span = { source: string; startLine: number; endLine: number };
 type ModelCall = {
-  startedAt: string; elapsedMs: number | null; promptBytes: number; inputTokens: number | null;
+  startedAt: string; elapsedMs: number | null; promptBytes: number; promptSha256: string; inputTokens: number | null;
   outputTokens: number | null; textTokens: number | null; reasoningTokens: number | null;
   outputLimit: number | null; finishReason: string | null;
-  clientRequestId: string | null; responseRequestId: string | null;
+  clientRequestId: string | null; responseClientRequestId: string | null; responseRequestId: string | null;
   requestedTier: string | null; responseTier: string | null;
   requestedEffort: string | null; responseEffort: string | null;
   requestedModel: string | null; responseModel: string | null;
@@ -49,7 +49,8 @@ type AttemptTrace = {
   answerComplete: boolean | null;
   semanticVerdict: SemanticResult['verdict'];
 };
-type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; attemptTraces?: AttemptTrace[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: ModelFailure[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; answerCompletenessAttempts?: (boolean | null)[]; contentCoverage?: boolean | null; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; handoffMarkerOverridden?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
+type JudgeCall = JudgeRoute & { purpose: 'delivery' | 'handoff-draft' };
+type GoldenResult = { lexical: ReturnType<typeof score>; semantic: SemanticResult; handoffContentVerdict?: HandoffContentVerdict; referenceConflict?: ReferenceConflict; eventLog?: EventLog[]; attemptTraces?: AttemptTrace[]; judgeCalls?: JudgeCall[]; answerability: Answerability; id: string; category: string; outcome: GoldenItem["outcome"]; answer: string; drafts: string[]; handedOff: boolean; error: boolean; toolErrors: string[]; modelFailures: ModelFailure[]; finishReasons: string[]; steps: number; attempts: number; latencyMs: number; citationGateViolation: boolean; ungroundedDelivery?: boolean; citationGateAttempts?: (CitationGate | null)[]; answerCompletenessAttempts?: (boolean | null)[]; contentCoverage?: boolean | null; currentPolicyCoverage?: boolean; handoffMarkerPresent?: boolean; handoffMarkerOverridden?: boolean; evidence: { source: string; startLine: number; endLine: number; excerpt: string; policyProvenance?: string }[]; admittedEvidence: { source: string; startLine: number; endLine: number }[]; semanticSupport: string; semanticScores: { source: string; startLine: number; score: number }[] };
 type GoldenCheckpoint = Record<string, unknown> & {
   status: string;
   selected: number;
@@ -58,7 +59,7 @@ type GoldenCheckpoint = Record<string, unknown> & {
   results: GoldenResult[];
 };
 
-type ResponsesSettings = { service_tier?: unknown; reasoning?: { effort?: unknown } };
+type ResponsesSettings = { model?: unknown; service_tier?: unknown; reasoning?: { effort?: unknown } };
 
 // No environment files are loaded. Persist selected diagnostics from provider errors.
 const { values: args } = parseArgs({ options: {
@@ -164,6 +165,7 @@ if (blockers.length) {
       let handoffMarkerOverridden = false;
       const eventLog: EventLog[] = [];
       const attemptTraces: AttemptTrace[] = [];
+      const judgeCalls: JudgeCall[] = [];
       let answerCalls: ModelCall[] = [];
       let reviewCalls: ModelCall[] = [];
       let attemptFailures: ModelFailure[] = [];
@@ -180,11 +182,13 @@ if (blockers.length) {
           const draft = stage === 'draft';
           const failures = attemptFailures;
           if (draft) steps++;
+          const serializedPrompt = JSON.stringify(params.prompt);
           const call: ModelCall = {
-            startedAt: new Date().toISOString(), elapsedMs: null, promptBytes: Buffer.byteLength(JSON.stringify(params.prompt)),
+            startedAt: new Date().toISOString(), elapsedMs: null, promptBytes: Buffer.byteLength(serializedPrompt),
+            promptSha256: createHash('sha256').update(serializedPrompt).digest('hex'),
             inputTokens: null, outputTokens: null, textTokens: null, reasoningTokens: null,
             outputLimit: params.maxOutputTokens ?? null, finishReason: null,
-            clientRequestId: requestId(params.headers?.['x-client-request-id']), responseRequestId: null,
+            clientRequestId: requestId(params.headers?.['x-client-request-id']), responseClientRequestId: null, responseRequestId: null,
             requestedModel: observedModel(model.modelId), responseModel: null,
             requestedTier: observedTier(params.providerOptions?.openai?.serviceTier), responseTier: null,
             requestedEffort: observedEffort(params.providerOptions?.openai?.reasoningEffort), responseEffort: null
@@ -198,7 +202,9 @@ if (blockers.length) {
               inputTokens: result.usage.inputTokens.total ?? null, outputTokens: result.usage.outputTokens.total ?? null,
               textTokens: result.usage.outputTokens.text ?? null, reasoningTokens: result.usage.outputTokens.reasoning ?? null,
               finishReason: result.finishReason.unified, responseRequestId: requestId(result.response?.headers?.['x-request-id']),
-              responseModel: observedModel(result.response?.modelId),
+              responseClientRequestId: requestId(result.response?.headers?.['x-client-request-id']),
+              requestedModel: observedModel(request?.model) ?? call.requestedModel,
+              responseModel: observedModel(response?.model ?? result.response?.modelId),
               requestedTier: observedTier(request?.service_tier) ?? call.requestedTier,
               responseTier: observedTier(response?.service_tier ?? result.providerMetadata?.openai?.serviceTier),
               requestedEffort: observedEffort(request?.reasoning?.effort) ?? call.requestedEffort,
@@ -339,10 +345,11 @@ if (blockers.length) {
         }
       } while (transientFailure && attempts < 3);
       const hasGateEvidence = citationGateAttempts.at(-1)?.claimSupport === true;
-      const judge = async (reference: typeof item, delivered: string) => {
+      const judge = async (reference: typeof item, delivered: string, purpose: JudgeCall['purpose']) => {
         eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'started' });
         try {
-          const judgment = parseJudgment(await requestJudgment(reference, delivered, judgeKey ?? ''), reference.expected_points.length);
+          const response = await requestJudgment(reference, delivered, judgeKey ?? '', route => judgeCalls.push({ ...route, purpose }));
+          const judgment = parseJudgment(response, reference.expected_points.length);
           eventLog.push({ attempt: attempts, kind: 'judge', name: 'semantic', status: 'ok', detail: judgment.verdict });
           return judgment;
         } catch (e) {
@@ -351,15 +358,15 @@ if (blockers.length) {
         }
       };
       const semantic = await scoreSemantic(item, { answer: scrub(answer), handedOff, error }, async (reference, delivered) => {
-        const judgment = await judge(reference as typeof item, delivered);
+        const judgment = await judge(reference as typeof item, delivered, 'delivery');
         return { ...judgment, reason: scrub(judgment.reason) };
       });
       const finalAttempt = attemptTraces.at(-1);
       if (finalAttempt) finalAttempt.semanticVerdict = semantic.verdict;
       const handoffDraft = drafts.map(scrub).filter(Boolean).at(-1) ?? '';
-      const handoffContentVerdict = handedOff && !error ? await scoreHandoffContent(item, handoffDraft, async (reference, delivered) => judge(reference as typeof item, delivered)) : undefined;
+      const handoffContentVerdict = handedOff && !error ? await scoreHandoffContent(item, handoffDraft, async (reference, delivered) => judge(reference as typeof item, delivered, 'handoff-draft')) : undefined;
       const referenceConflict = reconcileReference(`${item.staff_resolution} ${item.expected_points.join(' ')}`, handoffContentVerdict && 'judgment' in handoffContentVerdict ? handoffContentVerdict.judgment?.reason ?? '' : semantic && 'judgment' in semantic ? semantic.judgment?.reason ?? '' : '', evidence);
-      results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), attemptTraces, handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
+      results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), attemptTraces, judgeCalls, handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
         citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", currentPolicyCoverage: answerCompletenessAttempts.at(-1) === true && evidence.length > 0, ungroundedDelivery: !error && !handedOff && !hasGateEvidence,
         citationGateAttempts, answerCompletenessAttempts, contentCoverage: finalContentCoverage, handoffMarkerPresent, handoffMarkerOverridden, evidence: evidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine, excerpt: scrub(e.excerpt), ...(e.policyProvenance ? { policyProvenance: e.policyProvenance } : {}) })), admittedEvidence: admittedEvidence.map(e => ({ source: scrub(e.source), startLine: e.startLine, endLine: e.endLine })), semanticSupport: hasGateEvidence ? 'supported' : 'not verified', semanticScores, semantic, ...(handoffContentVerdict ? { handoffContentVerdict } : {}), referenceConflict, eventLog: eventLog.map(e => ({ ...e, ...(e.detail ? { detail: scrub(e.detail) } : {}) })), answerability: answerabilityForItem(item, parsed, answerability), lexical: score(item, answer, handedOff, error) };
       await writeCheckpoint({ ...metadata, kbStats, status: 'running', elapsedMs: previousElapsedMs + Date.now() - started, results });
