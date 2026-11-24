@@ -74,5 +74,6 @@ The full 6.1-sol clean run is sample one. Four additional blocks scheduled the s
 |---|---|---|---|---|---|
 | Full clean run | Correct (1) | Partial (1) | Correct (1) | Wrong / handoff (1) | Correct (1) |
 | golden-2026-11-24T06-08-50-711Z-5.json | Partial (3) | Correct (1) | Correct (3) | Correct (3) | Unscored (1) |
+| golden-2026-11-24T06-19-58-991Z-5.json | Correct (3) | Correct (1) | Correct (1) | Correct (1) | Correct (2) |
 
 The targeted fix-4 run is in progress.
