@@ -1,6 +1,6 @@
 /** Offline-only bridge around the existing synthetic harness. Not a production host adapter. */
 import { MockLanguageModelV4 } from "ai/test";
-import { createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type TrustedAgentSession } from "@support-ai-agent/agent-loop";
+import { createVercelTicketRunner, FileHistoryStore, SupportCoreClient, type DraftVerifier, type TrustedAgentSession } from "@support-ai-agent/agent-loop";
 import type { LanguageModel } from "ai";
 import type { createMockSupport } from "./mock-support.js";
 
@@ -18,7 +18,12 @@ export function mockCall(name: string, input: unknown = {}) {
 export function createDemoModel() {
   return new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
 }
-export function demoRunner(harness: ReturnType<typeof createMockSupport>, historyRoot: string, model: LanguageModel = createDemoModel(), selection?: string, semanticRelevance?: Parameters<typeof createVercelTicketRunner>[0]["semanticRelevance"]) {
+const mockVerifier: DraftVerifier = ({ draft, passages }) => Promise.resolve({
+  claimsSupported: true, complete: true,
+  references: passages.filter(({ label }) => draft.includes(label)).map(({ label }) => label)
+});
+
+export function demoRunner(harness: ReturnType<typeof createMockSupport>, historyRoot: string, model: LanguageModel = createDemoModel(), selection?: string, semanticRelevance?: Parameters<typeof createVercelTicketRunner>[0]["semanticRelevance"], verifyDraft = mockVerifier, prefetchSemanticEvidence = false) {
   const coreFetch: typeof fetch = async (url, init) => {
     const parsed = new URL(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
     const response = await harness.app.inject({
@@ -28,7 +33,7 @@ export function demoRunner(harness: ReturnType<typeof createMockSupport>, histor
     });
     return new Response(response.body, { status: response.statusCode, headers: { "content-type": "application/json" } });
   };
-  return createVercelTicketRunner({ model, ...(semanticRelevance ? { semanticRelevance } : {}), core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
+  return createVercelTicketRunner({ model, verifyDraft, prefetchSemanticEvidence, ...(semanticRelevance ? { semanticRelevance } : {}), core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
     authenticate: async ({ sessionId, ticketToken }): Promise<TrustedAgentSession> => {
       const scope = harness.tokens.verify(ticketToken);
       if (scope.channelId !== sessionId) throw new Error("Wrong session");

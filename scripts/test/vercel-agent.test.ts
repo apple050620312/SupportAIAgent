@@ -3,11 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
-import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, hasAccountBlockerCue, retrievalConfidence, repairRequiredTaskDraft, createLiveModel } from "@support-ai-agent/agent-loop";
-import { evaluateCitationGate } from "../../packages/agent-loop/dist/citation-gate.js";
+import { FileHistoryStore, READ_ONLY_TOOLS, SYSTEM_PROMPT, answerCompletenessCheck, contentCoverageCheck, evaluateCitationGate, hasAccountBlockerCue, retrievalConfidence, repairRequiredTaskDraft, createLiveModel, type DraftVerifier } from "@support-ai-agent/agent-loop";
 import { permissionMatrix } from "../../apps/support-core/dist/src/services/permission-matrix.js";
 import { createMockSupport, MOCK_SCOPE, MOCK_OTHER_SCOPE } from "../lib/mock-support.js";
-import { createDemoModel, DEMO_ANSWER, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
+import { createDemoModel, DEMO_ANSWER, DEMO_PASSAGE, demoRunner, mockCall, mockText } from "../lib/vercel-agent-demo.js";
 
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
@@ -183,7 +182,8 @@ describe("Vercel read-only agent", () => {
     const model = new MockLanguageModelV4({ doGenerate: [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
     const result = await demoRunner(harness, root, model).run(request, signal);
     expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
-    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(JSON.stringify(DEMO_ANSWER).slice(1, -1));
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain(DEMO_PASSAGE);
+    expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
     expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
     expect(harness.providerCalls.some((path) => path.endsWith("/power"))).toBe(false);
     const tools = model.doGenerateCalls[0]?.tools ?? [];
@@ -246,9 +246,9 @@ describe("Vercel read-only agent", () => {
     const message = model.doGenerateCalls[1]?.prompt.findLast(message => message.role === "tool");
     const content = message?.content[0];
     if (content?.type !== "tool-result" || content.output.type !== "json") throw new Error("Expected knowledge tool output");
-    const { matches } = content.output.value as { matches: { requiredQuote: string }[] };
+    const { matches } = content.output.value as { matches: { label: string }[] };
     expect(matches).toHaveLength(8);
-    expect(matches.filter(match => match.requiredQuote.endsWith(cite))).toHaveLength(1);
+    expect(matches.filter(match => match.label === cite)).toHaveLength(1);
     expect(result.admittedEvidence).toContainEqual({ source, startLine: 1, endLine: 12 });
     expect(JSON.stringify(content.output.value)).toContain("POSSIBLE_ROOT_CAUSE");
     expect(result.citationGate).toMatchObject({ status: "passed", matched: [cite] });
@@ -346,261 +346,50 @@ describe("Vercel read-only agent", () => {
   });
 
 
-  describe("citation gate", () => {
-    const long = ["# Setup", ...Array.from({ length: 81 }, (_, i) => i % 4 === 0 ? "" : "  - " + i + "\t"), "Done."].join("\n");
-    const first = "[synthetic/mod.md:101-183]";
-    const other = "Check the status in the panel.";
-    const second = "[synthetic/status.md:3-5]";
+  describe("paraphrase-tolerant gate", () => {
+    const label = "[synthetic/recovery.md:1-2]";
+    const evidence = [{ source: "synthetic/recovery.md", startLine: 1, endLine: 2, excerpt: "Query the status, then confirm the result with the customer." }];
+    const paraphrase = `Look up the current state and verify what you find with the customer. ${label}`;
+    const verify = (claimsSupported: boolean, complete = true): DraftVerifier => () => Promise.resolve({ claimsSupported, complete, references: [label] });
 
-    const velocity = {
-      articleRef: `kb:${"a".repeat(64)}`,
-      source: "practice/advanced/velocity.md", title: "在主機上執行 Velocity",
-      heading: "在主機上執行 Velocity", startLine: 1, endLine: 9,
-      excerpt: [
-        "# 在主機上執行 Velocity",
-        "",
-        "> Source: Coffee-Host owner answers, 2026-11-23 (KB gap questions from golden-set evals)",
-        "> Owner-provided; not sourced from published docs or past tickets.",
-        "",
-        "客戶可以在主機上執行 Velocity，沒有特別限制，但不能違反服務條款。",
-        "",
-        "後端 Paper 放在自己的伺服器也可以，但到後端的連線品質不保證。",
-        ""
-      ].join("\n")
-    };
-    const velocityCitation = "[practice/advanced/velocity.md:1-9]";
-    const velocityQuote = velocity.excerpt.trimEnd().replace("\n\n> Source:", "\n> Source:").replace("後端 Paper", "後端  Paper");
-    const velocityDraft = (quote: string) =>
-      `您可以在 Coffee Host 主機上執行 Velocity，並將後端 Paper 放在自有伺服器上。\n\n${quote}\n${velocityCitation}`;
+    it("passes a supported paraphrase and gives the verifier the full admitted span", async () => {
+      const audit = vi.fn(verify(true));
+      const gate = await evaluateCitationGate({ question: "What should I do?", draft: paraphrase, evidence }, audit, new AbortController().signal);
+      expect(audit.mock.calls[0]?.[0].passages).toEqual([{ label, excerpt: evidence[0]!.excerpt }]);
+      expect(gate).toMatchObject({ status: "passed", grounded: true, matched: [label], failures: [] });
+    });
 
     it.each([
-      ["checkpoint layout", velocity.excerpt.trimEnd()],
-      ["changed blank lines and spacing", velocityQuote]
-    ])("grounds the GS-138 Velocity quote with %s", (_layout, quote) => {
-      expect(evaluateCitationGate(velocityDraft(quote), [velocity], value => value)).toMatchObject({
-        status: "passed", grounded: true, matched: [velocityCitation], failures: []
-      });
+      [`Do not check the status. ${label}`, false, true, "unsupported_claim"],
+      [`The outage has been fixed. ${label}`, false, true, "unsupported_claim"],
+      [`> Query the status.\n${label}`, true, false, "incomplete_answer"],
+      [`Look up the current state. ${label}`, true, false, "incomplete_answer"]
+    ] as const)("rejects the verifier's negative result for %s", async (draft, supported, complete, reason) => {
+      const gate = await evaluateCitationGate({ question: "What should I do?", draft, evidence }, verify(supported, complete), new AbortController().signal);
+      expect(gate).toMatchObject({ status: "failed", failures: [{ reason }] });
     });
 
-    it.each(["```\n", "```markdown\n"])("grounds a verbatim quote inside a %s fence", (opening) => {
-      const fenced = `${opening}${velocity.excerpt.trimEnd()}\n\`\`\``;
-      expect(evaluateCitationGate(velocityDraft(fenced), [velocity], value => value)).toMatchObject({
-        status: "passed", grounded: true, matched: [velocityCitation], failures: []
-      });
+    it("rejects an unadmitted range even next to an admitted label", async () => {
+      const audit = vi.fn(verify(true));
+      const draft = `${paraphrase} [synthetic/recovery.md:1-3]`;
+      const gate = await evaluateCitationGate({ question: "What should I do?", draft, evidence }, audit, new AbortController().signal);
+      expect(gate).toMatchObject({ status: "failed", failures: [{ reason: "wrong_lines" }] });
+      expect(audit).not.toHaveBeenCalled();
     });
 
-    it("rejects changed words in the GS-138 Velocity quote", () => {
-      const altered = velocityQuote.replace("連線品質不保證", "連線品質有保證");
-      expect(evaluateCitationGate(velocityDraft(altered), [velocity], value => value)).toMatchObject({
-        status: "failed", grounded: false, matched: [],
-        failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }]
-      });
+    it("fails closed when the verifier is unavailable", async () => {
+      const gate = await evaluateCitationGate({ question: "What should I do?", draft: paraphrase, evidence }, () => Promise.reject(new Error("unavailable")), new AbortController().signal);
+      expect(gate).toMatchObject({ status: "failed", grounded: false, failures: [{ reason: "verification_unavailable" }] });
     });
 
-    async function runDraft(draft: string, statusExcerpt = other, prompt = "status", additionalEvidence: (typeof velocity)[] = []) {
-      const { root, harness, request, signal } = await setup({
-        search: () => Promise.resolve({ trust: "reference_only", matches: [
-          { articleRef: `kb:${"a".repeat(64)}`, source: "synthetic/mod.md", title: "Setup", heading: "Setup", startLine: 101, endLine: 183, excerpt: long },
-          { articleRef: `kb:${"b".repeat(64)}`, source: "synthetic/status.md", title: "Status", heading: "Status", startLine: 3, endLine: 5, excerpt: statusExcerpt },
-          velocity, ...additionalEvidence
-        ] }),
-        read: () => Promise.resolve(null)
-      });
+    it("hands off without sending a contradicted draft", async () => {
+      const { root, harness, request, signal } = await setup();
+      const draft = `Do not query the status. ${label}`;
       const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(draft)] });
-      const result = await demoRunner(harness, root, model, undefined, { threshold: 0.4, similarity: () => Promise.resolve(0.7) }).run({ ...request, prompt }, signal);
-      return { result, state: harness.snapshots.get(MOCK_SCOPE.channelId)?.state };
-    }
-
-    const wrapQuote = (quote: string) => quote.split("\n").map(line => `  > ${line}`).join("\n");
-
-    it("repairs one layer of Markdown wrapping before checking GS-138 completeness", async () => {
-      const draft = velocityDraft(velocity.excerpt.trimEnd());
-      const { result, state } = await runDraft(velocityDraft(wrapQuote(velocity.excerpt.trimEnd())));
-      expect(result).toMatchObject({
-        reply: draft, answerComplete: true,
-        citationGate: { status: "passed", matched: [velocityCitation], failures: [] },
-        citationGateRepair: {
-          attempted: true, repaired: true,
-          before: { status: "failed", matched: [], failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }] },
-          after: { status: "passed", matched: [velocityCitation] }
-        }
-      });
-      expect(state).toBe("AI_ACTIVE");
-    });
-
-    it("delivers the GS-138 architecture guidance after repair despite a marker about inventory", async () => {
-      const stockNote = "客服需要再確認庫存。";
-      const draft = velocityDraft(velocity.excerpt.trimEnd()) + "\n" + stockNote;
-      const { result, state } = await runDraft(
-        velocityDraft(wrapQuote(velocity.excerpt.trimEnd())) + "\n" + stockNote + "\nSTAFF_HANDOFF",
-        other,
-        "可以用 Velocity 連到我自己的 Paper 主機嗎？這樣符合條款嗎？"
-      );
-      expect(result).toMatchObject({
-        reply: draft, answerComplete: true, citationGateRepair: { repaired: true },
-        handoffMarkerPresent: true, handoffMarkerOverridden: true
-      });
-      expect(state).toBe("AI_ACTIVE");
-    });
-
-    it("still rejects changed quote text after removing blockquote formatting", async () => {
-      const altered = velocity.excerpt.trimEnd().replace("連線品質不保證", "連線品質有保證");
-      const { result, state } = await runDraft(velocityDraft(wrapQuote(altered)));
-      const mismatch = { status: "failed", matched: [], failures: [{ citation: velocityCitation, reason: "excerpt_mismatch" }] };
-      expect(result).toMatchObject({
-        citationGate: mismatch,
-        citationGateRepair: { attempted: true, repaired: false, before: mismatch, after: mismatch }
-      });
-      expect(result.reply).not.toContain("連線品質有保證");
-      expect(state).toBe("HUMAN_NEEDED");
-    });
-
-    it("hands off a cited draft that gives no action", async () => {
-      const excerpt = "The panel displays the current status.";
-      const draft = `${excerpt} ${second} The status indicator reflects the current state of the server.`;
-      const { result, state } = await runDraft(draft, excerpt);
-      expect(result).toMatchObject({ answerComplete: false, citationGate: { status: "passed" } });
-      expect(result.reply).toBe(draft + "\n\nI've handed this to support staff.");
-      expect(state).toBe("HUMAN_NEEDED");
-    });
-
-    it("passes a full 83-line quote with CRLF and a second exact citation", async () => {
-      expect(long.split("\n")).toHaveLength(83);
-      const draft = `${long.replaceAll("\n", "\r\n")}\r\n${first}\n\n${other} ${second}`;
-      const { result, state } = await runDraft(draft);
-      expect(result).toMatchObject({ reply: draft, citationGate: { status: "passed", grounded: true, matched: [first, second], failures: [] } });
-      expect(state).toBe("AI_ACTIVE");
-    });
-
-    it("records a truncated 83-line quote on handoff even when another citation is exact", async () => {
-      const { result, state } = await runDraft(`${long.split("\n").slice(0, 60).join("\n")} … ${first}\n\n${other} ${second} The panel shows the current server state.\nSTAFF_HANDOFF`, other, "My panel is locked");
-      expect(state).toBe("HUMAN_NEEDED");
-      expect(result).toMatchObject({ citationGate: {
-        status: "passed", grounded: true, matched: [second], failures: [{ citation: first, reason: "truncated" }]
-      } });
-      expect(result.reply).toContain(other);
-    });
-
-    it("adds the admitted citation to a standalone exact quote", async () => {
-      const draft = long.replaceAll("\n", "\r\n");
-      const { result, state } = await runDraft(draft);
-      expect(result).toMatchObject({
-        reply: `${draft} ${first}`,
-        citationGate: { status: "passed", matched: [first], failures: [] },
-        citationGateRepair: {
-          attempted: true, repaired: true,
-          before: { status: "failed", matched: [], failures: [{ citation: first, reason: "missing_citation" }] },
-          after: { status: "passed", matched: [first], failures: [] }
-        }
-      });
-      expect(state).toBe("AI_ACTIVE");
-    });
-
-    it("leaves missing citations unrepaired when an unknown citation also blocks delivery", async () => {
-      const unknown = "[invented.md:3-5]";
-      const { result, state } = await runDraft(`${long} ${first}\n\n${other}\n\nCheck the dashboard. ${unknown}`);
-      expect(result).toMatchObject({
-        citationGate: {
-          status: "failed", matched: [first],
-          failures: [{ citation: unknown, reason: "unknown_citation" }, { citation: second, reason: "missing_citation" }]
-        },
-        citationGateRepair: { attempted: false, repaired: false, before: null, after: null }
-      });
-      expect(state).toBe("HUMAN_NEEDED");
-    });
-
-    it("repairs three GS-108 startup quotes alongside a grounded nojar quote and wrong lines", async () => {
-      const nojar = {
-        articleRef: `kb:${"1".repeat(64)}`, source: "debug/nojar.md",
-        title: "Missing JAR", heading: "Check the JAR", startLine: 31, endLine: 38,
-        excerpt: "Open the file manager and check the exact name of the server JAR."
-      };
-      const startup = ["Select the runtime.", "Enter the JAR filename.", "Restart the server and check the console."].map((action, index) => ({
-        articleRef: `kb:${"2".repeat(64)}`, source: "panel/config/startup.md", title: "Startup",
-        heading: `Step ${index + 1}`, startLine: 10 + index * 4, endLine: 13 + index * 4,
-        excerpt: `## Step ${index + 1}\n${action}`
-      }));
-      const labels = startup.map(match => `[${match.source}:${match.startLine}-${match.endLine}]`);
-      const grounded = "[debug/nojar.md:31-38]";
-      const wrong = { citation: "[panel/config/startup.md:10-25]", reason: "wrong_lines" };
-      const prefix = `${nojar.excerpt} ${grounded}\n\nCheck the startup settings. ${wrong.citation}`;
-      const draft = [prefix, ...startup.map(match => match.excerpt)].join("\n\n");
-      const { result, state } = await runDraft(draft, other, "How do I fix the JAR filename?", [nojar, ...startup]);
-      const passed = { status: "passed", matched: [grounded, ...labels], failures: [wrong] };
-      expect(result).toMatchObject({
-        reply: [prefix, ...startup.map((match, index) => `${match.excerpt} ${labels[index]}`)].join("\n\n"),
-        citationGate: passed,
-        citationGateRepair: {
-          attempted: true, repaired: true,
-          before: { status: "failed", matched: [grounded] },
-          after: passed
-        }
-      });
-      const failures = result.citationGateRepair.before?.failures ?? [];
-      expect(failures).toHaveLength(4);
-      expect(failures).toContainEqual(wrong);
-      for (const citation of labels) expect(failures).toContainEqual({ citation, reason: "missing_citation" });
-      expect(state).toBe("AI_ACTIVE");
-    });
-
-    it.each([
-      ["unknown_citation", `${wrapQuote(other)} [invented.md:3-5]`, "[invented.md:3-5]"],
-      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
-    ])("identifies a second citation with %s", async (reason, tail, citation) => {
-      const { result, state } = await runDraft(`${long} ${first}\n\n${tail}`);
-      const expectedStatus = reason === "excerpt_mismatch" ? "passed" : "failed";
-      expect(state).toBe(expectedStatus === "failed" ? "HUMAN_NEEDED" : "AI_ACTIVE");
-      expect(result).toMatchObject({ citationGate: { status: expectedStatus, grounded: true, matched: [first], failures: [{ citation, reason }] } });
-      if (expectedStatus === "failed") {
-        expect(result.reply).not.toContain(first);
-        expect(result.reply).toContain("I've handed this to support staff.");
-      }
-    });
-
-    const wrongLines = "[synthetic/status.md:3-6]";
-    const wrongLinesTail = `The panel shows the current server state. ${wrongLines}`;
-
-    it.each([
-      ["GS-084 direct delivery", "status", "", "AI_ACTIVE", ""],
-      ["handoff with an account blocker", "My panel is locked", "\nSTAFF_HANDOFF", "HUMAN_NEEDED", "\n\nI've handed this to support staff."]
-    ])("retains a grounded draft with wrong lines for %s", async (_scenario, prompt, marker, expectedState, suffix) => {
-      const draft = `${long} ${first}\n\n${wrongLinesTail}`;
-      const { result, state } = await runDraft(draft + marker, other, prompt);
-      expect(result).toMatchObject({
-        reply: draft + suffix, answerComplete: true,
-        citationGate: { status: "passed", grounded: true, matched: [first], failures: [{ citation: wrongLines, reason: "wrong_lines" }] }
-      });
-      expect(state).toBe(expectedState);
-    });
-
-    it.each([
-      ["wrong_lines", wrongLinesTail, wrongLines],
-      ["truncated", `${long.split("\n").slice(0, 60).join("\n")} … ${first}`, first],
-      ["excerpt_mismatch", `Check the panel for status. ${second}`, second]
-    ])("hands off a draft whose only citation has %s", async (reason, draft, citation) => {
-      const { result, state } = await runDraft(draft);
-      expect(result).toMatchObject({
-        reply: "I don't know; I don't have enough verified information. I've handed this to support staff.",
-        citationGate: { status: "failed", grounded: false, matched: [], failures: [{ citation, reason }] }
-      });
-      expect(state).toBe("HUMAN_NEEDED");
-    });
-
-    it("passes a repeated citation when one occurrence has an exact excerpt", async () => {
-      const draft = `${other} ${second}\nThe panel status is unavailable. ${second}`;
-      const { result } = await runDraft(draft);
-      expect(result.citationGate).toMatchObject({ status: "passed", grounded: true, matched: [second] });
-      expect(result.citationGate.failures).toEqual([{ citation: second, reason: "excerpt_mismatch" }]);
-    });
-
-    it("retains a marker when a grounded draft fails completeness", async () => {
-      const { result, state } = await runDraft(`${other} ${second}\nSTAFF_HANDOFF`);
-      expect(state).toBe("HUMAN_NEEDED");
-      expect(result).toMatchObject({
-        citationGate: { status: "passed", matched: [second] }, answerComplete: false,
-        handoffMarkerPresent: true, handoffMarkerOverridden: false
-      });
-      expect(result.reply).toContain(other);
+      const result = await demoRunner(harness, root, model, undefined, undefined, verify(false)).run(request, signal);
+      expect(result.citationGate).toMatchObject({ status: "failed", failures: [{ reason: "unsupported_claim" }] });
+      expect(result.reply).not.toContain(draft);
+      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
     });
   });
 
@@ -611,6 +400,26 @@ describe("Vercel read-only agent", () => {
     expect(model.doGenerateCalls.length).toBeGreaterThanOrEqual(2);
     for (const call of model.doGenerateCalls) expect(call.providerOptions).toEqual({ openai: { store: false } });
     expect(JSON.stringify(model.doGenerateCalls)).not.toContain("previousResponseId");
+  });
+
+  it("hands off a request for live installer state even if a policy draft is supported", async () => {
+    const { root, harness, request, signal } = await setup();
+    const prompt = "Can you check the modpack installer current status?";
+    const model = new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
+    const result = await demoRunner(harness, root, model).run({ ...request, prompt }, signal);
+    expect(result).toMatchObject({ answerComplete: true, citationGate: { status: "passed" } });
+    expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+  });
+
+  it("uses one drafting call after prefetched knowledge and required own-server status", async () => {
+    const { root, harness, request, signal } = await setup();
+    const model = new MockLanguageModelV4({ doGenerate: [mockText(DEMO_ANSWER)] });
+    const relevance = { threshold: 0.4, similarity: () => Promise.resolve(0.7) };
+    const result = await demoRunner(harness, root, model, undefined, relevance, undefined, true).run({ ...request, prompt: "Is my server running?" }, signal);
+    expect(result).toMatchObject({ reply: DEMO_ANSWER, answerComplete: true });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("[synthetic/recovery.md:1-2]");
+    expect(harness.providerCalls).toContain("/api/client/servers/00000000-0000-4000-8000-000000000001/resources");
   });
 
   it("reads own invoice and redacted logs through Core ports without exposing selectors", async () => {
@@ -735,7 +544,7 @@ describe("Vercel read-only agent", () => {
   });
 
   it("requires every documented step before deciding whether the unknown needs staff", () => {
-    expect(SYSTEM_PROMPT).toMatch(/Give every documented step in source order, including prerequisites and warnings, before deciding whether to hand off/);
+    expect(SYSTEM_PROMPT).toContain("Explain the prerequisites, panel screen and field, actions, and verification in source order");
     expect(SYSTEM_PROMPT).toContain("Never ask staff to confirm a step the KB already documents");
     expect(SYSTEM_PROMPT).toContain("If the procedure answers the request, state the remaining uncertainty without handing off");
   });
