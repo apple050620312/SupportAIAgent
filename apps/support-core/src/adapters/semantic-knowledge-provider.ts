@@ -9,6 +9,21 @@ export interface EmbeddingPort { embed(texts: string[], signal?: AbortSignal): P
 export interface PassageIndex { model: string; digest: string; passages: Passage[]; vectors: number[][]; }
 export const passageText = (p: Passage): string => `${p.title}\n${p.heading}\n${p.excerpt}`;
 export const corpusDigest = (passages: Passage[]): string => createHash("sha256").update(JSON.stringify(passages)).digest("hex");
+export async function buildPassageIndex(passages: Passage[], embeddings: EmbeddingPort & { model: string }, previous?: PassageIndex): Promise<PassageIndex> {
+  const known = new Map(previous?.model === embeddings.model
+    ? previous.passages.map((passage, i) => [passageText(passage), previous.vectors[i]!] as const)
+    : []);
+  const missing = [...new Set(passages.map(passageText))].filter(input => !known.has(input));
+  for (let i = 0; i < missing.length; i += 32) {
+    const inputs = missing.slice(i, i + 32);
+    const vectors = await embeddings.embed(inputs);
+    if (vectors.length !== inputs.length) throw new Error("Incomplete passage index");
+    inputs.forEach((input, j) => known.set(input, vectors[j]!));
+  }
+  return { model: embeddings.model, digest: corpusDigest(passages), passages,
+    vectors: passages.map(passage => known.get(passageText(passage))!) };
+}
+
 export function cosine(a: number[], b: number[]): number {
   if (!a.length || a.length !== b.length || !a.every(Number.isFinite) || !b.every(Number.isFinite)) throw new Error("Invalid embedding vector");
   let dot = 0, aa = 0, bb = 0;
@@ -55,7 +70,7 @@ export class SemanticKnowledgeProvider implements SupportKnowledgeProvider {
     if (index.vectors.length !== index.passages.length || index.digest !== corpusDigest(index.passages)) throw new Error("Invalid passage index");
     for (const vector of index.vectors) cosine(vector, index.vectors[0]!);
   }
-  static async load(lexical: MarkdownKnowledgeProvider, embeddings: OpenAIEmbeddings, path: string): Promise<SemanticKnowledgeProvider> {
+  static async load(lexical: MarkdownKnowledgeProvider, embeddings: EmbeddingPort & { model: string }, path: string): Promise<SemanticKnowledgeProvider> {
     const index = JSON.parse(await readFile(path, "utf8")) as PassageIndex;
     if (index.model !== embeddings.model || index.digest !== corpusDigest(await lexical.passages())) throw new Error("Stale embedding index; rebuild it");
     return new SemanticKnowledgeProvider(lexical, embeddings, index);
