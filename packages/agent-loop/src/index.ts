@@ -8,7 +8,7 @@ import type { TSchema } from "@sinclair/typebox";
 import type { TicketAgentRunner } from "@support-ai-agent/ticket-bridge";
 import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
-import { citation, evaluateCitationGate, renderPassageIds, type CitationGate, type DraftVerifier } from "./citation-gate.js";
+import { asksToChangeVersion, citation, evaluateCitationGate, hasStartupReinstallStep, missingVersionReinstall, renderPassageIds, type CitationGate, type DraftVerifier } from "./citation-gate.js";
 import { PENDING_POLICY } from "./draft-verifier.js";
 import { ANSWER_LIMIT_MS, DELIVERY_RESERVE_MS, REVIEW_LIMIT_MS, REVIEW_RESERVE_MS, runUntil, TurnTimeout } from "./deadline.js";
 export { FileHistoryStore, SupportCoreClient, citation, evaluateCitationGate, renderPassageIds };
@@ -84,11 +84,16 @@ function hasReinstallSymptom(prompt: string): boolean {
   return /刪除.{0,12}(?:全部|所有)?資料|資料.{0,12}刪|世界.{0,8}(?:重製|重置)|(?:影響|會不會).{0,12}(?:資料|世界)|\b(?:reinstall|reset world)\b/iu.test(text);
 }
 
-function hasSupportFlowSymptom(prompt: string, deploymentPolicyFocus = true): boolean {
+function hasIncompleteInstallerDeployment(prompt: string): boolean {
   const text = prompt.normalize("NFKC");
   const installer = /(?:模[組组]包.{0,12}安[裝装]|安[裝装]器|modpack installer)/iu.test(text);
   const incompleteDeployment = /(?:未完成.{0,20}部署|部署.{0,12}(?:失[敗败]|未完成)|(?:failed|incomplete).{0,20}deploy)/iu.test(text);
-  if (deploymentPolicyFocus && installer && incompleteDeployment) return true;
+  return installer && incompleteDeployment;
+}
+
+function hasSupportFlowSymptom(prompt: string, deploymentPolicyFocus = true): boolean {
+  if (deploymentPolicyFocus && hasIncompleteInstallerDeployment(prompt)) return true;
+  const text = prompt.normalize("NFKC");
   return /重複.{0,8}開單|等待.{0,8}(?:回覆|客服)|售後(?:服務)?|after[- ]sales|support ticket|(?:反覆|反复|一直|持續|持续|重複|重复).{0,16}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:重裝|重装|重新安裝|重新安装|reinstall).{0,24}(?:後|后|之後|之后|after).{0,24}(?:斷線|断线|掉線|掉线|斷開|断开|連不上|连不上|連接不上|连接不上|disconnect)|(?:等了|等待|等候|等了).{0,12}(?:幾天|几天|多天|數天|数天|days?)/iu.test(text);
 }
 
@@ -195,7 +200,11 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
       (i > 0 && afterSales.test(sentences[i - 1]!) && generalSupport.test(sentence) &&
         /另一[條条個个]|不同|分[開开]|separate|different/iu.test(sentence))
     );
-    if (!sources.has(SUPPORT_FLOW_SOURCE) || !sources.has(DUPLICATE_TICKETS_SOURCE) || !routing || !noSpeedup || !distinguishesRoutes) return false;
+    const installer = hasIncompleteInstallerDeployment(prompt);
+    const scopedRoute = installer && !generalSupport.test(text)
+      && /(?:產品|产品|服務|服务|安[裝装]器|部署|\b(?:product|service|installer|deployment)\b)[^。！？.!?]{0,40}(?:售[後后]|after[- ]sales)/iu.test(text);
+    const waitForTechnician = /(?:等[候待]?|\bwait\b)[^。！？.!?]{0,24}(?:技[術术](?:人[員员]|支[援持])|\btechnician|\btechnical (?:staff|support|team))/iu.test(text);
+    if (!sources.has(SUPPORT_FLOW_SOURCE) || !sources.has(DUPLICATE_TICKETS_SOURCE) || !routing || !noSpeedup || !(distinguishesRoutes || scopedRoute) || (installer && !waitForTechnician)) return false;
   }
   if (sources.has("panel/start-server.md") && /購買.{0,12}伺服器|如何啟動|start.{0,12}server/iu.test(prompt) &&
       !(/(?:等候|等待?|待).{0,20}(?:開通|啟用)|\bwait\b[^.!?]{0,64}\bactivat(?:e|ed|ion)\b/iu.test(text))) return false;
@@ -209,7 +218,7 @@ export function answerCompletenessCheck(answer: string, prompt: string, evidence
   const admittedDowngrade = evidence.some(match => match.source === "practice/advanced/version-downgrade.md");
   const answerWithoutCitations = text.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "");
   const downgradeCovered = !(admittedDowngrade && hasDowngradeSymptom(prompt)) || /降版|降級|downgrade|備份|新世界|compatible backup|new world/iu.test(answerWithoutCitations);
-  return citedEvidence && downgradeCovered && requiredTaskCoverage(text, prompt, evidence);
+  return citedEvidence && downgradeCovered && !missingVersionReinstall(prompt, text, evidence) && requiredTaskCoverage(text, prompt, evidence);
 }
 
 /** Measures reflection of admitted passages for diagnostics. */
@@ -329,6 +338,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       const prompt = clean(request.prompt);
       const chinese = /\p{Script=Han}/u.test(prompt);
       const focusSupportPolicy = hasSupportFlowSymptom(prompt, options.deploymentPolicyFocus);
+      const installerDeployment = options.deploymentPolicyFocus !== false && hasIncompleteInstallerDeployment(prompt);
+      const versionChange = asksToChangeVersion(prompt);
       const prefetch = options.prefetchSemanticEvidence && options.semanticRelevance && history.length === 0;
       const focusDns = hasConnectionSymptom(prompt) || /DNS|線路|线路|路由|routing/iu.test(prompt);
       const focusBackup = /取消.{0,6}(?:續約|订阅|訂閱)|(?:cancel|stop).{0,16}renew/iu.test(prompt) &&
@@ -469,7 +480,9 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
                 retrievalConfidence(prompt, b.excerpt) - retrievalConfidence(prompt, a.excerpt));
               for (const sections of Map.groupBy(ranked, match => match.articleRef).values()) {
                 const limit = sections[0]?.source === DUPLICATE_TICKETS_SOURCE ? 3 : 2;
-                admitted.push(...sections.slice(0, limit));
+                const reinstallStep = versionChange ? sections.find(hasStartupReinstallStep) : undefined;
+                const ordered = reinstallStep ? [reinstallStep, ...sections.filter(section => section !== reinstallStep)] : sections;
+                admitted.push(...ordered.slice(0, limit));
               }
             } else {
               admitted.push(...companions);
@@ -480,9 +493,13 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           if (prefetch && focusDns && !focusSupportPolicy && !downgrade && dns && route &&
               !/基[岩巖]版|bedrock|hytale|palworld|\bvps\b|\bwarp\b|\bmtr\b/iu.test(prompt)) {
             const recovery = admitted.find(match => match.source === CONNECTION_SOURCE && /flushdns/iu.test(match.excerpt));
-            if (recovery) admitted = [recovery, dns, route, ...admitted.filter(match =>
-              match.source === CONNECTION_SOURCE && /fast-line\.tw|已嘗試過的 Google DNS/u.test(match.excerpt) &&
-              citation(match) !== citation(recovery))];
+            if (recovery) {
+              const alternatePathRequested = /封[鎖锁]|防火[牆墙]|替代位[址置]|fast-line\.tw|udp\.cfh\.tw|\b(?:block(?:ed)?|firewall|alternate host)\b/iu.test(prompt);
+              const alternate = alternatePathRequested ? admitted.filter(match =>
+                match.source === CONNECTION_SOURCE && /fast-line\.tw|已嘗試過的 Google DNS/u.test(match.excerpt) &&
+                citation(match) !== citation(recovery)) : [];
+              admitted = [recovery, dns, route, ...alternate];
+            }
           }
           if (prefetch && sftp && !focusDns) {
             const upload = admitted.filter(match => [SFTP_SOURCE, "panel/manage/upload.md", "practice/install/mod.md"].includes(match.source));
@@ -560,9 +577,10 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
           });
         }
         const guidance = [
-          focusDns && "For a documented DNS failure give cache flush, Google DNS, and rejoin at the original address after DNS works. Say the connection should normally work if DNS was the only blocker. When applicable, explain automatic route switching and the qualified faster DNS updates.",
-          focusSupportPolicy && "Advise customers with product issues to use the after-sales category instead of general support. If they have a ticket for this issue, tell them to wait there for technical staff because another ticket will not speed things up. If opening the first one, give the documented Discord prerequisite.",
-          hasSftpSymptom(prompt) && "For a panel upload error, first distinguish a possible upload connection problem from an unverified mod issue. Use the documented SFTP fallback as the connection check. Discuss compatibility afterward. For folder transfers, give the documented connection steps and explain where to drag the folder in the SFTP client without naming a server path.",
+          focusDns && "Use the documented DNS order. Set Google DNS, flush the cache, and verify the resolver with nslookup where the cited procedure calls for it. Say to rejoin at the original address when DNS works, conditional on DNS being the sole issue. When relevant, explain the automatic route switch, brief wait and retry, and why Google DNS may receive the updated record sooner. Keep host-block checks for questions about a block and preserve the confirmation requirement before switching hosts.",
+          focusSupportPolicy && "Direct product issues to the after-sales category. If they have a ticket for this issue, tell them to wait there for technical staff because another ticket will not speed things up. If opening the first one, give the documented Discord prerequisite. If asked about general support, explain that it handles other kinds of enquiries.",
+          installerDeployment && "For an incomplete deployment report, ask technical staff to check the specific installer stages and index entries the customer named. Use the documented ticket route and wait advice. Leave live verification to staff.",
+          hasSftpSymptom(prompt) && "For a panel upload error, start with the possible transfer connection problem. Use a retry over SFTP when the evidence documents that fallback. Then give the supported loader and Minecraft version checks. Treat file names as reported observations and omit undocumented rename tests or restrictions. For folder transfers, give the documented SFTP connection steps and explain how to drag the folder into the remote pane. Defer any requested threshold or file-type destination to staff.",
           "For a Minecraft version change apply the version in Startup before reinstalling in Settings, across the applicable loaders. For a missing server JAR, give documented reinstall guidance and request a fresh console error if it still fails."
         ].filter(Boolean).join("\n");
         const agent = new ToolLoopAgent({

@@ -406,6 +406,26 @@ describe("Vercel read-only agent", () => {
       expect(gate).toMatchObject({ status: "failed", grounded: false, failures: [{ reason: "verification_unavailable" }] });
     });
 
+    it("requires the cited Settings reinstall step even when the verifier returns complete", async () => {
+      const startup = "panel/config/startup.md";
+      const version = `[${startup}:1-2]`;
+      const reinstall = `[${startup}:3-6]`;
+      const evidence = [
+        { source: startup, startLine: 1, endLine: 2, excerpt: "Set the Minecraft version in Startup." },
+        { source: startup, startLine: 3, endLine: 6, excerpt: "For Forge, choose a recommended build.\nThen choose Reinstall in Settings." }
+      ];
+      const question = "How do I change my Minecraft version?";
+      const draft = `Set the desired Minecraft version in Startup. ${version} For Forge, choose a recommended build. ${reinstall}`;
+      const audit: DraftVerifier = ({ passages }) => Promise.resolve({ claimsSupported: true, complete: true, references: passages.map(p => p.label) });
+      const signal = new AbortController().signal;
+
+      const incomplete = await evaluateCitationGate({ question, draft, evidence }, audit, signal);
+      expect(incomplete).toMatchObject({ status: "failed", grounded: true, complete: false, failures: [{ reason: "incomplete_answer" }] });
+
+      const fullDraft = `${draft} After setting the version, reinstall from Settings. ${reinstall}`;
+      expect(await evaluateCitationGate({ question, draft: fullDraft, evidence }, audit, signal)).toMatchObject({ status: "passed", complete: true });
+    });
+
     it("hands off without sending a contradicted draft", async () => {
       const { root, harness, request, signal } = await setup();
       const draft = `Do not query the status. ${label}`;
@@ -935,5 +955,8 @@ describe("support routing coverage", () => {
     const installer = "模組包安裝器未完成內容部署，伺服器目錄沒有模組。";
     const phrasing = "這是產品／服務問題，應由「售後服務」類別處理；一般支援單不處理產品售後問題。若你已在同一問題的售後單，請在原單等技術人員；重複開單不會加快處理。";
     expect(answerCompletenessCheck(base + phrasing, installer, evidence)).toBe(true);
+    const scoped = "產品問題應走售後類別。請在原單等候技術人員，重複開單不會加快處理。";
+    expect(answerCompletenessCheck(base + scoped, installer, evidence)).toBe(true);
+    expect(answerCompletenessCheck(base + scoped.replace("請在原單等候技術人員，", ""), installer, evidence)).toBe(false);
   });
 });
