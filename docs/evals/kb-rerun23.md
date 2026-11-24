@@ -27,3 +27,18 @@ GS-030 had four distinct article windows, with one read each and both the automa
 ## Fast route
 
 A pinned Luna max request at 09:00:06 UTC reached `https://sub2api.coffeehost.net/v1/responses` with `service_tier=fast`. It returned HTTP 200, Luna max and `service_tier=default` in 5.03 s. The gateway returned request ID `8b865818-7f9c-46d2-b3b0-69763c450be5`. The effective rule, selected upstream account and egress tier remain unverified because the caller-facing trace contains none of those fields. The local gateway source at `01629d7ff` supports mapping `fast` to `priority` on pass and removing it on filter. This request counts as **zero confirmed Fast responses**. [Pinned request trace](../../eval-results/rerun23/fast-route.json) · [Gateway source evidence](kb-rerun22-diagnosis-evidence.md#fast-and-concurrency)
+
+## Matched throughput
+
+The benchmark used the clean digest, the same model and retry policy, and the 12-second low-effort verifier at `5f05f7c`. Each block ran GS-018, GS-023 and GS-030. All 12 responses carrying tier metadata returned `default`. No block recorded HTTP 429.
+
+| Pair | Serial wall / timeout attempts | Three-way wall / timeout attempts | First-attempt deliveries | Scored verdicts |
+|---|---:|---:|---:|---|
+| 1 | 381.8 s / 7 | 141.8 s / 3 | 0 / 0 | Serial 1 wrong, 2 unscored. Three-way 2 wrong, 1 unscored |
+| 2 | 273.9 s / 3 | 153.1 s / 6 | 0 / 0 | Both 2 wrong, 1 unscored |
+
+Three-way reduced wall time by 62.9% and 44.1%. The second pair recorded three additional timeout attempts at three-way concurrency, so the scheduled evaluation uses serial execution. All four blocks had three failed deliveries. The first serial block overlapped diagnostic verifier requests, which limits attribution of its wall-time difference. [Matched checkpoints](../../eval-results/rerun23/benchmark-manifest.json)
+
+## GS-023 judge control
+
+The judge scored all five fixed R21 drafts partial again, matching the R22 blind replay at the verdict level. Conditional rejoin coverage fell from partial to missing on one draft and stayed partial on four. The check uses byte-identical saved drafts and the same `step10-v1` rubric and model. [Blind replay](../../eval-results/rerun23/gs023-blind-rescore.json)
