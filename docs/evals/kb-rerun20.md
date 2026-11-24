@@ -20,3 +20,7 @@ The first routing block saved both rows in `golden-2026-11-24T04-02-03-003Z-2.js
 The second block saved GS-062 in `golden-2026-11-24T04-06-27-536Z-2.json`. It delivered on the first attempt in 36.2 s with both policy articles admitted, citation and completeness gates passed, and all three semantic points covered. The draft explicitly says product incidents go to after-sales, general support does not handle them, and duplicate tickets do not speed up processing. The runner recorded and overrode a staff marker after the synthetic log read returned 404.
 
 GS-140 scored partial on the second routing block as well, delivering in 31.5 s with the marker overridden. Neither policy source was admitted. The judge credited after-sales and no-speedup advice in both blocks but marked the wait-for-staff point partial in both.
+
+## Timeout arms
+
+The standard loop with `gpt-6.1-sol` timed out on all three attempts for each item in `golden-2026-11-24T04-08-26-494Z-2.json`. GS-018 admitted 17 spans on each attempt with one search, eight article reads, one status read and one log read. GS-030 admitted 28 spans with four searches and the same reads. Model calls took 58.25–59.72 s per attempt. No completed answer reached the gate.
