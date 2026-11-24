@@ -929,3 +929,27 @@ describe("Vercel read-only agent", () => {
     expect(() => createLiveModel({ AGENT_LIVE_MODEL: "1" })).toThrow("key missing");
   });
 });
+
+describe("support routing coverage", () => {
+  const routing = { source: "store/discord.md", startLine: 6, endLine: 43, excerpt: "請先選擇與問題相符的客服單類別。" };
+  const duplicate = { source: "store/services/duplicate-tickets.md", startLine: 6, endLine: 17, excerpt: "請在原有客服單補充資訊。" };
+  const evidence = [routing, duplicate] as never;
+  const base = "請先選擇與問題相符的客服單類別。 [store/discord.md:6-43] 請在原有客服單補充資訊。 [store/services/duplicate-tickets.md:6-17]";
+  const prompt = "我的伺服器一直斷線，已經等了好幾天";
+  const route = "請先開啟售後服務客服單";
+  const noSpeedup = "重複開單不會加快處理，請在目前的客服單補充斷線時間和相關資訊。";
+
+  it("requires both policy sources and accepts a natural route distinction", () => {
+    const answer = base + route + "，普通支援則留給其他問題。" + noSpeedup;
+    expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(base + "應走**售后服务**工单。**一般支持**是另一条渠道。" + noSpeedup, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(answer, prompt, [routing] as never)).toBe(false);
+    expect(answerCompletenessCheck(base + route + "，也可以用一般客服。" + noSpeedup, prompt, evidence)).toBe(false);
+    expect(answerCompletenessCheck(base + route + "。" + noSpeedup, prompt, evidence)).toBe(false);
+  });
+
+  it("keeps existing-ticket-only guidance incomplete", () => {
+    const answer = base + "請先在原本的客服單補充伺服器名稱、斷線的時間、畫面上的訊息及重裝之後的狀況，方便客服在同一張單繼續確認。";
+    expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(false);
+  });
+});
