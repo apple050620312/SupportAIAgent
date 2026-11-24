@@ -17,7 +17,26 @@ The clean working tree on `feat/teachable-loop-v1` started at `7a9fcf7`, the sam
 | Gateway intents | `GUILDS`, `GUILD_MESSAGES`, and `MESSAGE_CONTENT` for staff messages and explicit replies. Enable the privileged Message Content Intent for the application. |
 | Channel permissions | Grant the bot `View Channel`, `Read Message History`, and `Send Messages` in the management channel. Keep the channel staff-only and scope the integration to that guild and channel. |
 
-The proposed approval mechanism uses a native Discord reply to the bot's proposal with `approve <proposal-id>` or `decline <proposal-id>`. This requires ordinary text and reply access. Channel type, bot permissions, mention behavior, and the owner account still need verification in the actual guild.
+The approval mechanism uses **Discord Components V2 buttons** (owner decision
+2026-11-25 ~00:31, superseding the earlier text-reply idea): the proposal is a
+Container with Text Displays (title + metadata, ```diff block, `-#` subtext
+footer) and an Action Row with **批准** (Success, `custom_id` `kb:ap:<id>`) and
+**拒絕** (Danger, `custom_id` `kb:de:<id>`) buttons, plus an optional Link button
+to the article on GitHub. A button interaction carries the clicker's user ID, so
+approval auth is exact; on decision the bot edits the same message, disables
+both buttons, shows the outcome, and changes the Container accent color.
+Single-use is enforced server-side and by disabling the buttons. Markdown used
+in Text Display is limited to the verified allowlist (official Markdown Text 101
++ Component Reference, checked 2026-11-25): bold, italic, underline,
+strikethrough, spoiler, inline/fenced code (incl. ```diff), `#`/`##`/`###`
+headers, `-#` subtext, bulleted/numbered lists, block quotes, masked links,
+mentions, timestamps, emoji. NOT usable: tables, `####`+ headers, task lists,
+footnotes, horizontal rules, image syntax. One-time render check in the real
+channel during implementation must confirm headers, subtext, lists and
+```diff blocks inside Text Display. Full design: the production brief
+(`~/workspace/codex-briefs/teachable-loop-v1-production.md`, "Discord Components
+V2 design" section). Channel type, bot permissions, mention behavior, and the
+owner account still need verification in the actual guild.
 
 ## Proposed teaching and relay flow
 
