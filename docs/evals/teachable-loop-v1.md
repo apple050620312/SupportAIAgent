@@ -1,66 +1,50 @@
 # Teachable loop v1
 
-## Status and corpus
+## Implementation
 
-Implementation is blocked by missing Discord configuration for the Coffee-Host management group. The owner authorized that specific channel on 2026-11-24. The repository has an example test-ticket configuration and an optional test audit destination. The test launcher loads its Discord client from a separately supplied ticket-bot deployment. The repository, local runtime settings, project handover, and adjacent PteroAI checkout supply no management-group channel ID or approved bot installation for this integration. [Test configuration](../../.env.ticket-support.example) · [Shadow launcher](../../scripts/run-ticket-support.ts) · [Capability audit](pteroai-capability-audit.md)
+Support Core now accepts explicit standing-policy teachings from the configured owner and authorized management staff. It proposes an edit to one reviewed Markdown section and records the article, the section, the exact before and after text, the teaching message, the teacher and the timestamp. The adapter posts the preview, then binds the Discord message and exact proposal version before enabling the decision buttons. Only the configured owner can decide. Core consumes the approval once and requires a fresh proposal when the article version has changed. A revert is a new proposal for the previous reviewed text. [Teaching service](../../apps/support-core/src/services/teaching-service.ts)
 
-The clean working tree on `feat/teachable-loop-v1` started at `7a9fcf7`, the same commit as `main`. The chosen starting corpus for both phases is **FIX-4**. The Markdown loader found 72 articles and 570 passages. The loaded Markdown, indexed passages, and index metadata all match `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a`. The index uses `text-embedding-3-small`. [FIX-4 corpus record](kb-rerun25.md#corpus)
+Core keeps the configured KB root as the seed. On approval it builds an immutable release below `.teachable/releases/` that contains the full Markdown snapshot, the exact previous article and a semantic index. The rebuild uses official OpenAI embeddings for new inputs and reuses verified vectors for identical inputs. One atomic journal entry activates the Markdown and index together and records the teaching. Pending and declined proposals leave the published data and applied memory unchanged. A failed rebuild leaves the prior release available. The shadow runner reads the latest release through Core, and search and read results carry the original teaching date for the approved section. The teaching journal and previous versions survive a process restart. [Publication adapter](../../apps/support-core/src/adapters/file-teaching-corpus.ts) · [Shadow launcher](../../scripts/run-ticket-support.ts)
 
-## Required Discord configuration
+Proposal input is restricted to reviewed sections under `SUPPORT_KNOWLEDGE_ROOT`. The tool accepts the reviewed header `> Review: approved` and the existing owner-authored review metadata. It rejects traversal and symlink escapes, draft sections, customer transcripts, ticket-specific replies, golden references and eval sources. The management adapter rejects replies, forwards, bot messages and attachments as teachings. The trusted Discord event supplies provenance and actor context. The agent supplies the proposed edit. [Teaching policy](../../apps/support-core/src/domain/teaching-policy.ts) · [Section guard](../../apps/support-core/src/domain/teaching-section.ts)
+
+The management adapter accepts `教學：<standing policy>` and `還原 <proposal-id>：<reason>` from authorized staff. It renders proposals as Discord Components V2 Containers with the teacher and time, teaching text, fenced diff, subtext, and **批准** and **拒絕** buttons. The decision edits the original message, disables both actions and shows the outcome with a new accent color. The preview shows the changed hunk within 4,000 combined Text Display characters. When it truncates the diff or teaching, the staff message attaches the full diff and exact teaching text. Optional GitHub links use `TEACHING_GITHUB_ARTICLE_BASE_URL` and `TEACHING_GITHUB_DIFF_URL_TEMPLATE`, with `{proposalId}` in the diff template. [Payload builders](../../scripts/lib/discord-management-payloads.ts) · [Discord adapter](../../scripts/lib/discord-management.ts)
+
+The draft-only relay accepts a trusted ticket scope and a question. It posts the question to the management channel with an admin-role mention. **回答** opens a Label and Text Input modal for an authorized staff member. Core persists the answer, the polished review draft and the outcome entered by staff with `結果 <relay-id>：<outcome>`. The relay has a staff-review destination and no customer delivery port. [Relay service](../../apps/support-core/src/services/relay-service.ts) · [Discord setup](../../scripts/lib/discord-management-setup.ts) · [Shadow review](../testing-ticket-shadow.md)
+
+## Verification
+
+- `pnpm build`, `pnpm typecheck` and `pnpm lint` passed.
+- `pnpm test` passed 434 script tests and 60 Support Core tests. The new cases cover wrong actor, wrong message and version, repeat and concurrent approval, staleness, rollback through approval, failed rebuild, symlink and source rejection, and retrieval dates after restart.
+- `pnpm run eval:mock` passed 76 tests.
+- Four offline Discord tests covered flag 32768, Containers, Buttons and the Label modal, combined Text Display budget and truncation, GitHub links, custom IDs within 100 characters, omission of legacy message fields, bound decisions and terminal edits, and durable relay records. Three launcher tests covered configuration validation before login, gateway intents and handler registration, and cleanup after a failed login. The tests used simulated events and login. [Discord tests](../../scripts/test/discord-management.test.ts)
+
+## Paired measurements
+
+The baseline was **FIX-4** with 72 articles, 570 passages and digest `04003b9bec8898f13f9cd8a79ebf30491b3911c2732952cfb9f3f65b314e821a`. The replay harness copied that verified corpus to a private temporary directory and proposed, bound and approved all four edits through Core using generated test identities. Each edit restated a ruling already on record. The cumulative follow-up had 72 articles, 570 passages and digest `21bb482b773ae65ede0a348330bc336797d25b14744fd4e795fb14c33ed2c2f4`. Every measured golden item ran once against each corpus. This is a paired observation with four combined edits and one sample per phase. [FIX-4 corpus record](kb-rerun25.md#corpus) · [Replay harness](../../scripts/apply-teaching-eval.ts)
+
+Both runs used `GOLDEN_LIVE_MODEL=1`, `gpt-6-luna` with max reasoning, the existing 60-second answer limit and the `gpt-6.1-sol` semantic judge. Retrieval used official OpenAI `text-embedding-3-small`. The baseline read the FIX-4 seed index at `.kb-index/passages.json`. The follow-up read the index and Markdown published by Core. All eight item runs completed on their first attempt. The private checkpoints `eval-results/golden-2026-11-24T19-15-14-731Z-4.json` and `eval-results/golden-2026-11-24T19-21-30-747Z-4.json` match the reported corpus digests, verdicts, handoffs and attempt counts. [Golden evaluator](../../scripts/eval-golden.ts)
+
+| Item | Recorded ruling replayed | Before | After | Observed delta |
+| --- | --- | --- | --- | --- |
+| GS-140 | Duplicate tickets do not speed up handling. Wait in the existing ticket and route product issues to after-sales. | Correct · delivered | Wrong · handoff | The follow-up draft was judged correct, with a passing citation gate. The handoff marker was retained. |
+| GS-041 | Customers can switch the Docker image themselves when the panel offers the option. | Wrong · handoff | Wrong · handoff | The locked-field procedure and historical Java diagnosis remain open. |
+| GS-096 | The Discord test-server announcement controls the current address and rules. | Wrong · handoff | Wrong · handoff | The judge continued to require historical details beyond the recorded ruling. |
+| GS-138 | Velocity is permitted under the terms. Self-hosted Paper backends are allowed and backend connection quality is unguaranteed. | Wrong · handoff | Partial · delivered | The delivered answer covered the current policy. The historical network rationale remains open. |
+
+Handoffs were 3 of 4 in both runs. The primary verdicts moved from 1 correct and 3 wrong to 1 partial and 3 wrong. Retention for GS-049 and GS-053 (14 vs 17 days), SFTP destinations and any separate thresholds for GS-166, and the five other section 5 convention candidates await owner teachings. The unresolved parts of the three partial rulings also await the owner. [Convention candidates](kb-conventions-report.md#5-conventions-versus-procedures) · [Earlier diagnosis](kb-rerun9-diagnosis.md#未決事項)
+
+## Remaining Discord activation
 
 | Setting | Required value |
 | --- | --- |
-| Destination | The real Coffee-Host Discord guild ID and private management-group channel ID, or a Discord channel link containing both. |
-| Owner | The Discord user ID of the owner who can approve or decline each KB proposal. |
-| Admins | The Discord admin role ID to mention for escalations and the role or user IDs authorized to teach and answer. The bot needs to be able to mention the designated role in the management channel. |
-| Bot | An approved Discord application and bot installation in that guild using the `bot` OAuth2 scope. Supply the bot token through a deployment secret or identify the approved deployment that already provides it. |
-| Gateway intents | `GUILDS`, `GUILD_MESSAGES`, and `MESSAGE_CONTENT` for staff messages and explicit replies. Enable the privileged Message Content Intent for the application. |
-| Channel permissions | Grant the bot `View Channel`, `Read Message History`, and `Send Messages` in the management channel. Keep the channel staff-only and scope the integration to that guild and channel. |
+| Destination | `TEACHING_DISCORD_GUILD_ID` and `TEACHING_DISCORD_CHANNEL_ID` for the staff-only Coffee-Host management text channel. |
+| Owner | `TEACHING_OWNER_USER_ID` for the account that approves and declines proposals. |
+| Admins | `TEACHING_DISCORD_ADMIN_ROLE_ID` authorizes and mentions the admin role. Optional `TEACHING_DISCORD_STAFF_USER_IDS` and `TEACHING_DISCORD_STAFF_ROLE_IDS` accept comma-separated IDs for additional staff. |
+| Bot | Approved Discord application and guild installation with the `bot` OAuth2 scope. Provide `TEACHING_DISCORD_BOT_TOKEN` through a deployment secret or identify the approved deployment. |
+| Gateway intents | `Guilds`, `GuildMessages` and `MessageContent`. Enable the privileged Message Content Intent on the approved application. |
+| Channel permissions | View Channel, Read Message History, Send Messages and Attach Files for full previews. Make the designated admin role mentionable by the bot in the management channel. |
 
-The approval mechanism uses **Discord Components V2 buttons** (owner decision
-2026-11-25 ~00:31, superseding the earlier text-reply idea): the proposal is a
-Container with Text Displays (title + metadata, ```diff block, `-#` subtext
-footer) and an Action Row with **批准** (Success, `custom_id` `kb:ap:<id>`) and
-**拒絕** (Danger, `custom_id` `kb:de:<id>`) buttons, plus an optional Link button
-to the article on GitHub. A button interaction carries the clicker's user ID, so
-approval auth is exact; on decision the bot edits the same message, disables
-both buttons, shows the outcome, and changes the Container accent color.
-Single-use is enforced server-side and by disabling the buttons. Markdown used
-in Text Display is limited to the verified allowlist (official Markdown Text 101
-+ Component Reference, checked 2026-11-25): bold, italic, underline,
-strikethrough, spoiler, inline/fenced code (incl. ```diff), `#`/`##`/`###`
-headers, `-#` subtext, bulleted/numbered lists, block quotes, masked links,
-mentions, timestamps, emoji. NOT usable: tables, `####`+ headers, task lists,
-footnotes, horizontal rules, image syntax. One-time render check in the real
-channel during implementation must confirm headers, subtext, lists and
-```diff blocks inside Text Display. Full design: the production brief
-(`~/workspace/codex-briefs/teachable-loop-v1-production.md`, "Discord Components
-V2 design" section). Channel type, bot permissions, mention behavior, and the
-owner account still need verification in the actual guild.
+The owner's Discord configuration is the remaining activation blocker. With these settings in the deployment environment, run `pnpm start:discord-management` using the existing model and official embeddings settings. Use the same `SUPPORT_KNOWLEDGE_ROOT` and `KB_INDEX_PATH` as Support Core so later tickets can read published teachings. The trusted ticket host can call `escalate` from the management composition to post a staff review question. [Management launcher](../../scripts/run-discord-management.ts) · [Management composition](../../scripts/lib/discord-management-setup.ts)
 
-## Proposed teaching and relay flow
-
-1. The management adapter authenticates the sender from the Discord event and accepts an explicit standing-policy teaching from an authorized admin. The agent calls a Support Core proposal tool. The preview identifies the article and section, shows the exact before/after diff, and includes the teacher, timestamp, and exact teaching message.
-2. Support Core binds approval to the owner's Discord user ID, the proposal message, and the exact proposed version. Approval is single-use. A pending or declined proposal has no effect on the KB, semantic index, or active teaching memory. A stale article version requires a fresh preview and approval.
-3. On approval, Core keeps the previous article version, rebuilds the semantic index with official OpenAI embeddings, and records the applied teaching in a private, durable file store. Publication needs a consistent Markdown/index version even if rebuilding fails. A revert follows the same approval flow. Later tickets retrieve the approved policy through Core and can cite its teaching date. The store needs to survive a restart.
-4. The write tool accepts only reviewed Markdown sections under the configured KB root. Proposal generation receives the authenticated policy teaching and relevant KB sections. Customer transcripts, ticket-specific admin replies, golden references, and eval artifacts are ineligible as teaching sources. The write path must reject destinations outside the KB root, including symlink escapes.
-5. For an escalation, the adapter posts a scoped question and mentions the designated admin role. The agent polishes the authenticated reply into a staff review draft. A durable record links the question, admin answer, draft, and staff-recorded ticket outcome. Draft review ends in the staff-only workflow. [Existing shadow review](../testing-ticket-shadow.md)
-
-Live relay would require separate owner authorization, verified ticket and recipient binding, current ticket revision and takeover checks at delivery, staff approval of the customer reply, and delivery receipts. [Ticket integration acceptance criteria](../integrations/ticket-bot.md#驗收證據)
-
-## Teaching cases and measurements
-
-All paired measurements are pending. The owner-approved policies below are already present in FIX-4. Each measured comparison needs a baseline on that corpus and a follow-up after the owner approves an actual policy change through the management channel.
-
-| Case | Owner input on record | Pending policy | Before | After |
-| --- | --- | --- | --- | --- |
-| Retention · GS-049 / GS-053 | An older owner ruling on nonpayment is documented. The 14- and 17-day figures have different reported contexts. | Reconcile the durations and confirm voluntary cancellation and nonpayment separately, including reuse and restoration eligibility. | Pending | Pending |
-| SFTP · GS-166 | The web panel limit is 100 MB. The KB directs larger files and folders to SFTP. | Confirm destinations by file type and any separate thresholds. | Pending | Pending |
-| Conventions · section 5 | The owner approved the duplicate-ticket and after-sales routing policy, which covers GS-140. | The five other candidates await approval for promotion. They cover transient retries, provider or complex escalations, boundaries on non-covered work, observation after changes, and backup, activation, billing, and refund guidance. | Pending | Pending |
-| KB answers · GS-041 / GS-096 / GS-138 | Docker image switching is self-service when available. Test-server details come from Discord announcements. Velocity is allowed subject to the terms of service, with no guarantee for backend connectivity. | GS-041 needs the locked-field procedure and a ruling on the Java diagnosis. GS-096 needs adjudication of historical address, version, and plan expectations against the announcement policy. GS-138 needs adjudication of the historical network-handling rationale. | Pending | Pending |
-
-Policy sources are the owner decisions recorded in the project handover and their articles in the local FIX-4 corpus. [Retention and upload](kb-conventions-report.md#3-contradictions-and-outdated-answers) · [Convention candidates](kb-conventions-report.md#5-conventions-versus-procedures) · [Deferred decisions](kb-rerun25-diagnosis.md#deferred-owner-decisions) · [GS-041 / GS-096 / GS-138](kb-rerun9-diagnosis.md)
-
-Archived reference verdicts were GS-049, GS-053, and GS-166 wrong with handoff and GS-140 correct in rerun 25 on the clean corpus. Earlier runs scored GS-041 wrong with handoff, GS-096 wrong after delivery, and GS-138 partial after delivery. Those runs used different corpus or model settings from this comparison. [Rerun 25](kb-rerun25.md) · [GS-041 and GS-138](gs041-downgrade-inference-rerun.md#results) · [GS-096](golden-set-step12-kb-rerun-10.md)
-
-The evaluation setup supplied by the owner uses `GOLDEN_LIVE_MODEL=1`, `EMBEDDING_PROVIDER=openai`, `EMBEDDING_MODEL=text-embedding-3-small`, and `KB_INDEX_PATH=.kb-index/passages.json`. The prescribed protected key file at `~/.config/support-ai-agent/openai-api-key` and the `~/workspace/run-with-sub2api-key.sh` runner are available locally. The paired run uses Luna max, the existing 60-second limit, and the `gpt-6.1-sol` judge. Record the verdict and handoff for each affected golden ID along with both passage digests, and use the harness retries for transient failures.
+Run the one-time render and interaction check in the staff-only channel. Verify `##` headings, `-#` subtext, bulleted lists and fenced diffs, then check owner approval and decline on separate proposals and confirm both buttons disable after each decision. Check the admin mention, answer modal and staff draft using a test escalation. The live check is pending the owner's configuration. [Ticket delivery acceptance criteria](../integrations/ticket-bot.md#驗收證據)
