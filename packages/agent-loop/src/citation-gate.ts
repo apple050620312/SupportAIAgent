@@ -37,7 +37,7 @@ export async function evaluateCitationGate(input: {
 }, verify: DraftVerifier, signal: AbortSignal): Promise<CitationGate> {
   const { question, draft, evidence, accountReads = {}, scrub = text => text } = input;
   const passages = new Map(evidence.filter(match => match.excerpt.trim()).map(match => [citation(match), scrub(match.excerpt)]));
-  const labels = new Map([...draft.matchAll(/\[([^\[\]\r\n]+):\d+-\d+\]/g)].map(([label, source]) => [label, source]));
+  const labels = new Map([...draft.matchAll(/\[([^[\]\r\n]+):\d+-\d+\]/g)].map(([label, source]) => [label, source]));
   const failures: CitationFailure[] = [];
   if (!passages.size) failures.push({ citation: null, reason: "no_admitted_evidence" });
   else if (!labels.size) failures.push({ citation: null, reason: "missing_citation" });

@@ -18,7 +18,7 @@ export function mockCall(name: string, input: unknown = {}) {
 export function createDemoModel() {
   return new MockLanguageModelV4({ doGenerate: [mockCall("search_support_knowledge", { query: "status" }), mockText(DEMO_ANSWER)] });
 }
-const mockVerifier: DraftVerifier = async ({ draft, passages }) => ({
+const mockVerifier: DraftVerifier = ({ draft, passages }) => Promise.resolve({
   claimsSupported: true, complete: true,
   references: passages.filter(({ label }) => draft.includes(label)).map(({ label }) => label)
 });

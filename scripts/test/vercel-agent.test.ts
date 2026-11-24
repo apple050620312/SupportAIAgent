@@ -350,7 +350,7 @@ describe("Vercel read-only agent", () => {
     const label = "[synthetic/recovery.md:1-2]";
     const evidence = [{ source: "synthetic/recovery.md", startLine: 1, endLine: 2, excerpt: "Query the status, then confirm the result with the customer." }];
     const paraphrase = `Look up the current state and verify what you find with the customer. ${label}`;
-    const verify = (claimsSupported: boolean, complete = true): DraftVerifier => async () => ({ claimsSupported, complete, references: [label] });
+    const verify = (claimsSupported: boolean, complete = true): DraftVerifier => () => Promise.resolve({ claimsSupported, complete, references: [label] });
 
     it("passes a supported paraphrase and gives the verifier the full admitted span", async () => {
       const audit = vi.fn(verify(true));
@@ -378,7 +378,7 @@ describe("Vercel read-only agent", () => {
     });
 
     it("fails closed when the verifier is unavailable", async () => {
-      const gate = await evaluateCitationGate({ question: "What should I do?", draft: paraphrase, evidence }, async () => { throw new Error("unavailable"); }, new AbortController().signal);
+      const gate = await evaluateCitationGate({ question: "What should I do?", draft: paraphrase, evidence }, () => Promise.reject(new Error("unavailable")), new AbortController().signal);
       expect(gate).toMatchObject({ status: "failed", grounded: false, failures: [{ reason: "verification_unavailable" }] });
     });
 
