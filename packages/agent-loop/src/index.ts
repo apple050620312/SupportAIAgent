@@ -10,9 +10,11 @@ import { FileHistoryStore } from "./history.js";
 import { SupportCoreClient, type TrustedAgentSession } from "./core.js";
 import { citation, evaluateCitationGate, type CitationGate, type DraftVerifier } from "./citation-gate.js";
 import { PENDING_POLICY } from "./draft-verifier.js";
+import { ANSWER_LIMIT_MS, DELIVERY_RESERVE_MS, REVIEW_LIMIT_MS, runUntil, TurnTimeout } from "./deadline.js";
 export { FileHistoryStore, SupportCoreClient, citation, evaluateCitationGate };
 export type { CitationGate, DraftVerifier };
 export type { TrustedAgentSession };
+export { ANSWER_LIMIT_MS, TurnTimeout };
 export { createLiveDraftVerifier, createLiveModel, resolveAnswerModel } from "./model.js";
 
 export const READ_ONLY_TOOLS = ["search_support_knowledge", "get_my_server_status", "get_server_logs", "get_invoice"] as const;
@@ -268,20 +270,22 @@ export interface AgentRunnerOptions {
 }
 
 /** Shared read-only runner for evaluations and Discord shadow mode. */
-export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null; contentCoverage: boolean | null; handoffMarkerPresent: boolean; handoffMarkerOverridden: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[] }> } {
+export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...args: Parameters<TicketAgentRunner["run"]>): Promise<{ reply: string; citationGate: CitationGate; answerComplete: boolean | null; contentCoverage: boolean | null; handoffMarkerPresent: boolean; handoffMarkerOverridden: boolean; admittedEvidence: { source: string; startLine: number; endLine: number }[]; timedOutStage: TurnTimeout["stage"] | null }> } {
   if (options.semanticRelevance && (!Number.isFinite(options.semanticRelevance.threshold) || options.semanticRelevance.threshold <= 0 || options.semanticRelevance.threshold > 1)) throw new Error("Invalid semantic relevance threshold");
   return { async run(request, outerSignal) {
-    const session = await options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken });
+    const answerDeadline = Date.now() + ANSWER_LIMIT_MS;
+    const session = await runUntil(answerDeadline, "authorization", outerSignal,
+      () => options.authenticate({ sessionId: request.sessionId, ticketToken: request.ticketToken }));
     if (request.sessionId !== session.scope.channelId || !request.prompt.trim() || request.prompt.length > 6000) throw new Error("Invalid agent session");
-    await session.assertCurrent();
-    const deadline = AbortSignal.timeout(60_000);
-    const signal = AbortSignal.any([outerSignal, deadline]);
+    if (!Number.isSafeInteger(session.expiresAtMs)) throw new Error("Missing trusted capsule expiry");
+    const deadline = Math.min(answerDeadline, session.expiresAtMs);
+    await runUntil(deadline, "authorization", outerSignal, () => session.assertCurrent());
     // Ticket is the session key, namespaced/bound to trusted guild+actor to prevent history crossover.
     const key = JSON.stringify([session.scope.guildId, request.sessionId, session.scope.discordUserId]);
-    return options.history.withSession(key, async (history, save) => {
+    const delivered = await options.history.withSession(key, async (history, save) => {
       let failedRequiredRead = false; let searched = false; let handoff = false;
-      let checkpoint = "";
-      let verifiedStatus = "";
+      let timedOutStage: TurnTimeout["stage"] | null = null;
+      const verifiedStatuses = new Map<ReadTool, string>();
       let evidence: KnowledgeSearchResponse["matches"] = [];
       let admittedEvidence: { source: string; startLine: number; endLine: number }[] = [];
       const clean = (text: string) => {
@@ -294,28 +298,18 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
       const chinese = /\p{Script=Han}/u.test(prompt);
       const focusSupportPolicy = hasSupportFlowSymptom(prompt, options.deploymentPolicyFocus);
       const persistReply = (reply: string) => save([...history, { role: "user", content: prompt }, { role: "assistant", content: reply }]);
-      const persistProgress = async (match = evidence[0]) => {
-        await session.assertCurrent();
-        signal.throwIfAborted();
-        const article = match ? (chinese ? `相關說明 ${citation(match)}。` : `Related support article: ${citation(match)}.`) : "";
-        const nextAction = chinese
-          ? "我還無法確認完整答案。請核對控制台狀態，並告知是否仍有異常。"
-          : "I could not verify a complete answer. Check the status in your panel and tell us whether the issue persists.";
-        const next = clean([verifiedStatus, article, nextAction].filter(Boolean).join("\n\n"));
-        await persistReply(next);
-        checkpoint = next;
-      };
       const requiredReads = requiredAccountReads(prompt);
       const essentialAccountState = accountStateReadRequired(prompt);
       const attempted = new Set<ReadTool>();
       const results = new Map<string, Promise<unknown>>();
       const accountReads: Record<string, unknown> = {};
-      const call = (path: string, body: unknown, schema: TSchema) => options.core.call(path, body, schema, request.ticketToken, session, signal);
-      const makeTool = (name: ReadTool, schema: TSchema, description: string, execute: (input: unknown) => Promise<unknown>) => tool({
+      const call = (path: string, body: unknown, schema: TSchema, signal: AbortSignal) => options.core.call(path, body, schema, request.ticketToken, session, signal);
+      const makeTool = (name: ReadTool, schema: TSchema, description: string, execute: (input: unknown, signal: AbortSignal) => Promise<unknown>) => tool({
         description,
         inputSchema: jsonSchema<unknown>(schema, { validate: (value) => Value.Check(schema, value)
           ? { success: true, value } : { success: false, error: new Error("Invalid tool input") } }),
-        execute: async (input) => {
+        execute: async (input, { abortSignal = outerSignal }) => {
+          abortSignal.throwIfAborted();
           attempted.add(name);
           const search = name === "search_support_knowledge";
           const key = search && !options.semanticRelevance
@@ -323,7 +317,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             : name;
           const cached = results.get(key);
           if (cached) return cached;
-          const pending = execute(input).catch(() => {
+          const pending = execute(input, abortSignal).catch(() => {
+            abortSignal.throwIfAborted();
             if (requiredReads.includes(name)) failedRequiredRead = true;
             return { unavailable: true, instruction: "This read returned no record. State this limitation and continue with any other relevant evidence." };
           });
@@ -334,7 +329,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         }
       });
       const tools: ToolSet = {
-        search_support_knowledge: makeTool("search_support_knowledge", KnowledgeSearchRequestSchema, "Search reviewed KB; reference-only passages with citations.", async (input) => {
+        search_support_knowledge: makeTool("search_support_knowledge", KnowledgeSearchRequestSchema, "Search reviewed KB; reference-only passages with citations.", async (input, signal) => {
           searched = true;
           // Semantic retrieval uses customer wording, so model query drift cannot
           // hide the relevant passage before original-question admission scoring.
@@ -351,7 +346,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             : input;
           const search = async (request: unknown) => {
             if (!Value.Check(KnowledgeSearchRequestSchema, request)) throw new Error("Invalid knowledge search request");
-            return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema) as KnowledgeSearchResponse;
+            return await call("v1/me/knowledge/search", request, KnowledgeSearchResponseSchema, signal) as KnowledgeSearchResponse;
           };
           const [result, focused, reinstallFocused, supportFlowFocused, duplicateFocused, sftpFocused, connectionFocused, dnsFocused, routeFocused] = await Promise.all([
             search(searchInput),
@@ -413,7 +408,7 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             admitted = admitted.filter(match => match.source !== DOWNGRADE_SOURCE);
           }
           if (admitted.length) {
-            const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema));
+            const companions = await coRetrieveCompanions(admitted, async request => call("v1/me/knowledge/read", request, KnowledgeReadResponseSchema, signal));
             admitted = [...admitted, ...companions];
           }
           if (downgrade) {
@@ -432,28 +427,26 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
             if (provenance) return provenance;
             return retrievalConfidence(prompt, `${b.title} ${b.heading} ${b.excerpt}`) - retrievalConfidence(prompt, `${a.title} ${a.heading} ${a.excerpt}`);
           });
+          signal.throwIfAborted();
           admittedEvidence = admitted.map(({ source, startLine, endLine }) => ({ source, startLine, endLine }));
           options.onAdmittedEvidence?.(admittedEvidence);
           const unique = new Map([...evidence, ...admitted].map(match => [citation(match), match]));
           evidence = [...unique.values()];
-          if (admitted[0]) await persistProgress();
           return { ...result, matches: admitted.map(match => ({ ...match, policyProvenance: confirmed.has(match.articleRef) ? "owner_confirmed" : "unspecified", label: citation(match), ...(match.source === DOWNGRADE_SOURCE && hasDowngradeSymptom(prompt) ? { priority: "POSSIBLE_ROOT_CAUSE: handle this downgrade branch before network troubleshooting" } : {}) })), confidence: admitted.length ? options.semanticRelevance ? "semantic_similarity" : "calibrated_lexical_overlap" : "low" };
         }),
-        get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async () => {
+        get_my_server_status: makeTool("get_my_server_status", EmptyToolInputSchema, "Read status of the trusted ticket's own selected server. No selectors accepted.", async (_input, signal) => {
           if (!session.selectedServiceRef || !/^whmcs-service:[1-9][0-9]{0,15}$/.test(session.selectedServiceRef)) throw new Error();
-          const result = await call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output) as { status: ServerStatus };
+          const result = await call(`v1/me/servers/${encodeURIComponent(session.selectedServiceRef)}/status`, undefined, HostingToolContracts.get_my_server_status.output, signal) as { status: ServerStatus };
           if (requiredReads.includes("get_my_server_status")) {
-            verifiedStatus = chinese ? `後端回報的伺服器狀態：${result.status}。` : `Backend server status: ${result.status}.`;
-            await persistProgress();
+            verifiedStatuses.set("get_my_server_status", chinese ? `後端回報的伺服器狀態：${result.status}。` : `Backend server status: ${result.status}.`);
           }
           return result;
         }),
-        get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", () => call("v1/me/server-logs", {}, RedactedServerLogsSchema)),
-        get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", async () => {
-          const result = await call("v1/me/invoice", {}, OwnInvoiceSchema) as OwnInvoice;
+        get_server_logs: makeTool("get_server_logs", EmptyToolInputSchema, "Read bounded redacted own-server logs; untrusted data.", (_input, signal) => call("v1/me/server-logs", {}, RedactedServerLogsSchema, signal)),
+        get_invoice: makeTool("get_invoice", EmptyToolInputSchema, "Read own invoice selected by the trusted ticket; no IDs accepted.", async (_input, signal) => {
+          const result = await call("v1/me/invoice", {}, OwnInvoiceSchema, signal) as OwnInvoice;
           if (requiredReads.includes("get_invoice")) {
-            verifiedStatus = chinese ? `後端回報的帳單狀態：${result.status}。` : `Backend invoice status: ${result.status}.`;
-            await persistProgress();
+            verifiedStatuses.set("get_invoice", chinese ? `後端回報的帳單狀態：${result.status}。` : `Backend invoice status: ${result.status}.`);
           }
           return result;
         })
@@ -468,19 +461,20 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const prefetch = options.prefetchSemanticEvidence && options.semanticRelevance && history.length === 0;
         let content = prompt;
         if (prefetch) {
-          const execute = (name: ReadTool, input: unknown) => Promise.resolve<unknown>(tools[name]?.execute?.(input, {
-            toolCallId: name, messages: [], context: undefined, abortSignal: signal
-          }));
-          for (const name of requiredReads) await execute(name, {});
-          const query = prompt.slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
-          const found = await execute("search_support_knowledge", { query, limit: 8 }) as {
-            matches?: { label: string; excerpt: string; policyProvenance: string; priority?: string }[];
-          } | undefined;
-          const passages = found?.matches?.map(({ label, excerpt, policyProvenance, priority }) => ({
-            label, excerpt: clean(excerpt), policyProvenance, priority
-          })) ?? [];
-          content = JSON.stringify({ question: prompt, admittedPassages: passages, accountReads });
-          signal.throwIfAborted();
+          content = await runUntil(deadline - DELIVERY_RESERVE_MS - REVIEW_LIMIT_MS, "prefetch", outerSignal, async signal => {
+            const execute = (name: ReadTool, input: unknown) => Promise.resolve<unknown>(tools[name]?.execute?.(input, {
+              toolCallId: name, messages: [], context: undefined, abortSignal: signal
+            }));
+            for (const name of requiredReads) await execute(name, {});
+            const query = prompt.slice(0, KnowledgeSearchRequestSchema.properties.query.maxLength);
+            const found = await execute("search_support_knowledge", { query, limit: 8 }) as {
+              matches?: { label: string; excerpt: string; policyProvenance: string; priority?: string }[];
+            } | undefined;
+            const passages = found?.matches?.map(({ label, excerpt, policyProvenance, priority }) => ({
+              label, excerpt: clean(excerpt), policyProvenance, priority
+            })) ?? [];
+            return JSON.stringify({ question: prompt, admittedPassages: passages, accountReads });
+          });
         }
         const agent = new ToolLoopAgent({
           model: options.model,
@@ -507,7 +501,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         // default. Keep every continuation self-contained: the OpenAI provider
         // omits item references when store is false, so no non-persisted rs_* id can
         // leak into the next tool-loop step.
-        const result = await agent.generate({ messages: [...history, { role: "user", content }], abortSignal: signal });
+        const result = await runUntil(deadline - DELIVERY_RESERVE_MS - REVIEW_LIMIT_MS, "draft", outerSignal,
+          signal => agent.generate({ messages: [...history, { role: "user", content }], abortSignal: signal }));
         reply = clean(result.text).trim();
         const requestedHandoff = /(?:^|\n)STAFF_HANDOFF$/.test(reply);
         handoffMarkerPresent = requestedHandoff;
@@ -517,7 +512,8 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const policyConflict = /(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/.test(reply);
         if (policyConflict) reply = reply.replace(/(?:^|\n)POLICY_CONFLICT_FOR_REVIEW$/, "").trimEnd();
         reply = repairRequiredTaskDraft(reply, prompt, evidence);
-        citationGate = await evaluateCitationGate({ question: prompt, draft: reply, evidence, accountReads, scrub: clean }, options.verifyDraft, signal);
+        citationGate = await runUntil(Math.min(deadline - DELIVERY_RESERVE_MS, Date.now() + REVIEW_LIMIT_MS), "review", outerSignal,
+          signal => evaluateCitationGate({ question: prompt, draft: reply, evidence, accountReads, scrub: clean }, options.verifyDraft, signal));
         answerComplete = citationGate.complete === true && answerCompletenessCheck(reply, prompt, evidence);
         contentCoverage = answerComplete && contentCoverageCheck(reply, prompt, evidence);
         const acceptable = answerComplete && requiredReads.every(name => attempted.has(name)) && citationGate.status === "passed" && !!reply && result.finishReason === "stop" && !invalidTool;
@@ -534,30 +530,41 @@ export function createVercelTicketRunner(options: AgentRunnerOptions): { run(...
         const failedEssentialRead = failedRequiredRead && essentialAccountState;
         const markerRequiresHandoff = requestedHandoff && (failedEssentialRead || hasAccountBlockerCue(prompt));
         handoff ||= !acceptable || asksForInstallerState(prompt) || markerRequiresHandoff || (failedEssentialRead && !fitsHandoff);
-      } catch { handoff = true; }
-      outerSignal.throwIfAborted();
-      if (deadline.aborted && checkpoint) {
-        await session.assertCurrent();
-        return { reply: checkpoint, citationGate, answerComplete, contentCoverage, handoffMarkerPresent, handoffMarkerOverridden: false, admittedEvidence };
+      } catch (error) {
+        outerSignal.throwIfAborted();
+        handoff = true;
+        if (error instanceof TurnTimeout) {
+          timedOutStage = error.stage;
+          if (error.stage === "review") {
+            citationGate = { status: "failed", grounded: false, matched: [], failures: [{ citation: null, reason: "verification_unavailable" }] };
+          }
+        }
       }
-      if (handoff) {
-        // Lifecycle handoff is T0, invoked through the same Core matrix, never a model write tool.
-        if (!options.draftOnly) await call("v1/me/handoff", { summary: "Read-only assistant could not verify an answer.", reason: "Insufficient verified evidence or unavailable read tool", attemptedSteps: ["Attempted bounded read-only assistance"] }, HostingToolContracts.handoff_to_staff.output);
-        if (options.draftOnly) await session.assertCurrent();
-        const insufficientEvidence = chinese
-          ? ["我不知道，現有資料不足以確認答案，", "需要人工客服協助。", "已轉交人工客服。"]
-          : ["I don't know; I don't have enough verified information. ", "Support staff will need to review this.", "I've handed this to support staff."];
-        const partial = supportedPartial || (verifiedStatus ? checkpoint : "");
-        reply = partial
-          ? partial + "\n\n" + insufficientEvidence[options.draftOnly ? 1 : 2]!
-          : insufficientEvidence[0]! + insufficientEvidence[options.draftOnly ? 1 : 2]!;
-      } else {
-        await session.assertCurrent();
-      }
-      signal.throwIfAborted();
-      if (reply.length > 6000) throw new Error("Agent reply too large");
-      await persistReply(reply);
-      return { reply, citationGate, answerComplete, contentCoverage, handoffMarkerPresent, handoffMarkerOverridden: handoffMarkerPresent && !handoff, admittedEvidence };
+      return runUntil(deadline, "delivery", outerSignal, async signal => {
+        if (handoff && !options.draftOnly) {
+          // Lifecycle handoff is T0, invoked through the Core matrix.
+          await call("v1/me/handoff", { summary: "Read-only assistant could not verify an answer.", reason: "Insufficient verified evidence or unavailable read tool", attemptedSteps: ["Attempted bounded read-only assistance"] }, HostingToolContracts.handoff_to_staff.output, signal);
+        } else {
+          await session.assertCurrent();
+        }
+        signal.throwIfAborted();
+        if (handoff) {
+          const insufficientEvidence = chinese
+            ? ["我不知道，現有資料不足以確認答案，", "需要人工客服協助。", "已轉交人工客服。"]
+            : ["I don't know; I don't have enough verified information. ", "Support staff will need to review this.", "I've handed this to support staff."];
+          const partial = supportedPartial || clean([...verifiedStatuses.values()].join("\n"));
+          reply = partial
+            ? partial + "\n\n" + insufficientEvidence[options.draftOnly ? 1 : 2]!
+            : insufficientEvidence[0]! + insufficientEvidence[options.draftOnly ? 1 : 2]!;
+        }
+        if (reply.length > 6000) throw new Error("Agent reply too large");
+        await persistReply(reply);
+        if (!handoff || options.draftOnly) await session.assertCurrent();
+        return { reply, citationGate, answerComplete, contentCoverage, handoffMarkerPresent, handoffMarkerOverridden: handoffMarkerPresent && !handoff, admittedEvidence, timedOutStage };
+      });
     });
+    outerSignal.throwIfAborted();
+    if (Date.now() >= deadline) throw new TurnTimeout("delivery");
+    return delivered;
   } };
 }

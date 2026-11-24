@@ -712,28 +712,107 @@ describe("Vercel read-only agent", () => {
     expect(JSON.stringify(model.doGenerateCalls[2]?.prompt)).toContain("synthetic power error");
   });
 
-  it("returns the persisted backend status if drafting reaches the internal deadline", async () => {
-    const { root, harness, request, signal } = await setup();
-    const deadline = new AbortController();
-    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-    const clock = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => ms === 60_000 ? deadline.signal : realTimeout(ms));
-    const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
-    const model = new MockLanguageModelV4({ doGenerate: () => {
-      const next = reads.shift();
-      if (next) return Promise.resolve(next);
-      deadline.abort();
-      return Promise.reject(new Error("draft interrupted"));
-    } });
+  it("hands off a stalled draft while the backend status and capsule are current", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
     try {
-      const result = await demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      const { root, harness, request, signal } = await setup();
+      const enteredDraft = Promise.withResolvers<AbortSignal | undefined>();
+      const reads = [mockCall("get_my_server_status"), mockCall("search_support_knowledge", { query: "status" })];
+      const model = new MockLanguageModelV4({ doGenerate: ({ abortSignal }) => {
+        const next = reads.shift();
+        if (next) return Promise.resolve(next);
+        enteredDraft.resolve(abortSignal);
+        return new Promise(() => {});
+      } });
+      const run = demoRunner(harness, root, model).run({ ...request, prompt: "My server status" }, signal);
+      const draftSignal = await enteredDraft.promise;
+      await vi.advanceTimersByTimeAsync(44_099);
+      expect(draftSignal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(draftSignal?.aborted).toBe(true);
+      const result = await run;
+      expect(result.timedOutStage).toBe("draft");
       expect(result.reply).toContain("Backend server status: running.");
-      expect(result.reply).toContain("I could not verify a complete answer.");
+      expect(result.reply).toContain("I've handed this to support staff.");
       const [file] = await readdir(root);
       expect(JSON.parse(await readFile(join(root, file!), "utf8"))).toEqual([
         { role: "user", content: "My server status" }, { role: "assistant", content: result.reply }
       ]);
-      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("AI_ACTIVE");
-    } finally { clock.mockRestore(); }
+      expect(harness.snapshots.get(MOCK_SCOPE.channelId)?.state).toBe("HUMAN_NEEDED");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("passes a late finished draft and evidence to one bounded review before expiry", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const { root, harness, request, signal } = await setup();
+      const drafting = Promise.withResolvers<void>();
+      const reviewStarted = Promise.withResolvers<void>();
+      let searched = false;
+      const model = new MockLanguageModelV4({ doGenerate: async () => {
+        if (!searched) {
+          searched = true;
+          return mockCall("search_support_knowledge", { query: "status" });
+        }
+        drafting.resolve();
+        await new Promise(resolve => setTimeout(resolve, 44_000));
+        return mockText(DEMO_ANSWER);
+      } });
+      const verifier = vi.fn<DraftVerifier>(async ({ draft, passages }) => {
+        expect(draft).toBe(DEMO_ANSWER);
+        reviewStarted.resolve();
+        await new Promise(resolve => setTimeout(resolve, 11_900));
+        return { claimsSupported: true, complete: true, references: [passages[0]!.label] };
+      });
+      const run = demoRunner(harness, root, model, undefined, undefined, verifier).run(request, signal);
+      await drafting.promise;
+      await vi.advanceTimersByTimeAsync(44_000);
+      await reviewStarted.promise;
+      await vi.advanceTimersByTimeAsync(11_900);
+      expect(await run).toMatchObject({ reply: DEMO_ANSWER, timedOutStage: null });
+      expect(verifier).toHaveBeenCalledTimes(1);
+      expect(model.doGenerateCalls).toHaveLength(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(["slow", "canceled", "expired", "superseded"])("handles a %s review without leaking a draft", async condition => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(900);
+    try {
+      const { root, harness, request } = await setup();
+      const outer = new AbortController();
+      const reviewing = Promise.withResolvers<AbortSignal>();
+      const accepted = Promise.withResolvers<Awaited<ReturnType<DraftVerifier>>>();
+      const verifier: DraftVerifier = (_input, signal) => {
+        reviewing.resolve(signal);
+        return accepted.promise;
+      };
+      const run = demoRunner(harness, root, createDemoModel(), undefined, undefined, verifier).run(request, outer.signal);
+      const observed = run.catch((error: unknown) => error);
+      const reviewSignal = await reviewing.promise;
+      if (condition === "slow") {
+        await vi.advanceTimersByTimeAsync(12_000);
+        expect(reviewSignal.aborted).toBe(true);
+        expect(await observed).toMatchObject({
+          timedOutStage: "review",
+          reply: "I don't know; I don't have enough verified information. I've handed this to support staff.",
+          citationGate: { failures: [{ reason: "verification_unavailable" }] }
+        });
+        return;
+      }
+      if (condition === "canceled") outer.abort();
+      if (condition === "expired") vi.setSystemTime(60_000);
+      if (condition === "superseded") {
+        await harness.bridge.waitForCustomer(MOCK_SCOPE);
+        await harness.bridge.customerMessage(MOCK_SCOPE);
+      }
+      accepted.resolve({ claimsSupported: true, complete: true, references: ["[synthetic/recovery.md:1-2]"] });
+      expect(await observed).toBeInstanceOf(Error);
+      expect(await readdir(root)).toEqual([]);
+      expect(harness.sent).toEqual([]);
+    } finally { vi.useRealTimers(); }
   });
 
   it("uses Chinese for a Chinese customer when refusing", async () => {

@@ -5,7 +5,7 @@ import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { wrapLanguageModel } from 'ai';
 import type { KnowledgeSearchResponse } from '@support-ai-agent/contracts';
-import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, resolveAnswerModel, SupportCoreClient, type CitationGate, type DraftVerifier } from '@support-ai-agent/agent-loop';
+import { createLiveDraftVerifier, createLiveModel, createVercelTicketRunner, FileHistoryStore, resolveAnswerModel, SupportCoreClient, TurnTimeout, type CitationGate, type DraftVerifier } from '@support-ai-agent/agent-loop';
 import { MarkdownKnowledgeProvider } from '../apps/support-core/dist/src/adapters/markdown-knowledge-provider.js';
 import { OpenAIEmbeddings, SemanticKnowledgeProvider } from '../apps/support-core/dist/src/adapters/semantic-knowledge-provider.js';
 import { createMockSupport, MOCK_SCOPE } from './lib/mock-support.js';
@@ -30,6 +30,7 @@ type AttemptTrace = {
   modelCallsMs: number[];
   answerCalls: AnswerCall[];
   verificationMs: number | null;
+  timedOutStage: TurnTimeout['stage'] | null;
   modelFailures: ModelFailure[];
   toolCounts: Record<string, number>;
   retrievedEvidence: Span[];
@@ -209,6 +210,7 @@ if (blockers.length) {
         verificationMs = null;
         admittedEvidence = [];
         let answerComplete: boolean | null = null;
+        let timedOutStage: TurnTimeout['stage'] | null = null;
         let currentContentCoverage: boolean | null = null;
         let citationGate: CitationGate | null = null;
         answer = '';
@@ -237,21 +239,23 @@ if (blockers.length) {
           semanticScores.push({ source: passage.source, startLine: passage.startLine, score });
           return score;
         } } } : {}), history: new FileHistoryStore(join(history, item.id, String(attempts))), authenticate: async ({ sessionId, ticketToken }) => {
-          const scope = harness.tokens.verify(ticketToken);
-          if (sessionId !== scope.channelId || !await harness.bridge.read(scope)) throw new Error('Session mismatch');
-          return { scope, selectedServiceRef: 'whmcs-service:1', assertCurrent: async () => {
+          const { scope, expiresAtMs } = harness.tokens.verifyContext(ticketToken);
+          const initial = await harness.bridge.read(scope);
+          if (sessionId !== scope.channelId || !initial) throw new Error('Session mismatch');
+          return { scope, expiresAtMs, selectedServiceRef: 'whmcs-service:1', assertCurrent: async () => {
             harness.tokens.verify(ticketToken);
             const snapshot = await harness.bridge.read(scope);
-            if (!snapshot || !['AI_ACTIVE', 'WAITING_CUSTOMER'].includes(snapshot.state)) throw new Error('Retired session');
+            if (snapshot?.revision !== initial.revision || !['AI_ACTIVE', 'WAITING_CUSTOMER'].includes(snapshot.state)) throw new Error('Retired session');
           } };
         } });
         try {
           const result = await runner.run({ sessionId: MOCK_SCOPE.channelId, ticketToken: await harness.bridge.contextForCustomer(MOCK_SCOPE), prompt: inputFor(item) }, new AbortController().signal);
-          ({ reply: answer, citationGate, answerComplete, contentCoverage: currentContentCoverage, admittedEvidence, handoffMarkerPresent, handoffMarkerOverridden } = result);
+          ({ reply: answer, citationGate, answerComplete, contentCoverage: currentContentCoverage, admittedEvidence, handoffMarkerPresent, handoffMarkerOverridden, timedOutStage } = result);
           eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarker', status: handoffMarkerPresent ? 'present' : 'absent' });
           if (handoffMarkerPresent) eventLog.push({ attempt: attempts, kind: 'diagnostic', name: 'handoffMarkerDecision', status: handoffMarkerOverridden ? 'overridden' : 'retained' });
         } catch (caught) {
           error = true;
+          if (caught instanceof TurnTimeout) timedOutStage = caught.stage;
           const detail = caught instanceof Error ? caught.message : '';
           transientFailure = (caught instanceof Error && ['TimeoutError', 'AbortError'].includes(caught.name)) ||
             /store.{0,30}false|previous.{0,30}response|rs_[a-z0-9]+.{0,30}not found/i.test(detail);
@@ -263,6 +267,10 @@ if (blockers.length) {
         finalContentCoverage = currentContentCoverage;
         eventLog.push({ attempt: attempts, kind: 'gate', name: 'citationGate', status: citationGate?.status ?? 'none' });
         const attemptFailures = modelFailures.slice(failuresBeforeAttempt);
+        if (timedOutStage) {
+          error = true;
+          transientFailure = true;
+        }
         const retryableModelFailure = attemptFailures.some(f =>
           f.status === 429 || f.status === 502 || f.status === 503 || f.status === 504 ||
           ['StoreContinuationError', 'TimeoutError', 'AbortError'].includes(f.name));
@@ -276,7 +284,7 @@ if (blockers.length) {
         const attemptEnd = Date.now();
         attemptTraces.push({
           attempt: attempts, startedAt: new Date(attemptStart).toISOString(), endedAt: new Date(attemptEnd).toISOString(),
-          latencyMs: attemptEnd - attemptStart, modelCallsMs: [...modelCallsMs], answerCalls, verificationMs,
+          latencyMs: attemptEnd - attemptStart, modelCallsMs: [...modelCallsMs], answerCalls, verificationMs, timedOutStage,
           modelFailures: modelFailures.slice(failuresBeforeAttempt), toolCounts,
           retrievedEvidence: spans(evidence), admittedEvidence: spans(observedAdmissions),
           drafts: drafts.slice(draftsBeforeAttempt).map(scrub), answer: scrub(answer),

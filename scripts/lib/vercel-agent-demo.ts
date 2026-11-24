@@ -35,15 +35,17 @@ export function demoRunner(harness: ReturnType<typeof createMockSupport>, histor
   };
   return createVercelTicketRunner({ model, verifyDraft, prefetchSemanticEvidence, ...(semanticRelevance ? { semanticRelevance } : {}), core: new SupportCoreClient("https://synthetic-core.example.invalid/", coreFetch), history: new FileHistoryStore(historyRoot),
     authenticate: async ({ sessionId, ticketToken }): Promise<TrustedAgentSession> => {
-      const scope = harness.tokens.verify(ticketToken);
+      const { scope, expiresAtMs } = harness.tokens.verifyContext(ticketToken);
       if (scope.channelId !== sessionId) throw new Error("Wrong session");
+      const initial = await harness.bridge.read(scope);
+      if (!initial) throw new Error("Retired session");
       const assertCurrent = async () => {
         harness.tokens.verify(ticketToken);
         const snapshot = await harness.bridge.read(scope);
-        if (!snapshot || !["AI_ACTIVE", "WAITING_CUSTOMER"].includes(snapshot.state)) throw new Error("Retired session");
+        if (snapshot?.revision !== initial.revision || !["AI_ACTIVE", "WAITING_CUSTOMER"].includes(snapshot.state)) throw new Error("Retired session");
       };
       await assertCurrent();
-      return { scope, assertCurrent, selectedServiceRef: selection ?? (scope.discordUserId.endsWith("615") ? "whmcs-service:1" : "whmcs-service:2") };
+      return { scope, expiresAtMs, assertCurrent, selectedServiceRef: selection ?? (scope.discordUserId.endsWith("615") ? "whmcs-service:1" : "whmcs-service:2") };
     }
   });
 }
