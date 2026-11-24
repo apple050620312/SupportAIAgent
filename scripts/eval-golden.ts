@@ -223,9 +223,17 @@ if (blockers.length) {
         answerCompletenessAttempts.push(answerComplete);
         finalContentCoverage = currentContentCoverage;
         eventLog.push({ attempt: attempts, kind: 'gate', name: 'citationGate', status: citationGate?.status ?? 'none' });
-        transientFailure ||= modelFailures.slice(failuresBeforeAttempt).some(f =>
-          f.status === 502 || f.status === 503 || f.status === 504 ||
+        const attemptFailures = modelFailures.slice(failuresBeforeAttempt);
+        const retryableModelFailure = attemptFailures.some(f =>
+          f.status === 429 || f.status === 502 || f.status === 503 || f.status === 504 ||
           ['StoreContinuationError', 'TimeoutError', 'AbortError'].includes(f.name));
+        transientFailure ||= retryableModelFailure;
+        // The runner can turn a provider error into a lifecycle handoff. Score
+        // that as an unavailable answer when generation never reached the gate.
+        if (attemptFailures.length && citationGateAttempts.at(-1)?.status !== 'passed' &&
+            (!citationGateAttempts.at(-1) || citationGateAttempts.at(-1)?.status === 'not_evaluated')) {
+          error = true;
+        }
         const attemptEnd = Date.now();
         attemptTraces.push({
           attempt: attempts, startedAt: new Date(attemptStart).toISOString(), endedAt: new Date(attemptEnd).toISOString(),
@@ -236,7 +244,10 @@ if (blockers.length) {
           delivery: error ? 'error' : handedOff ? 'handoff' : 'answer',
           citationVerdict: citationGateAttempts.at(-1)?.status ?? null, answerComplete, semanticVerdict: null,
         });
-        if (transientFailure && attempts < 3) await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+        if (transientFailure && attempts < 3) {
+          const delay = attemptFailures.some(f => f.status === 429) ? 10_000 : 1000;
+          await new Promise(resolve => setTimeout(resolve, attempts * delay));
+        }
       } while (transientFailure && attempts < 3);
       const hasGateEvidence = evidence.some(e => answer.includes(`[${e.source}:${e.startLine}-${e.endLine}]`) && answer.includes(e.excerpt));
       const judge = async (reference: typeof item, delivered: string) => {
@@ -257,7 +268,7 @@ if (blockers.length) {
       const finalAttempt = attemptTraces.at(-1);
       if (finalAttempt) finalAttempt.semanticVerdict = semantic.verdict;
       const handoffDraft = drafts.map(scrub).filter(Boolean).at(-1) ?? '';
-      const handoffContentVerdict = handedOff ? await scoreHandoffContent(item, handoffDraft, async (reference, delivered) => judge(reference as typeof item, delivered)) : undefined;
+      const handoffContentVerdict = handedOff && !error ? await scoreHandoffContent(item, handoffDraft, async (reference, delivered) => judge(reference as typeof item, delivered)) : undefined;
       const referenceConflict = reconcileReference(`${item.staff_resolution} ${item.expected_points.join(' ')}`, handoffContentVerdict && 'judgment' in handoffContentVerdict ? handoffContentVerdict.judgment?.reason ?? '' : semantic && 'judgment' in semantic ? semantic.judgment?.reason ?? '' : '', evidence);
       results[index] = { id: item.id, category: item.category, outcome: item.outcome, answer: scrub(answer), drafts: drafts.map(scrub), attemptTraces, handedOff, error, toolErrors, modelFailures, finishReasons, steps, attempts, latencyMs: Date.now() - turnStart,
         citationGateViolation: citationGateAttempts.at(-1)?.status === "failed", currentPolicyCoverage: answerCompletenessAttempts.at(-1) === true && evidence.length > 0, ungroundedDelivery: !error && !handedOff && !hasGateEvidence,
