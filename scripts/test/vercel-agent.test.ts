@@ -942,6 +942,7 @@ describe("support routing coverage", () => {
   it("requires both policy sources and accepts a natural route distinction", () => {
     const answer = base + route + "，普通支援則留給其他問題。" + noSpeedup;
     expect(answerCompletenessCheck(answer, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(base + "應走**售后服务**工单。**一般支持**是另一条渠道。" + noSpeedup, prompt, evidence)).toBe(true);
     expect(answerCompletenessCheck(answer, prompt, [routing] as never)).toBe(false);
     expect(answerCompletenessCheck(base + route + "，也可以用一般客服。" + noSpeedup, prompt, evidence)).toBe(false);
     expect(answerCompletenessCheck(base + route + "。" + noSpeedup, prompt, evidence)).toBe(false);

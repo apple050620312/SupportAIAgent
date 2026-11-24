@@ -149,7 +149,7 @@ function hasUnnegatedMention(text: string, mention: RegExp, negation: RegExp): b
 const WORLD_RESET_PATTERN = /世界.{0,16}(?:重製|重置)|(?:重製|重置).{0,8}世界|reset.{0,16}world|world.{0,20}reset/iu;
 
 function requiredTaskCoverage(answer: string, prompt: string, evidence: KnowledgeSearchResponse["matches"]): boolean {
-  const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, ""));
+  const text = normalizeCoverageText(answer.replace(/\[[^\]\n]+:\d+-\d+\]/gu, "").replace(/\*{1,2}/gu, ""));
   const sources = new Set(evidence.map(match => match.source));
   if (sources.has(REINSTALL_SOURCE) && hasReinstallSymptom(prompt)) {
     const positiveInstall = hasUnnegatedMention(text, /重新安裝|重新安装|reinstall/giu, /(?:先別|不要|勿|不必|do not|don.t)/iu);
@@ -162,9 +162,12 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
     const noSpeedup = /(?:重[複复]|另[開开]|再[開开]|多[開开]|duplicate|another ticket)[^。！？.!?]{0,48}(?:不[會会能]|無法|无法|並不|并不|won't|will not|does not)[^。！？.!?]{0,20}(?:快|加速|speed|faster)/iu.test(text);
     const afterSales = /售[後后]|after[- ]sales/iu;
     const generalSupport = /(?:一般|普通|通用)(?:的)?\s*(?:客服|支援|支持|服務|服务|問[題题]|諮詢|咨询)|general\s+(?:support|help|inquir(?:y|ies))/iu;
-    const contrast = /而非|而不是|不是|不[用必須须要]|[別别勿]|不同|分[開开]|只[供適适]|留[給给]|另[一個一个]|則|则|\b(?:instead(?: of)?|rather than|separate|different|unlike|reserved for|whereas|not|don.t)\b/iu;
-    const distinguishesRoutes = text.split(/[。！？.!?]/u).some(sentence =>
-      afterSales.test(sentence) && generalSupport.test(sentence) && contrast.test(sentence)
+    const contrast = /而非|而不是|不是|不[用必須须要]|[別别勿]|不同|分[開开]|只[供適适]|留[給给]|另(?:一[個个條条]|[個个條条])|則|则|\b(?:instead(?: of)?|rather than|separate|different|unlike|reserved for|whereas|not|don.t)\b/iu;
+    const sentences = text.split(/[。！？.!?]/u);
+    const distinguishesRoutes = sentences.some((sentence, i) =>
+      (afterSales.test(sentence) && generalSupport.test(sentence) && contrast.test(sentence)) ||
+      (i > 0 && afterSales.test(sentences[i - 1]!) && generalSupport.test(sentence) &&
+        /另一[條条個个]|不同|分[開开]|separate|different/iu.test(sentence))
     );
     if (!sources.has(SUPPORT_FLOW_SOURCE) || !sources.has(DUPLICATE_TICKETS_SOURCE) || !routing || !noSpeedup || !distinguishesRoutes) return false;
   }
