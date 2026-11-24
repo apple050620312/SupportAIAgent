@@ -946,6 +946,12 @@ describe("support routing coverage", () => {
     expect(answerCompletenessCheck(answer, prompt, [routing] as never)).toBe(false);
     expect(answerCompletenessCheck(base + route + "，也可以用一般客服。" + noSpeedup, prompt, evidence)).toBe(false);
     expect(answerCompletenessCheck(base + route + "。" + noSpeedup, prompt, evidence)).toBe(false);
+    expect(answerCompletenessCheck(base + "一般支持工单不处理产品售后问题。" + noSpeedup, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(base + "一般支援工單不處理產品售後問題。" + noSpeedup, prompt, evidence)).toBe(true);
+    expect(answerCompletenessCheck(base + "产品售后问题不处理一般支持工单。" + noSpeedup, prompt, evidence)).toBe(false);
+    expect(answerCompletenessCheck(base + "一般支持工单不处理其他问题。" + noSpeedup, prompt, evidence)).toBe(false);
+    expect(answerCompletenessCheck(base + "一般支持工单不处理产品售后问题。", prompt, evidence)).toBe(false);
+    expect(answerCompletenessCheck(base + "一般支持工单不处理产品售后问题。" + noSpeedup, prompt, [routing] as never)).toBe(false);
   });
 
   it("keeps existing-ticket-only guidance incomplete", () => {

@@ -166,6 +166,9 @@ function requiredTaskCoverage(answer: string, prompt: string, evidence: Knowledg
     const sentences = text.split(/[。！？.!?]/u);
     const distinguishesRoutes = sentences.some((sentence, i) =>
       (afterSales.test(sentence) && generalSupport.test(sentence) && contrast.test(sentence)) ||
+      // Explicit policy wording that general support excludes product after-sales.
+      // Keep the direction scoped so a reversed or unrelated negation cannot pass.
+      /(?:一般|普通|通用)(?:的)?\s*(?:客服|支援|支持|服務|服务|問[題题]|諮詢|咨询)[^。！？.!?]{0,24}(?:不處理|不处理)[^。！？.!?]{0,24}(?:售[後后]|after[- ]sales)/iu.test(sentence) ||
       (i > 0 && afterSales.test(sentences[i - 1]!) && generalSupport.test(sentence) &&
         /另一[條条個个]|不同|分[開开]|separate|different/iu.test(sentence))
     );
